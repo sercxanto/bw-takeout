@@ -1,0 +1,100 @@
+**Als zusätzliche KDBX-Notfallkopie ist das Tool brauchbar; als alleinige, verlässliche Sicherung deiner passkeyhaltigen Bitwarden-/Vaultwarden-Daten würde ich es nicht einsetzen.** Es wird gepflegt, besitzt Tests und CI sowie nachweisbare Dependabot-Aktivität. Die entscheidenden Schwächen liegen bei Vollständigkeit und Fehlerbehandlung — einschließlich eines reproduzierten Risikos, ein bestehendes Backup bei einem fehlgeschlagenen Lauf zu überschreiben.
+
+Untersucht habe ich den Stand **31.10.2026**, Commit [`9ee9643`](https://github.com/k3karthic/bitwarden-to-keepass/commit/9ee9643b55a19cb21f8138f408e6adfe1c5be798), zugleich Release `v1.1.0` vom 13.10.2026. Ich habe den Quellcode, sämtliche Testfälle, den Workflow, Abhängigkeitsdateien sowie Git- und Release-Historie gelesen und die Tests lokal ausgeführt.
+
+| Bereich | Bewertung |
+|---|---|
+| Wartung | Aktiv, kleines und stark vom Hauptmaintainer abhängiges Projekt |
+| Codequalität | Überschaubar und lesbar, aber relevante Robustheitsfehler |
+| Tests | 15 bestehende Tests bestanden; wichtige Fehlerfälle fehlen |
+| CI | Vorhanden, Ubuntu mit Python 3.10–3.13 |
+| Dependabot | Historisch nachweisbar; kein eingecheckter Update-Zeitplan |
+| Passkeys | Implementiert und teilweise getestet; keine belastbare Ende-zu-Ende-Garantie |
+| Vollständiges Backup | Nein: insbesondere Anhänge und benutzerdefinierte Felder fehlen in KDBX |
+
+**Wartung und Release-Qualität**
+
+Das Repository ist kein aufgegebenes Skript. Die Historie zeigt unter anderem:
+
+- Januar 2026: Umstellung auf einen CLI-Session-Key.
+- März 2026: Patch-Funktion samt zusätzlichem Test.
+- April 2026: Aktualisierung von `lxml`.
+- Mai 2026: Passkey-Unterstützung.
+- Oktober 2026: Korrektur für `b64:`-/`b64.`-Präfixe bei Passkey-Daten.
+
+Beiträge mehrerer Personen werden übernommen; die Hauptverantwortung bleibt deutlich konzentriert. Die Release-Pflege ist etwas unsauber: Das jüngste GitHub-Release heißt **`v1.1.0`**, während `pyproject.toml` und Changelog **`1.0.10`** nennen. Das erschwert eindeutige Versionszuordnung. [Commit-Historie](https://github.com/k3karthic/bitwarden-to-keepass/commits/main/), [Release](https://github.com/k3karthic/bitwarden-to-keepass/releases/tag/v1.1.0), [Changelog](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/CHANGELOG.md)
+
+**Tests und CI: vorhanden, aber keine umfassende Absicherung**
+
+Die Tests prüfen tatsächlich erzeugte KDBX-Dateien durch erneutes Öffnen mit PyKeePass. Abgedeckt sind unter anderem JSON-Datei und Standardeingabe, Passwortübergabe, doppelte Einträge, fehlende Ordner, TOTP, SSH-Schlüssel, Patch-Funktion und Passkey-Attribute. **Alle 15 Tests bestanden bei meiner lokalen Ausführung unter macOS mit Python 3.13 und den festgelegten Laufzeitabhängigkeiten.** [Tests](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/test/tests.py)
+
+Die Aussagekraft bleibt begrenzt:
+
+- Keine Tests gegen einen laufenden Bitwarden- oder Vaultwarden-Server.
+- Keine echte Passkey-Anmeldung mit KeePassXC und Browser.
+- Keine Wiederherstellungsprüfung in Bitwarden/Vaultwarden.
+- Keine Coverage-Messung oder Mindestabdeckung.
+- Keine Absicherung wesentlicher Fehlerfälle wie fehlgeschlagener Synchronisation oder Erhalt des vorherigen Backups.
+
+Der GitHub-Actions-Workflow installiert `requirements.txt` und startet `python -m unittest` auf Ubuntu mit Python 3.10–3.13. Er enthält keine Windows-/macOS-Matrix, keinen Linter, Typprüfer oder Sicherheitscheck. Trotz entsprechender Einleitung im Workflow wird kein Linting ausgeführt. Außerdem prüft CI nicht die Paketinstallation: `pyproject.toml` verlangt Python **≥3.13**, die README dagegen **3.10+**. [Workflow](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/.github/workflows/python-app.yml), [Paketdefinition](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/pyproject.toml)
+
+Die Abfrage der Workflow-Läufe zum untersuchten Commit lieferte keine Ergebnisse. Deshalb bestätige ich **die CI-Konfiguration und meine lokale Testausführung**, keinen verifizierten grünen GitHub-Lauf für dieses Release.
+
+**Dependabot und Abhängigkeiten**
+
+„Kein Dependabot eingerichtet“ wäre falsch: Drei Dependabot-Commits sind in der Historie vorhanden, für `pycryptodomex`, `black` und `lxml`. Besonders konkret: [PR #22](https://github.com/k3karthic/bitwarden-to-keepass/pull/22) aktualisierte `lxml` von 6.0.2 auf 6.1.0 und wurde am 28.04.2026 übernommen. Der PR verweist auf eine XXE-Sicherheitskorrektur.
+
+Im untersuchten Dateibaum fehlt allerdings `.github/dependabot.yml`. Regelmäßige Versionsupdates nach einem eingecheckten Zeitplan sind damit **nicht belegt**. Die aktuellen privaten Einstellungen für Security Alerts und Security Updates lassen sich daraus nicht bestimmen.
+
+Positiv sind `uv.lock` und exakt festgelegte Versionen in `requirements.txt`, unter anderem:
+
+- `pykeepass==4.1.1.post1`
+- `lxml==6.1.0`
+- `pycryptodomex==3.23.0`
+- `argon2-cffi==25.1.0`
+
+Einschränkungen: Die Requirements werden ausdrücklich **ohne Hashes** exportiert; die normale Paketinstallation verwendet Mindestversionen aus `pyproject.toml`. CI und Nutzerinstallation können deshalb unterschiedliche Abhängigkeiten erhalten. GitHub Actions sind über Versions-Tags statt unveränderliche Commit-Hashes eingebunden. [Requirements](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/requirements.txt), [Exportskript](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/update-requirements.sh)
+
+Eine vollständige Prüfung aller transitiven Abhängigkeiten gegen Schwachstellendatenbanken habe ich nicht durchgeführt; eine Aussage „frei von bekannten Sicherheitslücken“ wäre daher nicht gerechtfertigt.
+
+**Die wichtigsten konkreten Fehler**
+
+Diese Befunde stammen aus dem Quellcode; die ersten fünf habe ich zusätzlich mit synthetischen Daten beziehungsweise simulierten CLI-Antworten reproduziert.
+
+| Befund | Praktische Folge |
+|---|---|
+| **Vorhandenes Backup wird zu früh ersetzt.** `convert()` erstellt die Ausgabedatenbank vor dem Einlesen und Prüfen der Eingabe. | Bei freigegebenem Überschreiben kann bereits eine fehlende Eingabedatei das alte Backup durch eine leere KDBX ersetzen. Im Versuch: vorher ein Eintrag, anschließend null. |
+| **Synchronisationsfehler werden ignoriert.** `bw sync` läuft mit `check=False`; Rückgabecode und Fehlermeldung werden nicht ausgewertet. | Ein Lauf kann alte lokale Daten sichern, ohne den gescheiterten Sync zu melden. |
+| **Unvollständige Passkeys werden still übergangen.** Fehlen `keyValue`, `credentialId` oder `rpId`, kehrt die Funktion ohne Fehler zurück. | Die KDBX enthält den Login, aber keinen Passkey; der Lauf kann erfolgreich enden. |
+| **Präfixkorrektur für Credential-IDs ist unvollständig.** Nur bei genau 16 dekodierten Bytes wird normalisiert. | Bei einer synthetischen 32-Byte-ID blieb `b64:` erhalten. Eine allgemeine korrekte Konvertierung solcher IDs ist nicht gewährleistet. |
+| **Ordner werden anhand einzelner Namen statt vollständiger Pfade verwaltet.** | Bei `A/Shared` und `B/Shared` wurde der zweite Ordner falsch zugeordnet: zu `B` statt `B/Shared`. |
+| `--replace` verwendet `type=bool` statt eines normalen Schalters. | Das dokumentierte `-r` allein funktioniert nicht wie beschrieben; auch die Auswertung von Zeichenketten als Boolean ist irreführend. |
+
+Quellen: [CLI-Zugriff](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/bitwarden_to_keepass/convert.py#L28), [Passkey-Konvertierung](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/bitwarden_to_keepass/convert.py#L290), [Ordnerzuordnung](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/bitwarden_to_keepass/convert.py#L381), [Ablauf und Argumente](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/bitwarden_to_keepass/convert.py#L583).
+
+**Passkeys: echte Unterstützung, aber keine verlustfreie Sicherung**
+
+Positiv: Das Tool liest `login.fido2Credentials`, überführt Schlüsselmaterial und Credential-ID in KeePassXC-Attribute und erzeugt bei mehreren Passkeys zusätzliche Einträge. Private Schlüssel und weitere sensible Attribute werden als geschützt markiert. Der vorhandene Test kontrolliert UUID-IDs, beide Base64-Präfixe und mehrere Passkeys. [Passkey-Testdaten](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/test/resources/test_passkey.json)
+
+Es übernimmt jedoch **nicht alle Passkey-Metadaten**, insbesondere den `counter`. Bemerkenswert: Bereits die Testdatei enthält einen Passkey mit `counter: "6"`, ohne dass dessen Erhalt geprüft wird. Bitwarden warnt ausdrücklich, dass ältere Passkeys mit Nutzungszähler nach weiteren Anmeldungen als Langzeitbackup unzuverlässig sein können. Das bedeutet nicht, dass jeder konvertierte Passkey scheitert — eine generelle Wiederverwendbarkeit ist aber nicht nachgewiesen. [Konvertierung](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/bitwarden_to_keepass/convert.py#L315), [Bitwardens Export-Dokumentation](https://bitwarden.com/help/export-your-data/)
+
+**Weitere Grenzen und Sicherheitsaspekte**
+
+Der KDBX-Export übernimmt keine Bitwarden-Custom-Fields, Passwort-Historie oder vollständige Organisations-/Collection-Struktur. Anhänge werden überhaupt nicht heruntergeladen. Weitere URLs sowie Karten- und Identitätsfelder landen teilweise als Text in Notizen. Das ist für menschlichen Notfallzugriff hilfreich, aber keine strukturerhaltende Sicherung. [Konvertierungscode](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/bitwarden_to_keepass/convert.py)
+
+Die optionale JSON-Ausgabe bewahrt die abgefragten Item-Objekte umfassender, wird aber **unverschlüsselt** geschrieben. Bei fehlerhaftem CLI-JSON wird außerdem dessen kompletter Standardoutput auf stderr ausgegeben; dadurch könnten sensible Inhalte in Protokolle geraten. Positiv sind die Nutzung von PyKeePass statt eigener Kryptografie und CLI-Aufrufe ohne Shell-Interpolation. [JSON-Ausgabe und Fehlerbehandlung](https://github.com/k3karthic/bitwarden-to-keepass/blob/9ee9643/bitwarden_to_keepass/convert.py#L80)
+
+Mehrere Accounts, Serverwechsel, Zeitplanung und TOTP-Login verwaltet das Tool nicht selbst. Es verwendet den bestehenden `bw`-Kontext und entsperrt ihn. Vaultwarden-Kompatibilität hängt entsprechend von CLI, Server und Datenformat ab; eigene Integrationstests fehlen. Gesicherte TOTP-Geheimnisse sind dabei nicht mit Unterstützung des TOTP-Anmeldevorgangs zu verwechseln.
+
+**Meine Empfehlung für deinen Anwendungsfall**
+
+Verwende es höchstens als **zusätzliche, regelmäßig geprüfte KeePassXC-Notfallkopie**. Als primäre Sicherung würde ich einen portablen, verschlüsselten Bitwarden-JSON-Export plus separat gesicherte Anhänge behalten. Bitwarden dokumentiert JSON als Exportformat mit Passkeys; für Portabilität ist bei verschlüsseltem JSON der passwortgeschützte statt accountgebundene Export relevant. [Offizielle Exportoptionen](https://bitwarden.com/help/export-your-data/)
+
+Vor einem unbeaufsichtigten Einsatz dieses Tools würde ich mindestens verlangen:
+
+1. Neue Backups unter neuen Namen erzeugen; erst nach erfolgreicher Inhaltsprüfung freigeben und ältere Generationen behalten.
+2. Bei Sync-Fehlern und unvollständigen Passkeys abbrechen.
+3. Passkey-IDs und Ordnerzuordnung korrigieren sowie Regressionstests ergänzen.
+4. Repräsentative Passkeys tatsächlich mit KeePassXC verwenden und den separaten JSON-Wiederherstellungsweg in einem Testkonto prüfen.
+
+**Für deine zwingende Anforderung „Passkeys müssen zuverlässig gesichert sein“ reicht der aktuelle Nachweisstand nicht.** Die vorhandenen Tests und die aktive Pflege sind gute Ansätze; die reproduzierten Fehler verhindern für mich eine Empfehlung als alleinige Backup-Lösung.

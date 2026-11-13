@@ -1,0 +1,13 @@
+schema: spec-driven
+context: |
+  Lies CONTRIBUTING.md und docs/README.md. Produktziele stehen in docs/product/.
+  Nutze docs/research/research-summary.md und die Originale mit ihren Nachweisgrenzen.
+  Prüfe bestehende ADRs unter docs/decisions/ und unterscheide proposed und accepted.
+rules:
+  proposal:
+    - Benenne betroffene Anforderungen, Dokumentation, bestehende ADRs und offene Nachweise.
+  design:
+    - Begründe dauerhafte Entscheidungen. Prüfe die ADR-Kriterien aus CONTRIBUTING.md.
+  tasks:
+    - Plane betroffene Benutzer- und Entwicklerdokumentation sowie konkrete Fehlerfalltests ein.
+    - Plane ein ADR nur bei erfülltem ADR-Kriterium ein.
