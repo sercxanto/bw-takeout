@@ -1,13 +1,14 @@
 schema: spec-driven
 context: |
-  Lies CONTRIBUTING.md und docs/README.md. Produktziele stehen in docs/product/.
-  Nutze docs/research/research-summary.md und die Originale mit ihren Nachweisgrenzen.
-  Prüfe bestehende ADRs unter docs/decisions/ und unterscheide proposed und accepted.
+  Read CONTRIBUTING.md and docs/README.md. Product goals are in docs/product/.
+  Use docs/research/research-summary.md and the originals with their evidence limits.
+  Review existing ADRs under docs/decisions/ and distinguish proposed from accepted.
+  Write all artifacts in English, even if the conversation is in another language.
 rules:
   proposal:
-    - Benenne betroffene Anforderungen, Dokumentation, bestehende ADRs und offene Nachweise.
+    - Name affected requirements, documentation, existing ADRs and open evidence.
   design:
-    - Begründe dauerhafte Entscheidungen. Prüfe die ADR-Kriterien aus CONTRIBUTING.md.
+    - Justify lasting decisions. Check the ADR criteria from CONTRIBUTING.md.
   tasks:
-    - Plane betroffene Benutzer- und Entwicklerdokumentation sowie konkrete Fehlerfalltests ein.
-    - Plane ein ADR nur bei erfülltem ADR-Kriterium ein.
+    - Plan affected user and developer documentation as well as concrete failure-case tests.
+    - Plan an ADR only if the ADR criteria are met.

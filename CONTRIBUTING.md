@@ -1,9 +1,11 @@
-# Beiträge von Menschen und Agenten
+# Contributions from Humans and Agents
 
-Beginne beim [Entwicklungseinstieg](docs/development/getting-started.md). In Explore werden Fragen, Belege und Alternativen gesammelt. Für eine abgegrenzte Änderung erstellt Propose einen Change mit Motivation, Spezifikationsdelta, Design und prüfbaren Tasks. Vor der Umsetzung Scope, Risiken und Abnahmekriterien gemeinsam prüfen. Nach der Umsetzung Tests ausführen, Spezifikation und tatsächliches Verhalten vergleichen und den geprüften Change archivieren.
+Start with [getting started](docs/development/getting-started.md). Explore collects questions, evidence and alternatives. For a well-scoped change, Propose creates a change with motivation, spec delta, design and verifiable tasks. Review scope, risks and acceptance criteria together before implementing. After implementing, run the tests, compare the spec with the actual behavior and archive the reviewed change.
 
-Halte Änderungen klein. Für späteren Go-Code gelten gofmt, explizite Fehlerbehandlung und überprüfbare Fehlerpfade bei externen Prozessen und Dateioperationen. Ein PR nennt Change, Auswirkungen, ausgeführte Tests und verbleibende Lücken. Ergänze bei Verhaltensänderungen passende Regressionstests gemäß [Teststrategie](docs/development/testing.md).
+Keep changes small. Future Go code follows gofmt, explicit error handling and testable error paths for external processes and file operations. A PR names the change, its impact, the tests that were run and remaining gaps. For behavior changes, add matching regression tests according to the [test strategy](docs/development/testing.md).
 
-Verwende ausschließlich synthetische Daten. Keine Zugangsdaten, Sitzungen, Klartextexporte oder Schlüssel in Argumenten, Logs, Issues, Fixtures oder Commits. Prüfe Diffs vor dem Teilen.
+Write all repository content in English, regardless of the language used in discussions.
 
-Aktualisiere die betroffenen Seiten gemäß [Dokumentationsübersicht](docs/README.md). Ein ADR ist sinnvoll, wenn eine dauerhafte Festlegung schwer umkehrbar ist, Integrationsgrenzen verändert oder eine wesentliche Sicherheitsannahme festschreibt. Dokumentiere Kontext, Alternativen und Folgen. Neue Entscheidungen beginnen als proposed. Die Annahme erfordert eine ausdrückliche Projektentscheidung. Change-lokale Details gehören ins Design.
+Use synthetic data only. No credentials, sessions, plaintext exports or keys in arguments, logs, issues, fixtures or commits. Review diffs before sharing them.
+
+Update the affected pages according to the [documentation overview](docs/README.md). An ADR is appropriate when a lasting decision is hard to reverse, changes integration boundaries or fixes an essential security assumption. Document context, alternatives and consequences. New decisions start as proposed. Acceptance requires an explicit project decision. Change-specific details belong in the design.

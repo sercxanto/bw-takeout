@@ -1,11 +1,11 @@
 # bitwarden-backup
 
-Geplant ist eine kleine CLI, mit der sich ein Tresor aus Bitwarden Cloud oder Vaultwarden lokal verschlüsselt sichern und später offline lesen lässt. Passkey-Schlüsselmaterial und Dateianhänge gehören zum Sicherungsumfang.
+A small CLI is planned that backs up a vault from Bitwarden Cloud or Vaultwarden locally in encrypted form, so it can be read offline later. Passkey key material and file attachments are part of the backup scope.
 
-**Projektstand:** Entwicklungsumgebung und Recherche liegen vor. Es gibt noch keine installierbare Backup-Anwendung.
+**Project status:** The development environment and research are in place. There is no installable backup application yet.
 
-- [Benutzerhandbuch und Dokumentationsübersicht](docs/README.md)
-- [Grenzen der Vollständigkeitsprüfung](docs/user/limitations.md)
-- [Entwicklungsumgebung öffnen und Explore starten](docs/development/getting-started.md)
+- [User guide and documentation overview](docs/README.md)
+- [Limits of the completeness check](docs/user/limitations.md)
+- [Open the development environment and start Explore](docs/development/getting-started.md)
 
-Lizenz und Rechteinhaber sind vor der ersten Veröffentlichung zu klären.
+License and copyright holder must be settled before the first release.

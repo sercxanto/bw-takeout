@@ -1,5 +1,5 @@
-# Integrationen
+# Integrations
 
-Das Dockerfile pinnt Debian-basierte Go- und Node-Images per Manifest-Digest. npm ci prüft die Pakete von bw und OpenSpec gegen die Integritätswerte im Lockfile. age und age-keygen stammen aus dem versionierten Go-Modul mit Go-Prüfsummendatenbank. Bei Aktualisierungen Pins und Lockfile gemeinsam prüfen, Image neu bauen und die relevanten Regressionstests wiederholen.
+The Dockerfile pins Debian-based Go and Node images by manifest digest. npm ci verifies the bw and OpenSpec packages against the integrity values in the lockfile. age and age-keygen come from the versioned Go module, verified by the Go checksum database. When updating, review pins and lockfile together, rebuild the image and repeat the relevant regression tests.
 
-Die unveränderte bw-Version ist absichtlich auf den Research-Stand festgelegt. Für spätere Integrationsläufe ausschließlich isolierte Testprofile und synthetische Konten verwenden. Bitwarden Cloud und Vaultwarden separat ausweisen. Eine Vaultwarden-Testinstanz bei Bedarf außerhalb des Entwicklungscontainers betreiben.
+The unmodified bw version is deliberately pinned to the version used in the research. For later integration runs, use only isolated test profiles and synthetic accounts. Report Bitwarden Cloud and Vaultwarden separately. Run a Vaultwarden test instance outside the development container if needed.

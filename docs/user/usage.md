@@ -1,3 +1,3 @@
-# Nutzung
+# Usage
 
-Geplant ist eine interaktive Sicherung eines Kontos mit TOTP. Befehlsnamen, Fortschrittsanzeige und Ergebnisstatus werden nach der ersten geprüften Umsetzung ergänzt.
+An interactive backup of one account with TOTP is planned. Command names, progress display and result status will be added after the first verified implementation.

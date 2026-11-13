@@ -1,3 +1,3 @@
-# Abgrenzung
+# Non-Goals
 
-Automatischer Restore, Papierkorb und Sends sind ausgeschlossen. Batchbetrieb und Scheduler folgen frühestens nach interaktivem Betrieb. KDBX ist eine optionale spätere Ableitung. Das Projekt entwickelt weder einen bw-Fork noch eigene Bitwarden-Protokoll- oder Kryptografieimplementierungen.
+Automatic restore, trash and Sends are excluded. Batch operation and scheduling follow at the earliest after interactive operation works. KDBX is an optional later derivative. The project develops neither a bw fork nor its own Bitwarden protocol or cryptography implementations.

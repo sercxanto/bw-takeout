@@ -1,3 +1,3 @@
 # Installation
 
-Es gibt noch kein Release. Hier werden später unterstützte Plattformen, Bezugsquellen und die Prüfung heruntergeladener Pakete beschrieben.
+There is no release yet. Supported platforms, download sources and how to verify downloaded packages will be described here later.

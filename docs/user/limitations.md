@@ -1,3 +1,3 @@
-# Grenzen
+# Limitations
 
-Ein erfolgreicher CLI-Export kann entschlüsselbare Teilbestände liefern, während Einträge oder Passkeys fehlen. Fehlende Organisationsrechte und ein veralteter lokaler Stand begrenzen die Sicht zusätzlich. Ein unabhängiger Sollbestand ist oft unbekannt. Siehe [Nachweisstufen](../research/research-summary.md).
+A successful CLI export can deliver decryptable partial inventories while items or passkeys are missing. Missing organization permissions and stale local state limit the view further. An independent reference inventory is often unknown. See [evidence levels](../research/research-summary.md).

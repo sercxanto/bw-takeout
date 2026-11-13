@@ -1,11 +1,11 @@
-# Teststrategie
+# Test Strategy
 
-Für den ersten Change einen bekannten synthetischen Sollbestand außerhalb der CLI-Sicht festlegen. Zwei Passkeys mit unterschiedlichen Schlüsseln und Countern prüfen, anschließend fehlendes Credential, fehlenden Schlüssel und gleiche Anzahl bei vertauschtem Inhalt simulieren. Zwei gleichnamige Anhänge mit verschiedenen IDs und Bytes abrufen. Einen Einzelabruf fehlschlagen lassen und prüfen, dass kein stiller Erfolg entsteht.
+For the first change, define a known synthetic reference inventory outside the CLI's view. Verify two passkeys with different keys and counters, then simulate a missing credential, a missing key, and an equal count with swapped content. Download two attachments with the same name but different IDs and bytes. Make one individual download fail and check that no silent success results.
 
-Weitere Fälle: veralteter lokaler Stand, eingeschränkte Organisationsrolle, unterbrochene Verschlüsselung und zwei gleichzeitige Läufe mit identischem Ziel. Bereits vorhandene Archive müssen bytegleich bleiben. Für Offline-Recovery ohne Netz entschlüsseln und Inhalte mit dem Sollbestand vergleichen. Mock, SDK-Test und authentifizierten End-to-End-Test getrennt ausweisen. Diese Produktprüfungen sind geplant.
+Further cases: stale local state, a restricted organization role, interrupted encryption, and two concurrent runs with the same target. Existing archives must stay byte-identical. For offline recovery, decrypt without network access and compare the contents with the reference inventory. Report mock, SDK test and authenticated end-to-end test separately. These product tests are planned.
 
-## Bootstrap-Prüfung vom 13. November 2026
+## Bootstrap Check of 13 November 2026
 
-Docker-Build und Start als Benutzer vscode auf Linux/arm64 erfolgreich. Go 1.27.3, bw 2026.10.1, age 1.2.1 und OpenSpec 2.0.0 wurden im Image ausgeführt. Ein synthetischer age-Rundlauf gelang ohne Netzwerk. SHA-256 des installierten npm-Einstiegspunkts von bw (build/bw.js): `8a443d1190643330826e8cc0b27381fba5af5a06c6c3d7c7254033913a51ee9b`. Die Paketintegrität ist separat im npm-Lockfile festgehalten.
+Docker build and start as user vscode on Linux/arm64 succeeded. Go 1.27.3, bw 2026.10.1, age 1.2.1 and OpenSpec 2.0.0 were run in the image. A synthetic age round trip succeeded without network access. SHA-256 of bw's installed npm entry point (build/bw.js): `8a443d1190643330826e8cc0b27381fba5af5a06c6c3d7c7254033913a51ee9b`. Package integrity is recorded separately in the npm lockfile.
 
-OpenSpec init erzeugte sechs gemeinsame Skills. Der Claude-Verweis für Explore ist im Container lesbar. openspec list meldete keine aktiven Changes. Bei einem temporären Change enthielten die Proposal-Instruktionen die projektspezifische Dokumentationsregel. VS-Code-Oberfläche, persönliches Claude-Feature, Linux/amd64 und authentifizierte Tresore wurden nicht getestet.
+OpenSpec init generated six shared skills. The Claude reference for Explore is readable in the container. openspec list reported no active changes. For a temporary change, the proposal instructions contained the project-specific documentation rule. The VS Code UI, the personal Claude feature, Linux/amd64 and authenticated vaults were not tested.

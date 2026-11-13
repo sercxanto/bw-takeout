@@ -1,3 +1,3 @@
 # Vision
 
-Ein Benutzer soll einen lokalen, verschlüsselten Stand seines Tresors auch bei einem Serverausfall unabhängig öffnen können. Der Planungshorizont beträgt etwa sechs Monate. Welche Werkzeuge und Informationen dafür offline bereitliegen müssen, ist Teil der Recovery-Erprobung.
+A user should be able to open a local, encrypted copy of their vault independently, even if the server is unavailable. The planning horizon is about six months. Which tools and information must be available offline for this is part of the recovery testing.

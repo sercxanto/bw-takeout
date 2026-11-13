@@ -1,13 +1,13 @@
-# Dokumentation
+# Documentation
 
-| Bereich | Maßgeblich für |
+| Area | Authoritative for |
 |---|---|
-| Benutzerhandbuch | [Installation](user/installation.md), [Konfiguration](user/configuration.md), [Nutzung](user/usage.md), [Recovery](user/recovery.md), [Sicherheit](user/security.md), [Grenzen](user/limitations.md) und später tatsächlich verfügbare Bedienabläufe |
-| Entwicklung | [Einstieg](development/getting-started.md), [Architektur](development/architecture.md), [Tests](development/testing.md), [Integrationen](development/integrations.md), [Releases](development/releases.md) |
-| Produkt | [Vision](product/vision.md), [Anforderungen](product/requirements.md), [Abgrenzung](product/non-goals.md) |
-| Evidenz | [Rechercheübersicht und Originalberichte](research/research-summary.md) |
-| Entscheidungen | [ADRs und ihr Status](decisions/README.md) |
-| Spezifikation | openspec/specs/ für vereinbartes Verhalten, openspec/changes/ für laufende Änderungen |
-| Mitarbeit | [CONTRIBUTING](../CONTRIBUTING.md) |
+| User guide | [Installation](user/installation.md), [configuration](user/configuration.md), [usage](user/usage.md), [recovery](user/recovery.md), [security](user/security.md), [limitations](user/limitations.md) and, later, the workflows that actually exist |
+| Development | [Getting started](development/getting-started.md), [architecture](development/architecture.md), [testing](development/testing.md), [integrations](development/integrations.md), [releases](development/releases.md) |
+| Product | [Vision](product/vision.md), [requirements](product/requirements.md), [non-goals](product/non-goals.md) |
+| Evidence | [Research overview and original reports](research/research-summary.md) |
+| Decisions | [ADRs and their status](decisions/README.md) |
+| Specification | openspec/specs/ for agreed behavior, openspec/changes/ for changes in progress |
+| Contributing | [CONTRIBUTING](../CONTRIBUTING.md) |
 
-Neue Befunde, Entscheidungen und Bedienungsanleitungen am jeweils zuständigen Ort pflegen und aus anderen Dokumenten verlinken.
+Maintain new findings, decisions and instructions in the place responsible for them and link to them from other documents.

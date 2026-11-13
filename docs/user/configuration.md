@@ -1,3 +1,3 @@
-# Konfiguration
+# Configuration
 
-Das Konfigurationsformat ist offen. Zu dokumentieren sind Server- und Kontozuordnung, Archivziel und Schlüsselverwaltung. Es existieren noch keine verbindlichen Konfigurationsschlüssel.
+The configuration format is open. Server and account mapping, archive target and key management need to be documented. There are no binding configuration keys yet.

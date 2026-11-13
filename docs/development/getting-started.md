@@ -1,9 +1,9 @@
-# Mit Explore beginnen
+# Getting Started with Explore
 
-1. Öffne den Repository-Ordner mit dem obersten README in VS Code. Docker muss laufen und die Erweiterung Dev Containers installiert sein.
-2. Wähle **Dev Containers: Reopen in Container**. Der erste Build benötigt Netzwerk. Das persönliche VS-Code-Feature stellt Claude Code bereit.
-3. Im Container-Terminal im Repository: `go version`, `bw --version`, `age --version`, `openspec --version` und `openspec list` ausführen.
-4. Starte `claude`. Eingabe: `/openspec-explore Lies docs/development/first-explore-prompt.md und bearbeite den Auftrag.`
-5. Ergebnisse prüfen und Scope wählen. Erst danach beispielsweise `/openspec-propose Plane einen synthetischen Regressionstest für gleichnamige Anhänge mit verschiedenen IDs.` Proposal, Design, Spec-Delta und Tasks unter openspec/changes/ prüfen. Vor dem nächsten Schritt `openspec validate <change-name> --strict` ausführen.
+1. Open the repository folder containing the top-level README in VS Code. Docker must be running and the Dev Containers extension installed.
+2. Choose **Dev Containers: Reopen in Container**. The first build needs network access. The personal VS Code feature provides Claude Code.
+3. In the container terminal, inside the repository, run `go version`, `bw --version`, `age --version`, `openspec --version` and `openspec list`.
+4. Start `claude`. Input: `/openspec-explore Read docs/development/first-explore-prompt.md and work on the brief.`
+5. Review the results and choose a scope. Only then run, for example, `/openspec-propose Plan a synthetic regression test for attachments with the same name but different IDs.` Review the proposal, design, spec delta and tasks under openspec/changes/. Run `openspec validate <change-name> --strict` before the next step.
 
-OpenSpec wurde mit `openspec init --tools claude,agents` initialisiert. Die generierten Skills sind eingecheckt. Weitere Clients lassen sich bei Bedarf nach der [offiziellen CLI-Referenz](https://github.com/Fission-AI/OpenSpec/blob/v2.0.0/docs/cli.md) anbinden.
+OpenSpec was initialized with `openspec init --tools claude,agents`. The generated skills are checked in. Further clients can be connected as needed following the [official CLI reference](https://github.com/Fission-AI/OpenSpec/blob/v2.0.0/docs/cli.md).

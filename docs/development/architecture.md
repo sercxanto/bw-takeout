@@ -1,3 +1,3 @@
-# Architekturstand
+# Architecture Status
 
-Die feste Integrationsgrenze ist die unveränderte offizielle bw-CLI. Entwurf für Explore: interaktives Profil → Synchronisation und Bestandsaufnahme → JSON und einzelne Anhangabrufe → Prüfergebnis → verschlüsseltes Archiv. Persönliche und organisatorische Sichten getrennt behandeln. Prozessschnittstellen, temporärer Klartext, Manifest, atomare Veröffentlichung ohne Überschreiben und Fehlerstatus sind offene Designfragen. [Entscheidungsstand](../decisions/README.md)
+The fixed integration boundary is the unmodified official bw CLI. Draft for Explore: interactive profile → sync and inventory → JSON and individual attachment downloads → verification result → encrypted archive. Handle personal and organization views separately. Process interfaces, temporary plaintext, the manifest, atomic publishing without overwriting, and error status are open design questions. [Decision status](../decisions/README.md)

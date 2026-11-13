@@ -1,7 +1,7 @@
-# Architekturentscheidungen
+# Architecture Decisions
 
-- accepted · [Unveränderte offizielle bw-CLI](0001-offizielle-cli.md)
+- accepted · [Unmodified official bw CLI](0001-official-cli.md)
 - proposed · [Go](0002-go.md)
 - proposed · [age](0003-age.md)
 
-Für neue oder ersetzende Entscheidungen gelten die Kriterien in [CONTRIBUTING](../../CONTRIBUTING.md).
+New or superseding decisions follow the criteria in [CONTRIBUTING](../../CONTRIBUTING.md).
