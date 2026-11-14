@@ -42,7 +42,7 @@
 ## 6. Integration check
 
 - [x] 6.1 Run `gofmt -l .`, `go vet ./...` and `go test ./...` in the dev container; verify no output from gofmt and all tests pass, and record platform, Go version and date in `docs/development/testing.md` together with what was not run (macOS, Windows, live capture)
-- [ ] 6.2 Compare every scenario in `specs/capture-verification/spec.md` with the test that covers it; verify the mapping is complete and note it in the PR description
+- [x] 6.2 Compare every scenario in `specs/capture-verification/spec.md` with the test that covers it; verify the mapping is complete and record it in `docs/development/testing.md`, because the repository has no pull request workflow yet
 - [x] 6.3 Run `openspec validate capture-verification --strict`; verify it passes
 
 ## Workflow follow-up

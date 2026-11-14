@@ -29,6 +29,42 @@ Fourteen variants each break the intact fixture in one place: missing item, dupl
 
 `internal/capture` tests the parsers: format recognition, rejected document forms and duplicate detection. `internal/verify` tests the verdict rules. Each test of a spec scenario carries the scenario's name, for example `TestOneDownloadFails`. The cross-cutting tests run every fixture variant and every additional failure case, with and without the reference inventory, and check that the serialized result contains no sensitive value, that every finding carries a severity, a known reason code and the IDs it refers to, and that two runs produce byte-identical output.
 
+### Spec Scenario Coverage
+
+Every scenario of the capture-verification spec has one test of the same name in `internal/verify`. The mapping was checked on 14 November 2026 and is complete. Parser cases are tested in addition in `internal/capture/parse_test.go`.
+
+| Requirement | Scenario | Test |
+|---|---|---|
+| Three-state verdict | Intact capture | `TestIntactCapture` |
+| | Failure outranks unverifiable items | `TestFailureOutranksUnverifiableItems` |
+| Scope statement and standing limits | Verified result without reference inventory | `TestVerifiedResultWithoutReferenceInventory` |
+| Document form validation | Password-protected export supplied as inventory | `TestPasswordProtectedExportSuppliedAsInventory` |
+| | Unparsable document | `TestUnparsableDocument` |
+| Item identity comparison | Item missing from plaintext export | `TestItemMissingFromPlaintextExport` |
+| | Duplicate item ID | `TestDuplicateItemID` |
+| Passkey count comparison | Legacy login without passkey list | `TestLegacyLoginWithoutPasskeyList` |
+| | One passkey missing | `TestOnePasskeyMissing` |
+| | All passkeys dropped | `TestAllPasskeysDropped` |
+| Unverifiable item formats | Blob-format login item | `TestBlobFormatLoginItem` |
+| | Unrecognized format | `TestUnrecognizedFormat` |
+| | Legacy content with unmarked sealed data | `TestLegacyContentWithUnmarkedSealedData` |
+| Passkey structure validation | Two valid passkeys with different keys and counters | `TestTwoValidPasskeysWithDifferentKeysAndCounters` |
+| | Empty key | `TestEmptyKey` |
+| | Key does not parse | `TestKeyDoesNotParse` |
+| | Unknown key form | `TestUnknownKeyForm` |
+| Reference inventory comparison | Swapped credential without reference | `TestSwappedCredentialWithoutReference` |
+| | Swapped credential with reference | `TestSwappedCredentialWithReference` |
+| | Attachment content differs from reference | `TestAttachmentContentDiffersFromReference` |
+| Attachment accounting by ID | Two attachments with the same name | `TestTwoAttachmentsWithTheSameName` |
+| | One download fails | `TestOneDownloadFails` |
+| | Result missing | `TestResultMissing` |
+| | Empty attachment | `TestEmptyAttachment` |
+| Attachment inventory coverage | Listed item not exported | `TestListedItemNotExported` |
+| | Exported item not listed | `TestExportedItemNotListed` |
+| Organization items stay visible | Organization items present | `TestOrganizationItemsPresent` |
+| Attributable findings | Finding for a missing passkey | `TestFindingForAMissingPasskey` |
+| No secrets in results | Failing capture with sensitive content | `TestFailingCaptureWithSensitiveContent` |
+
 ## Test Run of 14 November 2026
 
 In the dev container on Linux/arm64 with Go 1.27.3, `gofmt -l .` printed nothing, `go vet ./...` passed and `go test ./...` passed in all three packages. The key-material search above printed nothing on the same day. Evidence level: mock.
