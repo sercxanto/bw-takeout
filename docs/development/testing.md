@@ -151,7 +151,7 @@ Every scenario of the three specs of the change archive-generation has at least 
 
 In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3, age 1.2.1, GNU tar 1.34 and OpenSpec 2.0.0: `gofmt -l .` printed nothing, and `go vet ./...`, `go test ./...` and `go test -race ./...` passed in all packages. The concurrency test passed 100 runs in a row with the race detector. `GOOS=darwin` and `GOOS=windows` builds and `go vet` passed for `./...`. The key-material search above printed nothing. The recovery commands of the [recovery page](../user/recovery.md) were run as written against a generation left by the opt-in test. Evidence level: mock.
 
-The module cache of this container belonged to root, so the session used a `GOPATH` under the ignored `.local/` until the image is rebuilt ([integrations](integrations.md)).
+The module cache of this container belonged to root, so the session used a `GOPATH` under the ignored `.local/` ([integrations](integrations.md)). After the image was rebuilt on 14 November 2026, `/go/pkg/mod` belongs to `vscode`, and `go mod download` and `go test ./...` passed with the default `GOPATH=/go`.
 
 Not run: macOS, Windows, Linux/amd64, FAT or exFAT media, network shares, the manual offline exercise on a second system, attachments larger than a few hundred kilobytes, any live capture and the real `bw` binary.
 
