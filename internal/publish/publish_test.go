@@ -234,7 +234,7 @@ func TestVerdictDecidesPublication(t *testing.T) {
 				}
 				return
 			}
-			if len(got) != 1 || got[0] != c.want || pub.Name != c.want || pub.Verdict != c.verdict {
+			if len(got) != 1 || got[0] != c.want || pub.Name != c.want || pub.Verdict != string(c.verdict) {
 				t.Fatalf("target holds %v, published %+v", got, pub)
 			}
 			if inner := names(t, pub.Path); len(inner) != 1 || inner[0] != ArchiveName {
@@ -738,5 +738,11 @@ func TestParseName(t *testing.T) {
 		if _, _, ok := ParseName(name); ok {
 			t.Errorf("%s accepted", name)
 		}
+	}
+}
+
+func TestVerdictsMatchPackageVerify(t *testing.T) {
+	if VerdictVerified != string(verify.Verified) || VerdictUnverified != string(verify.Unverified) || VerdictFailed != string(verify.Failed) {
+		t.Fatal("verdict constants differ from package verify")
 	}
 }

@@ -2,7 +2,7 @@
 
 For the first change, define a known synthetic reference inventory outside the CLI's view. Verify two passkeys with different keys and counters, then simulate a missing credential, a missing key, and an equal count with swapped content. Download two attachments with the same name but different IDs and bytes. Make one individual download fail and check that no silent success results.
 
-Further cases: stale local state, a restricted organization role, interrupted encryption, and two concurrent runs with the same target. Existing archives must stay byte-identical. For offline recovery, decrypt without network access and compare the contents with the reference inventory. Report mock, SDK test and authenticated end-to-end test separately. These product tests are planned.
+Further cases: stale local state, a restricted organization role, interrupted encryption, and two concurrent runs with the same target. Existing archives must stay byte-identical. For offline recovery, decrypt without network access and compare the contents with the reference inventory. Report mock, SDK test and authenticated end-to-end test separately. Concurrent runs, interrupted writing and offline decryption are tested with synthetic data, see [archive and publishing tests](#archive-and-publishing-tests). The tests against stale local state, organization roles and a live vault are planned.
 
 ## Synthetic Capture Fixtures
 
@@ -74,6 +74,82 @@ Every scenario of the capture-verification spec has one test of the same name in
 In the dev container on Linux/arm64 with Go 1.27.3, `gofmt -l .` printed nothing, `go vet ./...` passed and `go test ./...` passed in all three packages. The key-material search above printed nothing on the same day. Evidence level: mock.
 
 Not run: macOS, Windows, Linux/amd64, any live capture, any authenticated CLI process, and the real `bw` binary. The tests start no process and use no network.
+
+## Archive and Publishing Tests
+
+The change archive-generation adds tests in four packages. All of them use the synthetic fixtures above and age key pairs generated at test time. No key is committed.
+
+- `internal/manifest`: serialization, the byte-identical embedded verification result, format version and entry validation.
+- `internal/archive`: the encrypted tar stream. Malformed archives are built for the purpose by re-encrypting changed tar entries. Truncation and altered bytes are tested at several positions of an archive whose payload spans several age chunks. `TestRecoveryWithStandardTools` decrypts with the `age` command and unpacks with the `tar` command from the search path. It is skipped with a message where either is missing, and it is the only test that writes synthetic plaintext to a test directory on purpose.
+- `internal/publish`: the target directory. A fault-injecting file system fails each step of design D8 in turn, and every pre-existing file in the target is hashed before and after. Eight publishers run concurrently with the same clock value and the same first random value. `TestProcessKilledWhileWriting` starts the test binary as a helper process, lets it write more than one age chunk into a new generation and kills it. `TestKillHelper` is that helper and reports a skip when run on its own.
+- `cmd/bitwarden-backup`: the command is built once and run as a separate process against generations made from the fixtures, including runs with an empty search path. `TestEndToEnd` runs the whole chain from fixture capture to the verify command.
+
+`TestLeaveGenerationForOfflineExercise` in `cmd/bitwarden-backup` writes one synthetic generation for the manual offline exercise on a second system. It runs only when both environment variables are set, otherwise it reports a skip:
+
+```sh
+age-keygen -o identity.txt
+BITWARDEN_BACKUP_EXERCISE_TARGET=/path/to/target \
+BITWARDEN_BACKUP_EXERCISE_RECIPIENT="$(age-keygen -y identity.txt)" \
+go test -count=1 -run TestLeaveGenerationForOfflineExercise -v ./cmd/bitwarden-backup/
+```
+
+Copy the generation and the identity to the second system separately and follow [recovery](../user/recovery.md) there.
+
+### Spec Scenario Coverage of archive-generation
+
+Every scenario of the three specs of the change archive-generation has at least one test. The mapping was checked on 14 November 2026 and is complete.
+
+| Spec | Scenario | Test |
+|---|---|---|
+| backup-archive | Content of a generation | `publish.TestNoNamesFromTheVault`, `publish.TestVerdictDecidesPublication` |
+| | Recovery with the age and tar commands | `archive.TestRecoveryWithStandardTools` |
+| | Two recipients | `archive.TestTwoRecipients` |
+| | No recipient | `archive.TestRecipients`, `main.TestEndToEnd/no_recipient` |
+| | Unsupported recipient | `archive.TestRecipients` |
+| | Plaintext export round trip | `archive.TestRoundTripIntactFixture` |
+| | Two attachments with the same file name | `archive.TestTwoAttachmentsWithTheSameFileName` |
+| | ID with a path separator | `archive.TestIDValidation`, `main.TestEndToEnd/attachment_ID_with_a_path_separator` |
+| | Attachment ID that is not a UUID | `archive.TestRoundTripIntactFixture`, `archive.TestIDValidation` |
+| | Manifest covers every entry | `archive.TestRoundTripIntactFixture`, `archive.TestReaderScenarios` |
+| | Verification result embedded unchanged | `manifest.TestRoundTripKeepsVerificationBytes`, `archive.TestRoundTripIntactFixture` |
+| | Instructions present and free of vault data | `archive.TestRecoveryInstructions` |
+| | Temporary location stays empty | `archive.TestTemporaryLocationStaysEmpty`, `publish.TestNoNamesFromTheVault` |
+| generation-publishing | Two generations in the same second | `publish.TestTwoGenerationsInTheSameSecond` |
+| | Name collision | `publish.TestNameCollision` |
+| | Successful run next to older generations | `publish.TestSuccessfulRunNextToOlderGenerations` |
+| | Failing run next to older generations | `publish.TestFailingRunNextToOlderGenerations` |
+| | Concurrent runs with identical time and random source | `publish.TestConcurrentRunsWithIdenticalTimeAndRandomSource` |
+| | Write error in the middle | `publish.TestWriteErrorInTheMiddle` |
+| | Process killed while writing | `publish.TestProcessKilledWhileWriting` |
+| | Verified capture | `publish.TestVerdictDecidesPublication/verified` |
+| | Unverified capture | `publish.TestVerdictDecidesPublication/unverified` |
+| | Failed capture | `publish.TestVerdictDecidesPublication/failed`, `main.TestEndToEnd/failed_capture` |
+| | Leftover from an aborted run | `publish.TestLeftoverFromAnAbortedRun` |
+| | Missing target | `publish.TestMissingTarget` |
+| | Permissions on Linux | `publish.TestPermissionsOnLinux` |
+| offline-verification | System without bw | `main.TestSystemWithoutBW`, `main.TestNoNetworkOrProcessPackage` |
+| | Intact generation | `main.TestVerifiedCapture`, `main.TestEndToEnd` |
+| | Entry differs from the manifest | `archive.TestReaderScenarios/entry_differs_from_the_manifest`, `main.TestFailedVerification/damaged_entry` |
+| | Entry not listed | `archive.TestReaderScenarios/entry_not_listed` |
+| | Listed entry missing | `archive.TestReaderScenarios/listed_entry_missing` |
+| | Truncated archive file | `archive.TestTruncatedArchive`, `main.TestFailedVerification/truncated_archive` |
+| | Altered byte | `archive.TestAlteredByte`, `main.TestFailedVerification/altered_byte` |
+| | Identity of another key pair | `archive.TestIdentityOfAnotherKeyPair`, `main.TestFailedVerification/identity_of_another_key_pair` |
+| | Partial generation | `main.TestPartialGeneration`, `main.TestDirectoryWithoutArchive` |
+| | Symbolic link entry | `archive.TestReaderScenarios/symbolic_link_entry` |
+| | Newer format version | `archive.TestReaderScenarios/newer_format_version`, `main.TestFailedVerification/newer_format_version` |
+| | Verified capture | `main.TestVerifiedCapture` |
+| | Unverified capture | `main.TestUnverifiedCapture` |
+| | Failed verification | `main.TestFailedVerification` |
+| | Generation with sentinel values | `main.TestGenerationWithSentinelValues` |
+
+## Test Run of 14 November 2026, archive-generation
+
+In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3, age 1.2.1, GNU tar 1.34 and OpenSpec 2.0.0: `gofmt -l .` printed nothing, and `go vet ./...`, `go test ./...` and `go test -race ./...` passed in all packages. The concurrency test passed 100 runs in a row with the race detector. `GOOS=darwin` and `GOOS=windows` builds and `go vet` passed for `./...`. The key-material search above printed nothing. The recovery commands of the [recovery page](../user/recovery.md) were run as written against a generation left by the opt-in test. Evidence level: mock.
+
+The module cache of this container belonged to root, so the session used a `GOPATH` under the ignored `.local/` until the image is rebuilt ([integrations](integrations.md)).
+
+Not run: macOS, Windows, Linux/amd64, FAT or exFAT media, network shares, the manual offline exercise on a second system, attachments larger than a few hundred kilobytes, any live capture and the real `bw` binary.
 
 ## Bootstrap Check of 13 November 2026
 

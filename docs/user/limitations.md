@@ -24,6 +24,22 @@ It cannot detect:
 
 Organization items are not checked. They are counted per organization and reported as a warning.
 
+## What Offline Verification Shows
+
+`bitwarden-backup verify` shows that:
+
+- the identity file holds an identity that opens the archive,
+- the archive is complete and unaltered: a truncated file or a changed byte fails the check,
+- every entry has a name the format defines and matches the size and SHA-256 in the manifest, and no entry is missing or added,
+- the manifest has a format version this program knows.
+
+It does not show:
+
+- **Completeness of the capture.** The stored verdict was computed when the backup was made. The check reports it but does not compute it again from the archived documents, and it carries all limits of that verdict described above.
+- **Origin.** Anyone who knows a recipient key can create an archive that passes. See [security](security.md).
+- **That the documents import elsewhere.** The plaintext export is stored as `bw` wrote it. Whether another program imports it is not tested.
+- **The state of other generations.** Each generation is checked on its own.
+
 ## Storage Guarantees
 
 A generation directory loses its `.partial` marker only after its archive file was flushed to storage. Where the platform supports it, the generation directory and the target directory are flushed as well. Some guarantees depend on the platform and the file system:

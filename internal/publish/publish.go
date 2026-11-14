@@ -22,8 +22,15 @@ import (
 	"regexp"
 	"runtime"
 	"time"
+)
 
-	"bitwarden-backup/internal/verify"
+// The verdicts as the serialized verification result of package verify
+// states them. They are repeated here so that publishing does not depend on
+// the verification code. A test checks that they match.
+const (
+	VerdictVerified   = "verified"
+	VerdictUnverified = "unverified"
+	VerdictFailed     = "failed"
 )
 
 // Names inside the target.
@@ -147,7 +154,7 @@ func (r *recordingWriter) Write(p []byte) (int, error) {
 type Published struct {
 	Name    string
 	Path    string
-	Verdict verify.Verdict
+	Verdict string
 }
 
 // Begin checks the target, creates a new partial generation directory with
@@ -264,14 +271,14 @@ func (g *Generation) Commit(verification []byte) (*Published, error) {
 		return nil, fmt.Errorf("%w: %w", ErrWriteFailed, g.written.err)
 	}
 	var r struct {
-		Verdict verify.Verdict `json:"verdict"`
+		Verdict string `json:"verdict"`
 	}
 	var final string
 	if err := json.Unmarshal(verification, &r); err == nil {
 		switch r.Verdict {
-		case verify.Verified:
+		case VerdictVerified:
 			final = g.base
-		case verify.Unverified:
+		case VerdictUnverified:
 			final = g.base + UnverifiedMarker
 		}
 	}
@@ -279,7 +286,7 @@ func (g *Generation) Commit(verification []byte) (*Published, error) {
 		if err := g.Abort(); err != nil {
 			return nil, err
 		}
-		if r.Verdict == verify.Failed {
+		if r.Verdict == VerdictFailed {
 			return nil, ErrFailedCapture
 		}
 		return nil, ErrUnknownVerdict

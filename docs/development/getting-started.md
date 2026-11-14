@@ -16,7 +16,16 @@ go vet ./...
 go test ./...
 ```
 
-`gofmt -l .` prints the files that need formatting and prints nothing when all files are formatted. The tests need no network, no login and no `bw` process. The [test strategy](testing.md) describes the fixtures and their evidence level.
+`gofmt -l .` prints the files that need formatting and prints nothing when all files are formatted. The tests need no network, no login and no `bw` process. A few tests start the built command, the `age` and `tar` commands or a helper copy of the test binary. Run `go test -race ./...` as well before a review. The [test strategy](testing.md) describes the fixtures and their evidence level.
+
+## Building and running the command
+
+```sh
+go build -o .local/bin/bitwarden-backup ./cmd/bitwarden-backup
+.local/bin/bitwarden-backup verify --identity <identity-file> <generation-directory>
+```
+
+The command has one subcommand so far, the offline check of a backup generation, described in [usage](../user/usage.md). `.local/` is ignored by git. A synthetic generation to try it on can be left by an opt-in test, see [testing](testing.md#archive-and-publishing-tests).
 
 ## OpenSpec setup
 

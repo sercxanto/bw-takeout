@@ -4,6 +4,7 @@
 package archivetest
 
 import (
+	"archive/tar"
 	"bytes"
 	"io"
 	"testing"
@@ -109,4 +110,50 @@ func Build(t testing.TB, f *capturetest.Fixture, verification []byte, recipients
 	var b bytes.Buffer
 	WriteTo(t, &b, f, verification, recipients...)
 	return b.Bytes()
+}
+
+// Rewrite decrypts an archive, lets change replace the content of each
+// entry, and encrypts the result again to the identity's recipient. The
+// manifest is kept as it is, so a changed entry no longer matches it.
+func Rewrite(t testing.TB, data []byte, id *age.X25519Identity, change func(name string, content []byte) []byte) []byte {
+	t.Helper()
+	plain, err := age.Decrypt(bytes.NewReader(data), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(plain)
+	var out bytes.Buffer
+	enc, err := age.Encrypt(&out, id.Recipient())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tw := tar.NewWriter(enc)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		content, err := io.ReadAll(tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content = change(hdr.Name, content)
+		hdr.Size = int64(len(content))
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write(content); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := enc.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
 }

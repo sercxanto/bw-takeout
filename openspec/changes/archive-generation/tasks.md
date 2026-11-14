@@ -44,24 +44,24 @@
 
 ## 5. Verify command
 
-- [ ] 5.1 Add `cmd/bitwarden-backup` with the subcommand `verify --identity <file> <generation-directory>` and the exit statuses of design D10; verify `go build ./cmd/...` and a usage error with status 2 for missing arguments
-- [ ] 5.2 Verify the scenarios "Intact generation", "Verified capture", "Unverified capture" and "Failed verification" by running the built command against generations made from the fixtures
-- [ ] 5.3 Verify the scenario "Partial generation" and a directory without an archive file
-- [ ] 5.4 Verify the scenario "System without bw" by running the command with an empty search path, and verify with `go list -deps ./cmd/bitwarden-backup` that the network package is not among the dependencies
-- [ ] 5.5 Verify the scenario "Generation with sentinel values" for standard output and standard error, for an intact generation and for one with a damaged entry
-- [ ] 5.6 Refuse an identity file that cannot be parsed or holds no identity, without printing its content; verify a test with a file that holds a sentinel line
-- [ ] 5.7 Write `docs/user/recovery.md`: verifying with the command, recovering with the age and tar commands alone, what to keep outside the archive (identity, age program, these steps), and the warning that manual unpacking writes plaintext to disk; verify every command on the page runs as written against a synthetic generation
-- [ ] 5.8 Update `docs/user/usage.md` with the verify command and its exit statuses, `docs/user/security.md` with key separation, permissions and the missing proof of origin, and `docs/user/limitations.md` with what offline verification does and does not show; verify each statement corresponds to a test or to a risk in design.md
+- [x] 5.1 Add `cmd/bitwarden-backup` with the subcommand `verify --identity <file> <generation-directory>` and the exit statuses of design D10; verify `go build ./cmd/...` and a usage error with status 2 for missing arguments
+- [x] 5.2 Verify the scenarios "Intact generation", "Verified capture", "Unverified capture" and "Failed verification" by running the built command against generations made from the fixtures
+- [x] 5.3 Verify the scenario "Partial generation" and a directory without an archive file
+- [x] 5.4 Verify the scenario "System without bw" by running the command with an empty search path, and verify with `go list -deps ./cmd/bitwarden-backup` that the network package is not among the dependencies
+- [x] 5.5 Verify the scenario "Generation with sentinel values" for standard output and standard error, for an intact generation and for one with a damaged entry
+- [x] 5.6 Refuse an identity file that cannot be parsed or holds no identity, without printing its content; verify a test with a file that holds a sentinel line
+- [x] 5.7 Write `docs/user/recovery.md`: verifying with the command, recovering with the age and tar commands alone, what to keep outside the archive (identity, age program, these steps), and the warning that manual unpacking writes plaintext to disk; verify every command on the page runs as written against a synthetic generation
+- [x] 5.8 Update `docs/user/usage.md` with the verify command and its exit statuses, `docs/user/security.md` with key separation, permissions and the missing proof of origin, and `docs/user/limitations.md` with what offline verification does and does not show; verify each statement corresponds to a test or to a risk in design.md
 
 ## 6. Integration check
 
-- [ ] 6.1 Add an end-to-end test: fixture capture, verification, archive, publishing, then the verify command on the result, once for a verified and once for an unverified capture; verify both pass
-- [ ] 6.2 Add the opt-in test that leaves a synthetic generation for the manual offline exercise (design D12); verify it does nothing without its environment variables and writes one verifiable generation with them
-- [ ] 6.3 Cross-compile with `GOOS=darwin` and `GOOS=windows` for `./...` and run `go vet` for both; verify both succeed
-- [ ] 6.4 Run `gofmt -l .`, `go vet ./...`, `go test ./...` and `go test -race ./...` in the dev container; verify no output from gofmt and all tests pass, and record platform, versions and date in `docs/development/testing.md` together with what was not run: macOS, Windows, FAT or exFAT media, network shares, the manual offline exercise on a second system, large attachments
-- [ ] 6.5 Update `docs/development/architecture.md` (component status, roadmap step 2), `docs/development/getting-started.md` (build and verify commands) and the project status in `README.md`; verify the pages name the new packages and the command
-- [ ] 6.6 Compare every scenario of the three specs with the test that covers it and add the mapping to `docs/development/testing.md`; verify the mapping is complete
-- [ ] 6.7 Run `openspec validate archive-generation --strict`; verify it passes
+- [x] 6.1 Add an end-to-end test: fixture capture, verification, archive, publishing, then the verify command on the result, once for a verified and once for an unverified capture; verify both pass
+- [x] 6.2 Add the opt-in test that leaves a synthetic generation for the manual offline exercise (design D12); verify it does nothing without its environment variables and writes one verifiable generation with them
+- [x] 6.3 Cross-compile with `GOOS=darwin` and `GOOS=windows` for `./...` and run `go vet` for both; verify both succeed
+- [x] 6.4 Run `gofmt -l .`, `go vet ./...`, `go test ./...` and `go test -race ./...` in the dev container; verify no output from gofmt and all tests pass, and record platform, versions and date in `docs/development/testing.md` together with what was not run: macOS, Windows, FAT or exFAT media, network shares, the manual offline exercise on a second system, large attachments
+- [x] 6.5 Update `docs/development/architecture.md` (component status, roadmap step 2), `docs/development/getting-started.md` (build and verify commands) and the project status in `README.md`; verify the pages name the new packages and the command
+- [x] 6.6 Compare every scenario of the three specs with the test that covers it and add the mapping to `docs/development/testing.md`; verify the mapping is complete
+- [x] 6.7 Run `openspec validate archive-generation --strict`; verify it passes
 
 ## Workflow follow-up
 
