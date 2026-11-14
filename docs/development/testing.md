@@ -132,11 +132,14 @@ Every scenario of the three specs of the change archive-generation has at least 
 | | Entry differs from the manifest | `archive.TestReaderScenarios/entry_differs_from_the_manifest`, `main.TestFailedVerification/damaged_entry` |
 | | Entry not listed | `archive.TestReaderScenarios/entry_not_listed` |
 | | Listed entry missing | `archive.TestReaderScenarios/listed_entry_missing` |
+| | Item count differs from the export | `archive.TestReaderScenarios/item_count_differs_from_the_export` |
 | | Truncated archive file | `archive.TestTruncatedArchive`, `main.TestFailedVerification/truncated_archive` |
 | | Altered byte | `archive.TestAlteredByte`, `main.TestFailedVerification/altered_byte` |
 | | Identity of another key pair | `archive.TestIdentityOfAnotherKeyPair`, `main.TestFailedVerification/identity_of_another_key_pair` |
 | | Partial generation | `main.TestPartialGeneration`, `main.TestDirectoryWithoutArchive` |
+| | Partial generation reached through another path | `main.TestPartialGenerationByAnotherPath` |
 | | Symbolic link entry | `archive.TestReaderScenarios/symbolic_link_entry` |
+| | Recovery instructions not first | `archive.TestReaderScenarios/recovery_instructions_not_first` |
 | | Newer format version | `archive.TestReaderScenarios/newer_format_version`, `main.TestFailedVerification/newer_format_version` |
 | | Verified capture | `main.TestVerifiedCapture` |
 | | Unverified capture | `main.TestUnverifiedCapture` |

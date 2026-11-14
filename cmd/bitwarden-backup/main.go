@@ -71,8 +71,21 @@ func failed(stderr io.Writer, format string, args ...any) int {
 	return exitFailed
 }
 
+// generationName returns the name of the directory that dir resolves to,
+// so that ".", ".." and symbolic links do not hide the partial marker.
+func generationName(dir string) string {
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		resolved = dir
+	}
+	if abs, err := filepath.Abs(resolved); err == nil {
+		resolved = abs
+	}
+	return filepath.Base(resolved)
+}
+
 func verifyGeneration(identityPath, dir string, stdout, stderr io.Writer) int {
-	name := filepath.Base(filepath.Clean(dir))
+	name := generationName(dir)
 	if strings.HasSuffix(name, publish.PartialMarker) {
 		return failed(stderr, "generation %s is incomplete: it carries the %s marker", clean(name), publish.PartialMarker)
 	}

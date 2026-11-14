@@ -283,13 +283,14 @@ func (g *Generation) Commit(verification []byte) (*Published, error) {
 		}
 	}
 	if final == "" {
-		if err := g.Abort(); err != nil {
-			return nil, err
-		}
+		refused := ErrUnknownVerdict
 		if r.Verdict == VerdictFailed {
-			return nil, ErrFailedCapture
+			refused = ErrFailedCapture
 		}
-		return nil, ErrUnknownVerdict
+		if err := g.Abort(); err != nil {
+			return nil, errors.Join(refused, err)
+		}
+		return nil, refused
 	}
 	if err := g.file.Sync(); err != nil {
 		return nil, g.fail(fmt.Errorf("flush archive file: %w", err))
@@ -362,14 +363,16 @@ func (g *Generation) closeFile() {
 
 // Abort removes the run's own partial directory: the archive file, then the
 // directory. If the directory holds anything else, it is left in place and
-// an error is returned. Abort after a successful Commit returns
-// ErrFinished.
+// an error is returned. A failed Abort may be repeated. Abort after a
+// successful Commit or Abort returns ErrFinished.
 func (g *Generation) Abort() error {
 	if g.done {
 		return ErrFinished
 	}
 	g.closeFile()
-	g.done = true
+	// From here on the generation is never published, even if a removal
+	// fails and Abort is repeated.
+	g.broken = true
 	archive := filepath.Join(g.partialPath(), ArchiveName)
 	if err := g.fs.Remove(archive); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("remove partial archive file: %w", err)
@@ -377,5 +380,6 @@ func (g *Generation) Abort() error {
 	if err := g.fs.Remove(g.partialPath()); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("remove partial generation directory: %w", err)
 	}
+	g.done = true
 	return nil
 }

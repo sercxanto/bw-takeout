@@ -629,6 +629,40 @@ func TestCommitRefusesAfterWriteError(t *testing.T) {
 	}
 }
 
+func TestFailedCaptureWhoseRemovalFails(t *testing.T) {
+	target := t.TempDir()
+	id := archivetest.NewKey(t)
+	c := captureWith(t, verify.Failed)
+	p := &Publisher{Now: fixedClock, fs: &faultFS{fault: fault{op: "remove", nth: 1, err: syscall.EBUSY}}}
+	g, err := p.Begin(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeArchive(t, g.Writer(), c, id.Recipient().String()); err != nil {
+		t.Fatal(err)
+	}
+	_, err = g.Commit(c.verification)
+	if !errors.Is(err, ErrFailedCapture) || !errors.Is(err, syscall.EBUSY) {
+		t.Fatalf("commit: %v", err)
+	}
+	if got := names(t, target); len(got) != 1 || got[0] != g.PartialName() {
+		t.Fatalf("target holds %v", got)
+	}
+	if _, err := g.Commit([]byte(`{"verdict":"verified"}`)); !errors.Is(err, ErrCommitFailed) {
+		t.Fatalf("commit after the refusal: %v", err)
+	}
+	// The removal is repeated and now succeeds.
+	if err := g.Abort(); err != nil {
+		t.Fatalf("repeated abort: %v", err)
+	}
+	if got := names(t, target); len(got) != 0 {
+		t.Fatalf("target holds %v after the repeated abort", got)
+	}
+	if err := g.Abort(); !errors.Is(err, ErrFinished) {
+		t.Fatalf("abort after a successful abort: %v", err)
+	}
+}
+
 func TestFlushErrorKeepsGenerationPartial(t *testing.T) {
 	id := archivetest.NewKey(t)
 	c := captureWith(t, verify.Verified)

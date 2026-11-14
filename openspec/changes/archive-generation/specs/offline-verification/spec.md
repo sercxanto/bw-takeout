@@ -14,7 +14,7 @@ The verify command SHALL need only a generation and an age identity file. It SHA
 - **THEN** it succeeds
 
 ### Requirement: Entries are checked against the manifest
-The verify command SHALL compare the size and SHA-256 of every archive entry with the manifest. An entry that differs, an entry the manifest does not list and a listed entry that is missing SHALL each make the verification fail and SHALL be named by its entry name.
+The verify command SHALL compare the size and SHA-256 of every archive entry with the manifest. An entry that differs, an entry the manifest does not list and a listed entry that is missing SHALL each make the verification fail and SHALL be named by its entry name. The item and attachment counts of the manifest SHALL match the plaintext export and the listed attachments.
 
 #### Scenario: Intact generation
 - **WHEN** an intact generation is verified with a matching identity
@@ -31,6 +31,10 @@ The verify command SHALL compare the size and SHA-256 of every archive entry wit
 #### Scenario: Listed entry missing
 - **WHEN** the manifest lists an entry that the archive does not hold
 - **THEN** the verification fails and names the entry
+
+#### Scenario: Item count differs from the export
+- **WHEN** the manifest counts a different number of items than the plaintext export holds
+- **THEN** the verification fails
 
 ### Requirement: Damaged archives fail as a whole
 A truncated or altered archive file SHALL make the verification fail. The command SHALL NOT report a partial success.
@@ -57,12 +61,20 @@ The verify command SHALL refuse a generation that carries the partial marker or 
 - **WHEN** the verify command is pointed at a directory with the `.partial` marker
 - **THEN** it fails and reports the generation as incomplete
 
+#### Scenario: Partial generation reached through another path
+- **WHEN** the verify command is given `.` from inside a partial generation, or a symbolic link to one
+- **THEN** it fails and reports the generation as incomplete
+
 ### Requirement: Unsafe or unknown archive structure is rejected
-The verify command SHALL accept only regular file entries with the names the format defines. Any other entry type, an unexpected name, a duplicate entry, a manifest that is not the last entry and an unknown format version SHALL each make the verification fail.
+The verify command SHALL accept only regular file entries with the names the format defines. Any other entry type, an unexpected name, a duplicate entry, recovery instructions that are not the first entry, a manifest that is not the last entry and an unknown format version SHALL each make the verification fail.
 
 #### Scenario: Symbolic link entry
 - **WHEN** an archive contains a symbolic link entry
 - **THEN** the verification fails
+
+#### Scenario: Recovery instructions not first
+- **WHEN** the recovery instructions are not the first entry of the archive
+- **THEN** the verification fails and names the entry
 
 #### Scenario: Newer format version
 - **WHEN** the manifest states a format version the command does not know

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -420,6 +421,34 @@ func TestReaderScenarios(t *testing.T) {
 		})
 		_, err := archive.Read(bytes.NewReader(data), []age.Identity{id}, nil)
 		if !errors.Is(err, archive.ErrStructure) || !errors.Is(err, manifest.ErrInvalid) {
+			t.Fatalf("got %v", err)
+		}
+	})
+	t.Run("recovery instructions not first", func(t *testing.T) {
+		id, data := rebuild(t, func(es []rawEntry) []rawEntry {
+			es[0], es[1] = es[1], es[0]
+			return es
+		})
+		_, err := archive.Read(bytes.NewReader(data), []age.Identity{id}, nil)
+		wantEntryError(t, err, archive.RecoveryPath, archive.ProblemNotFirst)
+	})
+	t.Run("item count differs from the export", func(t *testing.T) {
+		var counted int
+		id, data := rebuild(t, func(es []rawEntry) []rawEntry {
+			i := indexOf(es, archive.ManifestPath)
+			m, err := manifest.Parse(es[i].content)
+			if err != nil {
+				t.Fatal(err)
+			}
+			counted = m.Counts.Items
+			m.Counts.Items++
+			if es[i].content, err = manifest.Marshal(m); err != nil {
+				t.Fatal(err)
+			}
+			return es
+		})
+		_, err := archive.Read(bytes.NewReader(data), []age.Identity{id}, nil)
+		if !errors.Is(err, archive.ErrStructure) || !strings.Contains(err.Error(), fmt.Sprintf("counts %d items", counted+1)) {
 			t.Fatalf("got %v", err)
 		}
 	})

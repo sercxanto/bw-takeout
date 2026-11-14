@@ -2,6 +2,7 @@ package archive
 
 import (
 	"archive/tar"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -11,6 +12,7 @@ import (
 
 	"filippo.io/age"
 
+	"bitwarden-backup/internal/capture"
 	"bitwarden-backup/internal/manifest"
 )
 
@@ -53,6 +55,7 @@ const (
 	ProblemMissing        = "is listed in the manifest but missing from the archive"
 	ProblemManifestPath   = "is listed in the manifest with a kind or IDs that do not match its name"
 	ProblemRequired       = "is required by the format but not listed in the manifest"
+	ProblemNotFirst       = "is not the first entry of the archive"
 )
 
 type seenEntry struct {
@@ -79,6 +82,7 @@ func Read(src io.Reader, identities []age.Identity, visit func(path string, cont
 	tr := tar.NewReader(plain)
 	seen := map[string]seenEntry{}
 	var order []string
+	var export bytes.Buffer
 	var m *manifest.Manifest
 	for {
 		hdr, err := tr.Next()
@@ -108,12 +112,17 @@ func Read(src io.Reader, identities []age.Identity, visit func(path string, cont
 			return nil, &EntryError{Path: hdr.Name, Problem: ProblemDuplicate}
 		}
 		h := sha256.New()
+		var dst io.Writer = h
+		if hdr.Name == PlaintextExportPath {
+			// Kept in memory to count its items after its hash is confirmed.
+			dst = io.MultiWriter(h, &export)
+		}
 		if visit != nil {
-			if err := visit(hdr.Name, io.TeeReader(tr, h)); err != nil {
+			if err := visit(hdr.Name, io.TeeReader(tr, dst)); err != nil {
 				return nil, err
 			}
 		}
-		if _, err := io.Copy(h, tr); err != nil {
+		if _, err := io.Copy(dst, tr); err != nil {
 			return nil, fmt.Errorf("%w: %v", ErrDamaged, err)
 		}
 		seen[hdr.Name] = seenEntry{size: hdr.Size, sha256: hex.EncodeToString(h.Sum(nil))}
@@ -131,7 +140,25 @@ func Read(src io.Reader, identities []age.Identity, visit func(path string, cont
 	if err := compare(m, seen, order); err != nil {
 		return nil, err
 	}
+	if err := compareItems(m, export.Bytes()); err != nil {
+		return nil, err
+	}
 	return m, nil
+}
+
+// compareItems checks the item count of the manifest against the plaintext
+// export, whose content compare has already matched with the manifest. The
+// error leaves out the parser's message, so no vault content can reach the
+// output.
+func compareItems(m *manifest.Manifest, export []byte) error {
+	plain, err := capture.ParsePlaintextExport(export)
+	if err != nil {
+		return fmt.Errorf("%w: %s cannot be read, so its items cannot be counted", ErrStructure, PlaintextExportPath)
+	}
+	if len(plain.Items) != m.Counts.Items {
+		return fmt.Errorf("%w: the manifest counts %d items and %s holds %d", ErrStructure, m.Counts.Items, PlaintextExportPath, len(plain.Items))
+	}
+	return nil
 }
 
 func readManifest(r io.Reader, size int64) (*manifest.Manifest, error) {
@@ -204,6 +231,9 @@ func compare(m *manifest.Manifest, seen map[string]seenEntry, order []string) er
 		if !listed[name] {
 			problems = append(problems, &EntryError{Path: name, Problem: ProblemNotListed})
 		}
+	}
+	if _, present := seen[RecoveryPath]; present && order[0] != RecoveryPath {
+		problems = append(problems, &EntryError{Path: RecoveryPath, Problem: ProblemNotFirst})
 	}
 	for _, name := range []string{RecoveryPath, PlaintextExportPath, EncryptedExportPath, ItemListPath} {
 		if _, present := seen[name]; !listed[name] && !present {
