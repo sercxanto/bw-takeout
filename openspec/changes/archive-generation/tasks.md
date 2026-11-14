@@ -2,31 +2,31 @@
 
 ## 1. Dev container repair and dependency
 
-- [ ] 1.1 Change `.devcontainer/Dockerfile` so that the content of `/go` belongs to the container user after the tools are installed (design D13); verify by reading the build steps that no later step writes to `/go` as root, and state in the task result that the running container is unchanged until the maintainer rebuilds it
-- [ ] 1.2 If `go mod download` cannot write to the module cache in the running container, set `GOPATH` to a directory under the ignored `.local/` for all Go commands of this session; verify `go env GOPATH` in the session and that `git status` shows no new tracked or untracked file from it
-- [ ] 1.3 Add `filippo.io/age v1.2.1` to `go.mod` and commit `go.sum`; verify `go mod tidy` leaves both files unchanged and `go build ./...` succeeds
-- [ ] 1.4 Record in `docs/development/integrations.md` that the age library and the age CLI are pinned to the same version and updated together, and that the module cache must be writable for the container user; verify the page names both pins
+- [x] 1.1 Change `.devcontainer/Dockerfile` so that the content of `/go` belongs to the container user after the tools are installed (design D13); verify by reading the build steps that no later step writes to `/go` as root, and state in the task result that the running container is unchanged until the maintainer rebuilds it
+- [x] 1.2 If `go mod download` cannot write to the module cache in the running container, set `GOPATH` to a directory under the ignored `.local/` for all Go commands of this session; verify `go env GOPATH` in the session and that `git status` shows no new tracked or untracked file from it
+- [x] 1.3 Add `filippo.io/age v1.2.1` to `go.mod` and commit `go.sum`; verify `go mod tidy` leaves both files unchanged and `go build ./...` succeeds
+- [x] 1.4 Record in `docs/development/integrations.md` that the age library and the age CLI are pinned to the same version and updated together, and that the module cache must be writable for the container user; verify the page names both pins
 
 ## 2. Manifest
 
-- [ ] 2.1 Implement `internal/manifest` with the keys of design D5, the format name and version, and the verification result as raw JSON; verify a test round-trips a manifest and shows the embedded result byte-identical to the supplied one
-- [ ] 2.2 Reject an unknown format version and ignore unknown additional keys when reading; verify one test for each
-- [ ] 2.3 Validate entries when reading a manifest: unique paths, non-negative sizes, SHA-256 in lowercase hexadecimal of full length, known kinds; verify a test per violation
+- [x] 2.1 Implement `internal/manifest` with the keys of design D5, the format name and version, and the verification result as raw JSON; verify a test round-trips a manifest and shows the embedded result byte-identical to the supplied one
+- [x] 2.2 Reject an unknown format version and ignore unknown additional keys when reading; verify one test for each
+- [x] 2.3 Validate entries when reading a manifest: unique paths, non-negative sizes, SHA-256 in lowercase hexadecimal of full length, known kinds; verify a test per violation
 
 ## 3. Archive writer and reader
 
-- [ ] 3.1 Implement the writer in `internal/archive` on an `io.Writer`: `RECOVERY.txt` first, the three documents, attachments by ID, manifest last, tar entry attributes as in design D2, encryption to X25519 recipients; verify a test writes an archive from the intact fixture and reads it back with every entry byte-identical
-- [ ] 3.2 Validate item IDs and attachment IDs as UUIDs before use in an entry name; verify tests refuse an ID with a path separator, with a parent directory reference, with a wrong length and an empty one, and that the writer reports an error without finishing the archive
-- [ ] 3.3 Refuse writing without a recipient and with a recipient string that is not a native age recipient; verify the error names the position and not the value
-- [ ] 3.4 Implement the reader on an `io.Reader`: sequential, hashing entries as they pass, checks of the `offline-verification` spec for entry types, names, duplicates, manifest position and the comparison with the manifest; verify the scenarios "Entry differs from the manifest", "Entry not listed", "Listed entry missing", "Symbolic link entry" and "Newer format version" with archives built for the purpose
-- [ ] 3.5 Read the stream to its end before reporting success; verify the scenarios "Truncated archive file" at several cut positions, including inside the header and inside the last chunk, and "Altered byte" at several positions
-- [ ] 3.6 Verify the scenarios "Two recipients" and "Identity of another key pair" with key pairs generated at test time
-- [ ] 3.7 Write the text of `RECOVERY.txt` as a fixed string in the package; verify the scenario "Instructions present and free of vault data" and that the text names every top-level entry of the layout
-- [ ] 3.8 Verify the scenario "Temporary location stays empty" by pointing the temporary directory of the test process at an empty directory while writing and reading
-- [ ] 3.9 Add the recovery test with the `age` and `tar` commands from the search path (design D12); verify the scenario "Recovery with the age and tar commands" in the dev container and that the test reports a skip with a reason where a command is missing
-- [ ] 3.10 Write `docs/decisions/0005-archive-format.md` with status proposed, covering context, alternatives and consequences for design D2, D4, D5, D6 and D8, and add it to `docs/decisions/README.md`; verify the index lists it as proposed
-- [ ] 3.11 Update `docs/decisions/0003-age.md` as described in design D14 and keep its status proposed; verify it names the recipient model, multiple recipients against key loss, the tested offline recovery, and the two open points
-- [ ] 3.12 Review checkpoint: stop and show the maintainer the output of `go test -v ./internal/manifest/... ./internal/archive/...`, with every skipped test and its reason listed separately; verify the maintainer confirmed before any task of group 4 starts
+- [x] 3.1 Implement the writer in `internal/archive` on an `io.Writer`: `RECOVERY.txt` first, the three documents, attachments by ID, manifest last, tar entry attributes as in design D2, encryption to X25519 recipients; verify a test writes an archive from the intact fixture and reads it back with every entry byte-identical
+- [x] 3.2 Validate item IDs as UUIDs and attachment IDs as 1 to 64 ASCII letters and digits before use in an entry name (design D3); verify tests accept the fixture's attachment IDs, refuse for item IDs and attachment IDs each an ID with a path separator, with a parent directory reference, with a wrong length and an empty one, and that the writer reports an error without finishing the archive
+- [x] 3.3 Refuse writing without a recipient and with a recipient string that is not a native age recipient; verify the error names the position and not the value
+- [x] 3.4 Implement the reader on an `io.Reader`: sequential, hashing entries as they pass, checks of the `offline-verification` spec for entry types, names, duplicates, manifest position and the comparison with the manifest; verify the scenarios "Entry differs from the manifest", "Entry not listed", "Listed entry missing", "Symbolic link entry" and "Newer format version" with archives built for the purpose
+- [x] 3.5 Read the stream to its end before reporting success; verify the scenarios "Truncated archive file" at several cut positions, including inside the header and inside the last chunk, and "Altered byte" at several positions
+- [x] 3.6 Verify the scenarios "Two recipients" and "Identity of another key pair" with key pairs generated at test time
+- [x] 3.7 Write the text of `RECOVERY.txt` as a fixed string in the package; verify the scenario "Instructions present and free of vault data" and that the text names every top-level entry of the layout
+- [x] 3.8 Verify the scenario "Temporary location stays empty" by pointing the temporary directory of the test process at an empty directory while writing and reading
+- [x] 3.9 Add the recovery test with the `age` and `tar` commands from the search path (design D12); verify the scenario "Recovery with the age and tar commands" in the dev container and that the test reports a skip with a reason where a command is missing
+- [x] 3.10 Write `docs/decisions/0005-archive-format.md` with status proposed, covering context, alternatives and consequences for design D2, D4, D5, D6 and D8, and add it to `docs/decisions/README.md`; verify the index lists it as proposed
+- [x] 3.11 Update `docs/decisions/0003-age.md` as described in design D14 and keep its status proposed; verify it names the recipient model, multiple recipients against key loss, the tested offline recovery, and the two open points
+- [x] 3.12 Review checkpoint: stop and show the maintainer the output of `go test -v ./internal/manifest/... ./internal/archive/...`, with every skipped test and its reason listed separately; verify the maintainer confirmed before any task of group 4 starts
 
 ## 4. Publishing
 

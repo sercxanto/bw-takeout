@@ -54,12 +54,16 @@ Each attachment SHALL be stored under a name built from its item ID and its atta
 - **AND** the manifest gives the same file name for both entries
 
 ### Requirement: Entry names come from fixed names and validated IDs
-Entry names SHALL be built only from fixed names and from IDs that have the form of a UUID. A capture with any other item ID or attachment ID SHALL be refused, and nothing SHALL be published.
+Entry names SHALL be built only from fixed names, from item IDs that have the form of a UUID, and from attachment IDs that consist of 1 to 64 ASCII letters and digits. A capture with any other item ID or attachment ID SHALL be refused, and nothing SHALL be published.
 
 #### Scenario: ID with a path separator
 - **WHEN** an attachment ID contains a path separator or a parent directory reference
 - **THEN** writing is refused
 - **AND** no generation is published
+
+#### Scenario: Attachment ID that is not a UUID
+- **WHEN** an attachment ID consists of 32 ASCII letters and digits and is not a UUID
+- **THEN** writing succeeds and the attachment is stored under that ID
 
 ### Requirement: Manifest
 The archive SHALL end with a manifest that states the format version, the creation time, the source server and account, the tool version and the `bw` version, and lists every other entry with its size and SHA-256. The manifest SHALL embed the verification result unchanged.

@@ -66,11 +66,15 @@ The three documents are the plaintext export, the account-bound encrypted export
 
 Tar entries are regular files with mode 0600, owner and group 0, empty owner names and the creation time of the generation as modification time. No local user name, path or host name enters the archive.
 
-### D3: Entry names from fixed names and UUIDs
+### D3: Entry names from fixed names and validated IDs
 
-Item IDs and attachment IDs come from CLI output and are used in entry names. Both must match the UUID form of 8-4-4-4-12 hexadecimal digits. Anything else aborts the writing. The live probe of 14 November 2026 showed UUIDs for both.
+Item IDs and attachment IDs come from CLI output and are used in entry names. An item ID must have the UUID form of 8-4-4-4-12 hexadecimal digits. An attachment ID must consist of 1 to 64 ASCII letters and digits. Anything else aborts the writing. Neither form admits a path separator, a dot or any other character with a meaning in a path.
 
-*Alternative considered:* escaping unusual IDs. Rejected because an ID that is not a UUID means an unknown server behavior, and refusing is the safe answer.
+The two rules differ because the evidence differs. The live probe of 14 November 2026 did not record the form of either ID. The synthetic fixture uses UUIDs for items and 32 alphanumeric characters for attachments. From the upstream server sources, not checked in this repository, both servers use UUIDs for items, the Bitwarden server generates attachment IDs of 32 lowercase alphanumeric characters and Vaultwarden of 20 hexadecimal digits. The alphanumeric rule covers both without depending on either. The maintainer decided this on 14 November 2026.
+
+*Alternative considered:* escaping unusual IDs. Rejected because an ID outside these forms means an unknown server behavior, and refusing is the safe answer.
+
+*Alternative considered:* the UUID form for attachment IDs too. Rejected because it refuses the fixture and, by the upstream sources, every real capture.
 
 ### D4: Manifest last
 
