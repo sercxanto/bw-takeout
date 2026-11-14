@@ -2,7 +2,7 @@
 
 The fixed integration boundary is the unmodified official bw CLI. Decisions and their status are in the [decision index](../decisions/README.md).
 
-**Everything on this page is planned.** The only code that exists is the Go module with the packages `internal/capture` and `internal/verify`, which the change `capture-verification` fills. The component model and the roadmap come from the explore session of 13 November 2026 and may change with each later change.
+**Everything on this page is planned, except where a status says otherwise.** The only code that exists is the Go module with the packages `internal/capture` and `internal/verify`, which the archived change `capture-verification` added. The component model and the roadmap come from the explore session of 13 November 2026 and may change with each later change.
 
 ## Planned flow
 
@@ -21,8 +21,8 @@ Interactive profile → sync and inventory → JSON exports and individual attac
 |---|---|---|
 | `bwcli` | Start `bw`, clean the environment, check version and hash, pass the session to child processes only, collect stdout, classify errors | planned |
 | `profile` | Own CLI data directory per run, detect leftovers of earlier runs, teardown | planned |
-| `capture` | Capture model and parsers. Later: collect the documents and attachments and compare before and after | model and parsers in progress, collection planned |
-| `verify` | Turn a capture into a verdict with reasons per ID | in progress |
+| `capture` | Capture model and parsers. Later: collect the documents and attachments and compare before and after | model and parsers implemented, collection planned |
+| `verify` | Turn a capture into a verdict with reasons per ID | implemented |
 | `manifest` | Scope, time window, versions, hashes, verdict, unverifiable areas | planned |
 | `archive` | Write and read the container, encryption as a stream | planned |
 | `publish` | Create a new generation exclusively, write a partial file, sync, publish without replacing | planned |
@@ -31,7 +31,7 @@ Interactive profile → sync and inventory → JSON exports and individual attac
 
 ## Roadmap
 
-1. `capture-verification`: verdict rules over a captured inventory. In progress.
+1. `capture-verification`: verdict rules over a captured inventory. Done, archived on 14 November 2026. The agreed behavior is in `openspec/specs/capture-verification/`.
 2. `archive-generation`: container, encryption, manifest, exclusive publishing and an offline verify command.
 3. `bw-process-adapter`: `bwcli` and `profile` against a fake `bw`, plus unauthenticated tests with the real binary. Findings of the [Vaultwarden live probe](../research/vaultwarden-live-probe-2026-11-14.md) to account for:
    - bw refuses servers without HTTPS. A self-signed server certificate needs `NODE_EXTRA_CA_CERTS` passed through to the child process (report, method "TLS").
@@ -45,4 +45,4 @@ The live probe against a disposable Vaultwarden instance ran outside this sequen
 
 ## Expected decisions
 
-The change `capture-verification` proposes an ADR on the completeness verdict and its scope claim. Further ADRs are expected along the roadmap: archive format and layout, the plaintext and secret boundary, and how `bw` versions are qualified. The ADRs on Go and age stay proposed until their open points are tested. The [decision index](../decisions/README.md) lists what exists.
+The change `capture-verification` added the proposed [ADR 0004](../decisions/0004-completeness-verdict.md) on the completeness verdict and its scope claim. Further ADRs are expected along the roadmap: archive format and layout, the plaintext and secret boundary, and how `bw` versions are qualified. The ADRs on Go and age stay proposed until their open points are tested. The [decision index](../decisions/README.md) lists what exists.

@@ -57,7 +57,7 @@
 
 ## Workflow follow-up
 
-- Review scope, risks and acceptance criteria before implementing, as CONTRIBUTING requires.
-- After the live probe, compare its captured shapes with the fixtures and open a follow-up change if they differ.
-- After the live probe, compare its archived-item results with D8 and its filter results with D5.
+- Review scope, risks and acceptance criteria before implementing, as CONTRIBUTING requires. Done after implementation on 14 November 2026; the decisions are in section 7.
+- After the live probe, compare its captured shapes with the fixtures and open a follow-up change if they differ. Done on 14 November 2026 by comparing the live probe report `docs/research/vaultwarden-live-probe-2026-11-14.md` with the parsers: the legacy shapes of the account-bound encrypted export, the plaintext export and the item list match, so no follow-up change is needed for them. The blob form was not observed and stays unconfirmed.
+- After the live probe, compare its archived-item results with D8 and its filter results with D5. Done on 14 November 2026: the default item list left the archived item out while both exports kept it, as D8 assumes. Both exports held the same items, as D5 assumes. Partial, deleted and restricted items and an account that cannot archive were not tested.
 - Archive the change after review and verify the archived result.
