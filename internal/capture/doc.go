@@ -5,8 +5,7 @@
 //
 // # Evidence level
 //
-// Every shape below is derived from source code, not from a live capture.
-// Two sources were read:
+// Every shape below is derived from source code. Two sources were read:
 //
 //   - "source": bitwarden/clients at commit
 //     91214c3b978edb5496a32a946451960fe7d44531, the release commit of CLI
@@ -17,11 +16,29 @@
 //     blob marker, both encrypted document literals, the partial-item filter
 //     and the attachment response class were found there unchanged.
 //
-// No authenticated CLI process has produced any of these documents for this
-// project yet. Whether a JSON key is absent or null in a real document
-// depends on what the server sent and is not settled by reading the code.
-// The parsers therefore treat an absent key and a null value alike, and
-// anything they do not recognize positively lowers the verdict.
+// One live run has since observed part of these shapes: bw 2026.10.1
+// against Vaultwarden 1.37.4 on 13 and 14 November 2026, reported in
+// docs/research/vaultwarden-live-probe-2026-11-14.md. For a personal legacy
+// login it showed:
+//
+//   - the legacy form of the account-bound encrypted export: per-field
+//     encrypted strings, a wrapped item key, no data key, no format_version
+//     marker, one fido2Credentials entry per passkey with creationDate in
+//     clear (report, results 3 and 6),
+//   - the plaintext export with every passkey, and an empty
+//     fido2Credentials array after a passkey failed to decrypt (results 3
+//     and 6),
+//   - the item list with the attachment keys id, fileName, size, sizeName
+//     and url, where size is the encrypted size (results 2 and 3),
+//   - that the default item list leaves archived items out while both
+//     exports keep them (added case "archived item").
+//
+// Still unconfirmed: the blob form, any capture from Bitwarden Cloud,
+// partial items, and whether a JSON key is absent or null in a real
+// document. The parsers and the fixtures of package capturetest were never
+// run against a real capture; the report was only compared with them by
+// reading. The parsers therefore treat an absent key and a null value alike,
+// and anything they do not recognize positively lowers the verdict.
 //
 // # Plaintext export
 //
@@ -123,7 +140,9 @@
 // and organization items are left out ([getEncryptedExport]). Archived items
 // are not filtered. The plaintext export has no partial-item filter of its
 // own, but the decrypted views it reads drop partial items, so at code level
-// both exports apply the same filters. No live run has confirmed this.
+// both exports apply the same filters. In the live run both exports held the
+// same items, including an archived one. Partial, deleted and restricted
+// items were not tested there.
 //
 // # Password-protected export
 //
@@ -175,10 +194,11 @@
 // ([matchesStateOptions]). When the account cannot archive, the CLI ignores
 // --archived, so archived items of such an account appear in no listing. The
 // exports do not filter archived items, so a default listing is not
-// comparable to the exports when the vault holds archived items. The caller
-// supplies one list that merges the default and the --archived listing
-// (design D8). The verification reports every exported item that this list
-// lacks as unverified.
+// comparable to the exports when the vault holds archived items. The live
+// run observed this difference. An account that cannot archive was not
+// tested. The caller supplies one list that merges the default and the
+// --archived listing (design D8). The verification reports every exported
+// item that this list lacks as unverified.
 //
 // # Attachment download
 //
