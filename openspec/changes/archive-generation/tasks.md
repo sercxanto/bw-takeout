@@ -30,17 +30,17 @@
 
 ## 4. Publishing
 
-- [ ] 4.1 Implement `internal/publish` with the steps of design D8, injectable clock and random source, and the verdict rule of design D9; verify the scenarios "Verified capture", "Unverified capture" and "Failed capture"
-- [ ] 4.2 Verify the scenarios "Two generations in the same second" and "Name collision" by forcing the clock and the random source, including a pre-existing final name and a pre-existing partial name
-- [ ] 4.3 Verify the scenarios "Successful run next to older generations" and "Failing run next to older generations" by hashing every pre-existing file in the target before and after, with a failure injected at each step of design D8
-- [ ] 4.4 Verify the scenario "Concurrent runs with identical time and random source" with eight concurrent publishers, and run the test repeatedly with the race detector
-- [ ] 4.5 Verify the scenario "Write error in the middle" with a writer that fails after a number of bytes, including an out-of-space error, and that only the run's own partial directory is left or removed
-- [ ] 4.6 Verify the scenario "Process killed while writing" with a helper process started from the test binary (design D12)
-- [ ] 4.7 Implement the listing of partial generations with name and age; verify the scenario "Leftover from an aborted run" and that listing changes nothing in the target
-- [ ] 4.8 Verify the scenarios "Missing target" and a target that is a regular file
-- [ ] 4.9 Verify the scenario "Permissions on Linux", and skip the mode check with a reason on platforms without POSIX permissions
-- [ ] 4.10 Flush the archive file and, where supported, the directories; verify by a test with an injected flush error that the generation stays partial, and document in `docs/user/limitations.md` what is not guaranteed on Windows and on FAT or exFAT media
-- [ ] 4.11 Review checkpoint: stop and show the maintainer the output of `go test -v -race ./internal/publish/...`, with every skipped test and its reason listed separately, and state whether the kill test and the concurrency test actually ran; verify the maintainer confirmed before any task of group 5 starts
+- [x] 4.1 Implement `internal/publish` with the steps of design D8, injectable clock and random source, and the verdict rule of design D9; verify the scenarios "Verified capture", "Unverified capture" and "Failed capture"
+- [x] 4.2 Verify the scenarios "Two generations in the same second" and "Name collision" by forcing the clock and the random source, including a pre-existing final name and a pre-existing partial name
+- [x] 4.3 Verify the scenarios "Successful run next to older generations" and "Failing run next to older generations" by hashing every pre-existing file in the target before and after, with a failure injected at each step of design D8
+- [x] 4.4 Verify the scenario "Concurrent runs with identical time and random source" with eight concurrent publishers, and run the test repeatedly with the race detector
+- [x] 4.5 Verify the scenario "Write error in the middle" with a writer that fails after a number of bytes, including an out-of-space error, and that only the run's own partial directory is left or removed
+- [x] 4.6 Verify the scenario "Process killed while writing" with a helper process started from the test binary (design D12)
+- [x] 4.7 Implement the listing of partial generations with name and age; verify the scenario "Leftover from an aborted run" and that listing changes nothing in the target
+- [x] 4.8 Verify the scenarios "Missing target" and a target that is a regular file
+- [x] 4.9 Verify the scenario "Permissions on Linux", and skip the mode check with a reason on platforms without POSIX permissions
+- [x] 4.10 Flush the archive file and, where supported, the directories; verify by a test with an injected flush error that the generation stays partial, and document in `docs/user/limitations.md` what is not guaranteed on Windows and on FAT or exFAT media
+- [x] 4.11 Review checkpoint: stop and show the maintainer the output of `go test -v -race ./internal/publish/...`, with every skipped test and its reason listed separately, and state whether the kill test and the concurrency test actually ran; verify the maintainer confirmed before any task of group 5 starts
 
 ## 5. Verify command
 

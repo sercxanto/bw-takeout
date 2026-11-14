@@ -133,14 +133,14 @@ A generation is a directory in the target:
 Steps:
 
 1. Check that the target exists and is a directory.
-2. Create `<name>.partial` with `mkdir` and mode 0700. `mkdir` fails if the name exists, on every platform and file system. On failure because the name exists, draw a new random part, for a bounded number of attempts.
+2. Create `<name>.partial` with `mkdir` and mode 0700. `mkdir` fails if the name exists, on every platform and file system. Then check that neither `<name>` nor `<name>.unverified` exists, and if one does, remove the empty directory again. On either collision, draw a new random part, for a bounded number of attempts.
 3. Create `vault.tar.age` inside with exclusive creation and mode 0600, and write the encrypted stream.
 4. Flush the file to storage and close it. Flush the directory where the platform supports it.
 5. Check that the final name does not exist, then rename the directory to `<name>` or `<name>.unverified`. Flush the target directory where supported.
 
 The marker is on the directory because that is what a person sees when listing the target. A directory without `.partial` is complete by construction.
 
-No run ever creates a final name directly, and each run owns its partial name exclusively, so two runs cannot aim at the same final name. If a third party created the final name in between, the rename fails on Windows and on a non-empty directory elsewhere. The run then ends with an error and leaves its partial directory. No existing backup is replaced in any case.
+No run ever creates a final name directly. A partial name is owned by one run at a time, but a run that publishes frees it again. The rename is atomic, so a run that could create `<name>.partial` after another run published `<name>` sees the final name in the check after mkdir and withdraws. The concurrency test found this gap. If a third party created the final name in between, the rename fails on Windows and on a non-empty directory elsewhere. The run then ends with an error and leaves its partial directory. No existing backup is replaced in any case.
 
 *Alternatives considered:* hard links or a no-replace rename of a flat file. Both depend on the file system and are not available on FAT or exFAT media, which are likely backup targets. Go's `os.Rename` replaces an existing file on Windows, so it cannot guard a flat file.
 

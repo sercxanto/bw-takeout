@@ -23,3 +23,15 @@ It cannot detect:
 - **Completeness against the server.** "Verified" covers the personal items in the local snapshot that the CLI exported during the capture. An omission in a step that both exports share, and items that the CLI leaves out of every document, stay invisible. Every result states this scope and lists it as a limit.
 
 Organization items are not checked. They are counted per organization and reported as a warning.
+
+## Storage Guarantees
+
+A generation directory loses its `.partial` marker only after its archive file was flushed to storage. Where the platform supports it, the generation directory and the target directory are flushed as well. Some guarantees depend on the platform and the file system:
+
+- **Windows** cannot flush a directory. After a power loss, a rename that the program reported as done can be lost, and the generation can reappear under its `.partial` name. The archive file itself was flushed before the rename.
+- **FAT and exFAT media** keep no journal. After a power loss or when a drive is pulled without ejecting, a directory entry or the end of a file can be damaged even after a successful flush. These file systems also have no POSIX permissions, so the owner-only modes are not applied there.
+- **Network shares** are untested. Their flush and rename semantics depend on the server.
+
+Offline verification detects a damaged or truncated archive but cannot repair it. Keep more than one generation, and on removable media eject the drive before unplugging it.
+
+Directory rename, flushing and permissions were tested on Linux only. macOS and Windows have not been tested yet.
