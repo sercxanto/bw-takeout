@@ -53,5 +53,5 @@ None. No specs exist yet.
 - The silent passkey omission was reproduced at SDK and export-service level only, not through an authenticated CLI process.
 - The shapes of the three input documents come from the pinned upstream source and the installed 2026.10.1 bundle. No live capture exists yet.
 - Whether a fresh account produces legacy or blob items is unknown. If blob items are the norm, most real captures will end as unverified.
-- Whether the plaintext export, the encrypted export and the item list apply the same filters (archived items, restricted item types) is unconfirmed.
+- At code level the two exports apply the same filters, and the default item list additionally leaves out archived items, which both exports keep. No live run has confirmed either point.
 - A live probe against a disposable Vaultwarden instance is planned separately and may lead to adjusted fixtures and rules.

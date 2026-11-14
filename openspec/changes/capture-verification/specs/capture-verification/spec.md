@@ -51,7 +51,11 @@ The verification SHALL compare the item IDs of the encrypted export with those o
 - **THEN** the verdict is failed
 
 ### Requirement: Passkey count comparison
-For every item in a format whose passkey list is visible in the encrypted export, the verification SHALL compare the number of passkeys in the encrypted export with the number in the plaintext export. A difference SHALL produce a failed finding with both counts.
+For every item in a format whose passkey list is visible in the encrypted export, the verification SHALL compare the number of passkeys in the encrypted export with the number in the plaintext export. A difference SHALL produce a failed finding with both counts. A legacy login item without a passkey list in the encrypted export SHALL count as zero passkeys.
+
+#### Scenario: Legacy login without passkey list
+- **WHEN** the encrypted export shows a legacy login item without a passkey list and the plaintext export shows an empty passkey list for it
+- **THEN** no finding is reported for this item
 
 #### Scenario: One passkey missing
 - **WHEN** the encrypted export shows two passkeys for an item and the plaintext export shows one
@@ -73,6 +77,11 @@ An item whose passkey list is not visible in the encrypted export SHALL be repor
 #### Scenario: Unrecognized format
 - **WHEN** an item in the encrypted export matches neither the known legacy form nor the known blob form
 - **THEN** the verdict is unverified
+
+#### Scenario: Legacy content with unmarked sealed data
+- **WHEN** an item in the encrypted export carries legacy content together with sealed data that lacks the blob marker
+- **THEN** the verdict is unverified
+- **AND** the finding states that the format of this item is not recognized
 
 ### Requirement: Passkey structure validation
 The verification SHALL check every passkey in the plaintext export for the required fields, a private key that parses for its declared algorithm and curve, and a counter that is a non-negative integer. A violation SHALL produce a failed finding. A declared key form the verification does not know SHALL produce an unverified finding.

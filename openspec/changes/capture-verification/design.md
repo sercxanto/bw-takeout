@@ -12,7 +12,13 @@ Evidence this design builds on, with its level:
   - The password-protected export is a different document with `passwordProtected: true` and a single encrypted `data` string. It is derived from the plaintext export and inherits its omissions.
   - `bw list items` returns item objects that add `attachments` with `id`, `fileName`, `size`, `sizeName` and `url`, plus revision, creation and deletion dates.
   - Upstream detects a blob item by the string `"format_version"` inside the item's `data` field.
-- **Not confirmed by any live run**: all of the above for a real account, and whether the three documents apply the same filters.
+- **Code level, `bitwarden/clients` at commit `91214c3b978edb5496a32a946451960fe7d44531`, read on 13 and 14 November 2026**:
+  - Both exports leave out deleted, restricted and partial items. The plaintext export and `bw list items` read the decrypted views, which already drop partial items.
+  - `bw list items` leaves out archived items by default, shows only archived items with `--archived`, and ignores that option when the account cannot archive. Both exports keep archived items.
+  - A legacy login without passkeys has no `fido2Credentials` key in the encrypted export and an empty array in the plaintext export. The exporter writes `data` only for blob items.
+  - `bw list items` prints a bare JSON array that holds the full decrypted content, including passkey private keys.
+  - Whether an empty optional key is left out or written as null depends on server data and is not settled by the code.
+- **Not confirmed by any live run**: all of the above for a real account. The filter behavior is code-level evidence only.
 
 ## Goals / Non-Goals
 
@@ -58,15 +64,21 @@ It is the only public CLI output that is produced before the decrypt step, which
 
 ### D4: Item formats are recognized positively
 
-An item in the encrypted export is treated as legacy only if it matches the known legacy form, and as blob only if it matches the known blob form. Everything else is unknown. Blob login items and unknown items produce an unverified finding. Non-login blob items cannot hold passkeys, so the ID comparison is their complete check.
+An item in the encrypted export is classified by its form:
 
-*Alternative considered:* treat "has a `data` field" as blob. Rejected because the research notes that legacy raw data can also carry such a field.
+- **Legacy:** no `data` key, a `name` string, a known item type and the object for that type. For a login, the passkey count is the length of `login.fido2Credentials`. An absent key counts as zero, because the exporter leaves it out when the login has no passkeys.
+- **Blob:** a `data` string that contains the upstream marker `"format_version"`, a known item type, and neither a `name` nor a type object.
+- **Unknown:** everything else. This includes an item whose `data` lacks the marker, even if it also has a name and a login object, an item that combines the marker with legacy content, and an item with an unknown type number.
+
+Blob login items and unknown items produce an unverified finding. Non-login blob items cannot hold passkeys, so the ID comparison is their complete check. In all three documents an absent key and a key with the value null are treated alike.
+
+*Alternatives considered:* treat "has a `data` field" as blob. Rejected because the research notes that legacy raw data can also carry such a field. Treat an item with `data` but without the marker as legacy when it has legacy content. Rejected because the 2026.10.1 exporter never writes `data` for a legacy item, so the verification has no evidence about that combination.
 
 ### D5: Any ID difference between the two exports fails
 
 An ID that is only in the encrypted export matches the reproduced decrypt omission. An ID that is only in the plaintext export means the two documents do not describe the same snapshot. Both directions fail, because the verification cannot tell a harmless timing difference from a loss. The later orchestrator decides about retries.
 
-*Risk accepted:* if the two exports turn out to filter differently in a live run, every capture would fail. The live probe will show this. The rule is then adjusted in a follow-up change with the evidence attached.
+*Risk accepted:* if the two exports turn out to filter differently in a live run, every capture would fail. Code reading found no filter difference between the two exports. The live probe still has to confirm this. If it shows a difference, the rule is adjusted in a follow-up change with the evidence attached.
 
 ### D6: Passkey structure rules
 
@@ -88,7 +100,7 @@ An empty attachment is a warning, not a failure. Empty files are legitimate, and
 
 The item list is the only source for attachment metadata. A personal item in the list that is missing from the plaintext export fails. An exported item that is missing from the list is unverified, because its attachments cannot be known. Organization items in the list are counted per organization ID, reported as a warning and excluded from every comparison.
 
-The caller supplies one merged item list. Whether archived items need a separate listing is a question for the later capture change.
+The caller supplies one merged item list as a bare JSON array. A list wrapped in the `BW_RESPONSE` envelope is rejected as a wrong document form. At code level the default listing leaves out archived items and `--archived` shows only those, so the later capture change has to merge both listings. A capture built from the default listing alone ends unverified as soon as the vault holds an archived item. The same holds for archived items of an account that cannot archive, because the CLI then ignores `--archived`. The verification does not know about archiving. It reports each such item as exported but not listed.
 
 ### D9: Optional reference inventory
 
@@ -159,7 +171,9 @@ ADRs expected along the roadmap, beyond this change: archive format and layout, 
 
 - [Input shapes are derived from source code, not from a live capture] → Positive recognition with unverified as the fallback (D4). The fixture sources are recorded with links. The live probe supplies real shapes later.
 - [Blob items may be the norm for new accounts, so most captures end unverified] → Reported honestly rather than hidden. The finding count shows how much of the vault is affected. This is a product-level question for after the live probe.
-- [The two exports may filter differently and cause false failures] → Accepted for now (D5). The reason codes make the direction of the difference visible.
+- [The two exports may filter differently and cause false failures] → Code reading found no difference (D5). Accepted until the live probe confirms it. The reason codes make the direction of a difference visible.
+- [The default item list omits archived items] → Each one is reported as unverified (D8). The later capture change merges the `--archived` listing.
+- [Partial items are in none of the three documents] → The verification cannot see them. Whether a personal item can be partial is open.
 - [A well-formed but wrong key, or a swapped credential, passes without a reference] → Stated as a standing limit in every result and in the user limitations.
 - [The attachment inventory has one source, the decrypted item list] → An item that fails decryption also disappears from the list, but then fails the ID comparison (D5). An attachment missing from an otherwise intact list entry stays undetected. Documented as a limit.
 - [The Go runtime may keep parsed key bytes in memory] → Keys are parsed only to check their form and dropped at once. Memory hygiene belongs to the later ADR on the plaintext boundary.
@@ -170,3 +184,4 @@ ADRs expected along the roadmap, beyond this change: archive format and layout, 
 - Should an empty attachment stay a warning once live data shows how the `size` metadata behaves?
 - Does the reference inventory need a file format? This change only defines it as an in-memory type.
 - Final module path, once a hosting location exists.
+- Can a personal item be partial? If so, the scope statement has to name the exclusion.
