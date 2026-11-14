@@ -120,6 +120,7 @@ Every scenario of the three specs of the change archive-generation has at least 
 | | Failing run next to older generations | `publish.TestFailingRunNextToOlderGenerations` |
 | | Concurrent runs with identical time and random source | `publish.TestConcurrentRunsWithIdenticalTimeAndRandomSource` |
 | | Write error in the middle | `publish.TestWriteErrorInTheMiddle` |
+| | Unfinished archive | `publish.TestUnfinishedArchiveIsNotPublished` |
 | | Process killed while writing | `publish.TestProcessKilledWhileWriting` |
 | | Verified capture | `publish.TestVerdictDecidesPublication/verified` |
 | | Unverified capture | `publish.TestVerdictDecidesPublication/unverified` |

@@ -139,6 +139,21 @@ func TestRoundTripIntactFixture(t *testing.T) {
 	}
 }
 
+func TestFinishReturnsTheEmbeddedResult(t *testing.T) {
+	f := capturetest.Intact(t)
+	id := archivetest.NewKey(t)
+	v, _ := archivetest.Verification(t, f, true)
+	var b bytes.Buffer
+	embedded := archivetest.WriteTo(t, &b, f, v, id.Recipient().String())
+	m, err := archive.Read(bytes.NewReader(b.Bytes()), []age.Identity{id}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(embedded, m.Verification) || !bytes.Equal(embedded, v) {
+		t.Errorf("Finish returned %q, the manifest embeds %q", embedded, m.Verification)
+	}
+}
+
 func TestEntryOrderAndAttributes(t *testing.T) {
 	f, id, _, data := intactArchive(t)
 	entries := decryptEntries(t, data, id)
@@ -237,8 +252,8 @@ func TestIDValidation(t *testing.T) {
 			if err := w.AddAttachment(a); err == nil {
 				t.Fatal("attachment accepted")
 			}
-			if err := w.Finish(archivetest.Meta(v)); !errors.Is(err, archive.ErrWriterFailed) {
-				t.Fatalf("finish after refusal: %v", err)
+			if embedded, err := w.Finish(archivetest.Meta(v)); !errors.Is(err, archive.ErrWriterFailed) || embedded != nil {
+				t.Fatalf("finish after refusal: %v, returned %q", err, embedded)
 			}
 			if _, err := archive.Read(bytes.NewReader(b.Bytes()), []age.Identity{id}, nil); err == nil {
 				t.Fatal("unfinished archive reads as valid")
@@ -512,7 +527,7 @@ func multiChunkArchive(t *testing.T) (*age.X25519Identity, []byte) {
 			t.Fatal(err)
 		}
 	}
-	if err := w.Finish(archivetest.Meta(v)); err != nil {
+	if _, err := w.Finish(archivetest.Meta(v)); err != nil {
 		t.Fatal(err)
 	}
 	data := b.Bytes()

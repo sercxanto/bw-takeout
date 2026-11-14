@@ -38,11 +38,15 @@ Several runs that publish into the same target at the same time SHALL each produ
 - **AND** each one passes offline verification
 
 ### Requirement: Incomplete generations are marked
-A generation SHALL carry the marker `.partial` in its directory name from its creation until its data is completely written and flushed to storage. A generation without this marker SHALL be complete.
+A generation SHALL carry the marker `.partial` in its directory name from its creation until its data is completely written and flushed to storage. A generation without this marker SHALL be complete. A generation whose archive was not finished SHALL NOT be published, whatever its verdict.
 
 #### Scenario: Write error in the middle
 - **WHEN** writing fails after part of the archive was written
 - **THEN** no directory without the marker was created by this run
+
+#### Scenario: Unfinished archive
+- **WHEN** a verified capture is written and finishing the archive fails before its manifest is written, while every byte written so far reached the file
+- **THEN** no directory of this run remains in the target
 
 #### Scenario: Process killed while writing
 - **WHEN** the writing process is killed in the middle of the archive

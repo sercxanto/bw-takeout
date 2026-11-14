@@ -81,32 +81,24 @@ func captureWith(t *testing.T, want verify.Verdict) capture {
 	return capture{f: f, verification: v}
 }
 
-// publishCapture runs the whole flow: begin, write the archive, commit. A
-// write error aborts the generation. A commit error leaves it as it is.
+// publishCapture runs the whole flow through Publish: write the archive,
+// then publish by the verdict that the archive embeds.
 func publishCapture(t *testing.T, p *Publisher, target string, c capture, recipients ...string) (*Published, error) {
 	t.Helper()
-	g, err := p.Begin(target)
-	if err != nil {
-		return nil, err
-	}
-	if err := writeArchive(t, g.Writer(), c, recipients...); err != nil {
-		if aerr := g.Abort(); aerr != nil {
-			t.Errorf("abort: %v", aerr)
-		}
-		return nil, err
-	}
-	return g.Commit(c.verification)
+	return p.Publish(target, func(w io.Writer, _ time.Time) ([]byte, error) {
+		return writeArchive(t, w, c, recipients...)
+	})
 }
 
-func writeArchive(t *testing.T, w io.Writer, c capture, recipients ...string) error {
+func writeArchive(t *testing.T, w io.Writer, c capture, recipients ...string) ([]byte, error) {
 	t.Helper()
 	aw, err := archive.NewWriter(w, recipients, archivetest.Created, archivetest.Documents(t, c.f))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, a := range archivetest.Attachments(c.f) {
 		if err := aw.AddAttachment(a); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	return aw.Finish(archivetest.Meta(c.verification))
@@ -601,6 +593,25 @@ func TestWriteErrorInTheMiddle(t *testing.T) {
 	}
 }
 
+// The archive writer fails in Finish before the manifest is written, while
+// every byte written so far reached the file. The generation must not be
+// published, even though the capture itself is verified.
+func TestUnfinishedArchiveIsNotPublished(t *testing.T) {
+	target := populated(t)
+	before := snapshot(t, target)
+	id := archivetest.NewKey(t)
+	c := captureWith(t, verify.Verified)
+	c.verification = []byte(`{"verdict":"verified"`)
+	_, err := publishCapture(t, &Publisher{Now: fixedClock}, target, c, id.Recipient().String())
+	if err == nil {
+		t.Fatal("published an archive whose Finish failed")
+	}
+	unchanged(t, target, before)
+	if added := newEntries(t, target, before); len(added) != 0 {
+		t.Errorf("run left %v", added)
+	}
+}
+
 func TestCommitRefusesAfterWriteError(t *testing.T) {
 	target := t.TempDir()
 	c := captureWith(t, verify.Verified)
@@ -612,10 +623,10 @@ func TestCommitRefusesAfterWriteError(t *testing.T) {
 	if _, err := g.Writer().Write(make([]byte, 100)); err == nil {
 		t.Fatal("write succeeded")
 	}
-	if _, err := g.Commit(c.verification); !errors.Is(err, ErrWriteFailed) {
+	if _, err := g.commit(c.verification); !errors.Is(err, ErrWriteFailed) {
 		t.Fatalf("commit after write error: %v", err)
 	}
-	if _, err := g.Commit(c.verification); !errors.Is(err, ErrCommitFailed) {
+	if _, err := g.commit(c.verification); !errors.Is(err, ErrCommitFailed) {
 		t.Fatalf("second commit: %v", err)
 	}
 	if got := names(t, target); len(got) != 1 || got[0] != g.PartialName() {
@@ -638,17 +649,18 @@ func TestFailedCaptureWhoseRemovalFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := writeArchive(t, g.Writer(), c, id.Recipient().String()); err != nil {
+	embedded, err := writeArchive(t, g.Writer(), c, id.Recipient().String())
+	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = g.Commit(c.verification)
+	_, err = g.commit(embedded)
 	if !errors.Is(err, ErrFailedCapture) || !errors.Is(err, syscall.EBUSY) {
 		t.Fatalf("commit: %v", err)
 	}
 	if got := names(t, target); len(got) != 1 || got[0] != g.PartialName() {
 		t.Fatalf("target holds %v", got)
 	}
-	if _, err := g.Commit([]byte(`{"verdict":"verified"}`)); !errors.Is(err, ErrCommitFailed) {
+	if _, err := g.commit([]byte(`{"verdict":"verified"}`)); !errors.Is(err, ErrCommitFailed) {
 		t.Fatalf("commit after the refusal: %v", err)
 	}
 	// The removal is repeated and now succeeds.

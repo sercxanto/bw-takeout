@@ -2,6 +2,7 @@ package archive
 
 import (
 	"archive/tar"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -127,7 +128,18 @@ func (w *Writer) AddAttachment(a Attachment) error {
 
 // Finish writes the manifest as the last entry and closes the tar stream and
 // the encryption. Only a finished archive is complete.
-func (w *Writer) Finish(meta Meta) error {
+//
+// It returns the verification result exactly as the manifest embeds it, and
+// only when the archive is finished. Publishing takes the verdict from these
+// bytes (design D9), so they are what a publish.WriteFunc returns.
+func (w *Writer) Finish(meta Meta) ([]byte, error) {
+	if err := w.finish(meta); err != nil {
+		return nil, err
+	}
+	return bytes.Clone(meta.Verification), nil
+}
+
+func (w *Writer) finish(meta Meta) error {
 	if err := w.usable(); err != nil {
 		return err
 	}

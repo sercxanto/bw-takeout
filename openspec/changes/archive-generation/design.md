@@ -45,7 +45,7 @@ Observed in the dev container on 14 November 2026, in a scratch module outside t
 - `internal/publish`: the only code that touches the target directory.
 - `cmd/bitwarden-backup`: the command with the single subcommand `verify`.
 
-The verdict rule of D9 lives in `publish`, so no caller can publish a failed capture by mistake.
+The verdict rule of D9 lives in `publish`, so no caller can publish a failed capture by mistake. `publish` does not decrypt, so it cannot read the verdict from the archive itself. The two packages meet in one function: `publish.Publisher.Publish` takes a write function, and that function returns what `archive.Writer.Finish` returns. Finish returns the verification result exactly as the manifest embeds it, and only for a finished archive. A caller therefore gets the verdict to `publish` only through a finished archive, and only as the archive carries it.
 
 *Alternative considered:* one package for format and publishing. Rejected because the format must be testable without a file system and the publishing rules without encryption.
 
@@ -149,6 +149,8 @@ Clock and random source are injectable so that tests can force collisions.
 ### D9: The verdict decides publication
 
 `publish` takes the verdict at commit time. Verified leads to the plain name, unverified to the `.unverified` marker, failed to removal of the partial directory. An abort for any other reason also leaves or removes only the run's own partial directory.
+
+`Publish` is the only way to a final name. When the write function fails, including a Finish that did not complete, the run's partial directory is removed and nothing is published. A generation begun without `Publish` can only be written and aborted. Commit is internal to the package. The review before archiving found that an exported Commit took the verdict from bytes the caller passed separately and could not tell whether the archive was finished.
 
 Partial directories of earlier runs are listed with name and age and never touched. Without a lock there is no safe way to tell a dead run from a running one.
 

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -14,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"filippo.io/age"
 
@@ -120,12 +122,9 @@ func publishGeneration(t *testing.T, verdict verify.Verdict) generation {
 	f, v := fixtureFor(t, verdict)
 	id := archivetest.NewKey(t)
 	target := t.TempDir()
-	g, err := (&publish.Publisher{}).Begin(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	archivetest.WriteTo(t, g.Writer(), f, v, id.Recipient().String())
-	pub, err := g.Commit(v)
+	pub, err := (&publish.Publisher{}).Publish(target, func(w io.Writer, _ time.Time) ([]byte, error) {
+		return archivetest.WriteTo(t, w, f, v, id.Recipient().String()), nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -117,7 +117,7 @@ func (p *Publisher) fsys() fileSystem {
 }
 
 // Generation is one generation while it is written. Its directory carries
-// the partial marker until Commit.
+// the partial marker until Publish commits it.
 type Generation struct {
 	p       *Publisher
 	fs      fileSystem
@@ -125,11 +125,11 @@ type Generation struct {
 	base    string
 	created time.Time
 	file    file
-	// written records the first write error, so that Commit refuses an
+	// written records the first write error, so that commit refuses an
 	// archive whose writing failed.
 	written *recordingWriter
-	// done is set by a successful Commit and by Abort. broken is set when a
-	// Commit step failed. Then only Abort is possible.
+	// done is set by a successful commit or Abort. broken is set when a
+	// commit step failed or Abort was called. Then only Abort is possible.
 	done   bool
 	broken bool
 }
@@ -157,9 +157,44 @@ type Published struct {
 	Verdict string
 }
 
+// WriteFunc writes the complete archive into w and returns the serialized
+// verification result that the archive embeds. created is the creation time
+// that the generation name carries, for the archive's own creation time.
+//
+// It returns the result only when the archive is complete, which is what
+// archive.Writer.Finish returns. Publish takes the verdict from these bytes.
+type WriteFunc func(w io.Writer, created time.Time) (verification []byte, err error)
+
+// Publish creates a new generation in target, lets write fill its archive
+// file and publishes it by the verdict that write returns (design D8 and
+// D9). It is the only way to give a generation a final name.
+//
+// When write fails, the run's partial directory is removed and the error is
+// returned. When the verdict is failed or unknown, the partial directory is
+// removed as well and ErrFailedCapture or ErrUnknownVerdict is returned.
+// When a later step fails, the partial directory stays and the error is
+// returned.
+func (p *Publisher) Publish(target string, write WriteFunc) (*Published, error) {
+	g, err := p.Begin(target)
+	if err != nil {
+		return nil, err
+	}
+	verification, err := write(g.written, g.created)
+	if err != nil {
+		if aerr := g.Abort(); aerr != nil {
+			return nil, errors.Join(err, aerr)
+		}
+		return nil, err
+	}
+	return g.commit(verification)
+}
+
 // Begin checks the target, creates a new partial generation directory with
 // mode 0700 and the archive file inside with mode 0600 (design D8, steps 1
 // to 3). On failure it leaves nothing behind.
+//
+// The generation can only be written and aborted. A run publishes with
+// Publish. Begin serves tests and tools that need a partial generation.
 func (p *Publisher) Begin(target string) (*Generation, error) {
 	fsys := p.fsys()
 	info, err := fsys.Stat(target)
@@ -251,15 +286,15 @@ func (g *Generation) Writer() io.Writer { return g.written }
 
 func (g *Generation) partialPath() string { return filepath.Join(g.target, g.PartialName()) }
 
-// Commit takes the verdict from the serialized verification result that the
+// commit takes the verdict from the serialized verification result that the
 // archive embeds and publishes accordingly (design D9). Verified leads to
 // the plain name, unverified to the unverified marker. Failed and an unknown
 // verdict remove the partial directory.
 //
 // Before renaming, the archive file and its directory are flushed (design
 // D8, steps 4 and 5). If any step fails, the generation stays partial and
-// the error is returned. The caller may then Abort to remove it.
-func (g *Generation) Commit(verification []byte) (*Published, error) {
+// the error is returned. Abort may then remove it.
+func (g *Generation) commit(verification []byte) (*Published, error) {
 	if g.done {
 		return nil, ErrFinished
 	}
@@ -364,7 +399,7 @@ func (g *Generation) closeFile() {
 // Abort removes the run's own partial directory: the archive file, then the
 // directory. If the directory holds anything else, it is left in place and
 // an error is returned. A failed Abort may be repeated. Abort after a
-// successful Commit or Abort returns ErrFinished.
+// successful commit or Abort returns ErrFinished.
 func (g *Generation) Abort() error {
 	if g.done {
 		return ErrFinished

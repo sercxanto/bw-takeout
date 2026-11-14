@@ -63,6 +63,14 @@
 - [x] 6.6 Compare every scenario of the three specs with the test that covers it and add the mapping to `docs/development/testing.md`; verify the mapping is complete
 - [x] 6.7 Run `openspec validate archive-generation --strict`; verify it passes
 
+## 7. Review follow-up
+
+- [x] 7.1 Reader: check the manifest item count against the plaintext export and require the recovery instructions as the first entry; verify the scenarios "Item count differs from the export" and "Recovery instructions not first"
+- [x] 7.2 verify: resolve the path before checking for the partial marker; verify the scenario "Partial generation reached through another path"
+- [x] 7.3 publish: keep ErrFailedCapture or ErrUnknownVerdict when removing the partial directory fails, and let a failed Abort be repeated; verify with an injected removal error
+- [x] 7.4 Make `Publisher.Publish` with a write function the only way to a final name, make Commit internal, and let `archive.Writer.Finish` return the embedded verification result (design D1 and D9); verify the scenario "Unfinished archive" and that Finish returns exactly the embedded bytes
+- [x] 7.5 Run `gofmt -l .`, `go vet ./...` for Linux, macOS and Windows, `go test -race ./...` and `openspec validate archive-generation --strict`; verify all pass
+
 ## Workflow follow-up
 
 - The maintainer rebuilds the dev container after task 1.1. Afterwards `go mod download` must work with the default `GOPATH`.

@@ -2,10 +2,12 @@ package main
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"bitwarden-backup/internal/archive"
 	"bitwarden-backup/internal/archive/archivetest"
@@ -31,35 +33,28 @@ func backup(t *testing.T, target string, f *capturetest.Fixture, recipients []st
 	if _, err := archive.ParseRecipients(recipients); err != nil {
 		return nil, err
 	}
-	g, err := (&publish.Publisher{}).Begin(target)
-	if err != nil {
-		return nil, err
-	}
-	abort := func(err error) (*publish.Published, error) {
-		return nil, errors.Join(err, g.Abort())
-	}
-	w, err := archive.NewWriter(g.Writer(), recipients, g.Created(), archive.Documents{
-		PlaintextExport: in.PlaintextExport,
-		EncryptedExport: in.EncryptedExport,
-		ItemList:        in.ItemList,
-	})
-	if err != nil {
-		return abort(err)
-	}
-	for _, a := range archivetest.Attachments(f) {
-		if err := w.AddAttachment(a); err != nil {
-			return abort(err)
+	// Publish takes the verdict from the bytes that Finish returns, which are
+	// the bytes the manifest embeds.
+	return (&publish.Publisher{}).Publish(target, func(dst io.Writer, created time.Time) ([]byte, error) {
+		w, err := archive.NewWriter(dst, recipients, created, archive.Documents{
+			PlaintextExport: in.PlaintextExport,
+			EncryptedExport: in.EncryptedExport,
+			ItemList:        in.ItemList,
+		})
+		if err != nil {
+			return nil, err
 		}
-	}
-	err = w.Finish(archive.Meta{
-		Source:       archivetest.Source,
-		Tool:         manifest.Tool{Name: "bitwarden-backup", Version: "test"},
-		Verification: verification,
+		for _, a := range archivetest.Attachments(f) {
+			if err := w.AddAttachment(a); err != nil {
+				return nil, err
+			}
+		}
+		return w.Finish(archive.Meta{
+			Source:       archivetest.Source,
+			Tool:         manifest.Tool{Name: "bitwarden-backup", Version: "test"},
+			Verification: verification,
+		})
 	})
-	if err != nil {
-		return abort(err)
-	}
-	return g.Commit(verification)
 }
 
 func TestEndToEnd(t *testing.T) {

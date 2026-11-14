@@ -87,8 +87,9 @@ func Meta(verification []byte) archive.Meta {
 	}
 }
 
-// WriteTo writes a complete archive of the fixture to w.
-func WriteTo(t testing.TB, w io.Writer, f *capturetest.Fixture, verification []byte, recipients ...string) {
+// WriteTo writes a complete archive of the fixture to w and returns the
+// verification result as the archive embeds it.
+func WriteTo(t testing.TB, w io.Writer, f *capturetest.Fixture, verification []byte, recipients ...string) []byte {
 	t.Helper()
 	aw, err := archive.NewWriter(w, recipients, Created, Documents(t, f))
 	if err != nil {
@@ -99,9 +100,11 @@ func WriteTo(t testing.TB, w io.Writer, f *capturetest.Fixture, verification []b
 			t.Fatal(err)
 		}
 	}
-	if err := aw.Finish(Meta(verification)); err != nil {
+	embedded, err := aw.Finish(Meta(verification))
+	if err != nil {
 		t.Fatal(err)
 	}
+	return embedded
 }
 
 // Build returns a complete archive of the fixture.
