@@ -163,6 +163,8 @@ var reasonNeeds = map[verify.Reason]needs{
 	verify.ListedItemMissingFromExport:     {document: true, item: true},
 	verify.ExportedItemNotListed:           {document: true, item: true},
 	verify.OrganizationItemsExcluded:       {document: true, counts: true},
+	verify.ItemOrganizationMismatch:        {document: true, item: true},
+	verify.AttachmentDownloadOutOfScope:    {document: true, item: true, attachment: true},
 	verify.PasskeyCountMismatch:            {item: true, counts: true},
 	verify.PasskeyCountUnverifiable:        {item: true},
 	verify.PasskeyFieldMissing:             {item: true, passkey: true},

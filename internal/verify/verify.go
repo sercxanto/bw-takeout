@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"sort"
 	"strconv"
+	"strings"
 
 	"bitwarden-backup/internal/capture"
 )
@@ -256,11 +257,21 @@ func (v *verifier) passkey(itemID string, position int, p capture.Passkey) {
 	}
 }
 
-// isP256Key reports whether a key value decodes as base64url without
-// padding and parses as a PKCS#8 P-256 private key. The parsed key is
-// dropped at once and never used.
+// decodeKeyValue decodes a key value as base64url. The export writes it
+// without padding. A padded value is accepted as well, because padding
+// changes the encoding and not the key.
+func decodeKeyValue(keyValue string) ([]byte, error) {
+	if strings.HasSuffix(keyValue, "=") {
+		return base64.URLEncoding.DecodeString(keyValue)
+	}
+	return base64.RawURLEncoding.DecodeString(keyValue)
+}
+
+// isP256Key reports whether a key value decodes as base64url and parses as
+// a PKCS#8 P-256 private key. The parsed key is dropped at once and never
+// used.
 func isP256Key(keyValue string) bool {
-	der, err := base64.RawURLEncoding.DecodeString(keyValue)
+	der, err := decodeKeyValue(keyValue)
 	if err != nil {
 		return false
 	}
@@ -285,8 +296,15 @@ func (v *verifier) coverage() {
 		}
 	}
 	for _, id := range v.plaintextOrder {
-		if item, ok := v.listed[id]; !ok || item.OrganizationID != "" {
+		item, ok := v.listed[id]
+		switch {
+		case !ok:
 			v.add(Finding{Severity: SeverityUnverified, Reason: ExportedItemNotListed,
+				Document: string(capture.ItemListDocument), ItemID: id})
+		case item.OrganizationID != "":
+			// The exports leave organization items out, so the documents
+			// disagree about the same snapshot (design D5, D8).
+			v.add(Finding{Severity: SeverityFailed, Reason: ItemOrganizationMismatch,
 				Document: string(capture.ItemListDocument), ItemID: id})
 		}
 	}
@@ -323,12 +341,31 @@ func (v *verifier) attachments() {
 		}
 	}
 	for _, ref := range v.downloadOrder {
-		if !expected[ref] {
-			f := attachmentFinding(SeverityFailed, AttachmentDownloadNotExpected, ref)
-			f.Document = string(capture.DownloadsDocument)
-			v.add(f)
+		if expected[ref] {
+			continue
+		}
+		f := attachmentFinding(SeverityFailed, AttachmentDownloadNotExpected, ref)
+		if v.organizationAttachment(ref) {
+			f.Severity, f.Reason = SeverityWarning, AttachmentDownloadOutOfScope
+		}
+		f.Document = string(capture.DownloadsDocument)
+		v.add(f)
+	}
+}
+
+// organizationAttachment reports whether the item list shows the
+// attachment on an organization item.
+func (v *verifier) organizationAttachment(ref capture.AttachmentRef) bool {
+	item, ok := v.listed[ref.ItemID]
+	if !ok || item.OrganizationID == "" {
+		return false
+	}
+	for _, id := range item.AttachmentIDs {
+		if id == ref.AttachmentID {
+			return true
 		}
 	}
+	return false
 }
 
 func attachmentFinding(s Severity, r Reason, ref capture.AttachmentRef) Finding {
@@ -369,7 +406,7 @@ func (v *verifier) organizations() {
 }
 
 // reference compares the capture with a reference inventory (design D9).
-// Every difference fails.
+// Every difference fails, except a passkey counter that grew.
 func (v *verifier) reference(ref *capture.Reference) {
 	known := map[string]capture.ReferenceItem{}
 	for _, item := range ref.Items {
@@ -410,7 +447,9 @@ func (v *verifier) referencePasskeys(item capture.ReferenceItem, plain capture.P
 		if keyFingerprint(got.KeyValue) != want.KeySHA256 {
 			v.add(Finding{Severity: SeverityFailed, Reason: ReferencePasskeyKeyMismatch, ItemID: item.ItemID, Passkey: intp(i)})
 		}
-		if counter, err := strconv.ParseUint(got.Counter, 10, 64); err != nil || counter != want.Counter {
+		// Counters grow with use, so a higher counter than the reference
+		// passes. A lower one points to a reset passkey.
+		if counter, err := strconv.ParseUint(got.Counter, 10, 64); err != nil || counter < want.Counter {
 			v.add(Finding{Severity: SeverityFailed, Reason: ReferencePasskeyCounterMismatch, ItemID: item.ItemID, Passkey: intp(i)})
 		}
 	}
@@ -424,7 +463,7 @@ func (v *verifier) referencePasskeys(item capture.ReferenceItem, plain capture.P
 // keyFingerprint returns the hex SHA-256 of the decoded key value, or "" when
 // it does not decode.
 func keyFingerprint(keyValue string) string {
-	der, err := base64.RawURLEncoding.DecodeString(keyValue)
+	der, err := decodeKeyValue(keyValue)
 	if err != nil || len(der) == 0 {
 		return ""
 	}

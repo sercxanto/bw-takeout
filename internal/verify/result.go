@@ -53,6 +53,9 @@ const (
 	ListedItemMissingFromExport    Reason = "listed_item_missing_from_export"
 	ExportedItemNotListed          Reason = "exported_item_not_listed"
 	OrganizationItemsExcluded      Reason = "organization_items_excluded"
+	// ItemOrganizationMismatch: both exports hold the item as a personal
+	// item, but the item list shows it as an organization item.
+	ItemOrganizationMismatch Reason = "item_organization_mismatch"
 )
 
 // Reason codes for passkeys.
@@ -75,6 +78,9 @@ const (
 	AttachmentDownloadInvalid     Reason = "attachment_download_invalid"
 	AttachmentDownloadNotExpected Reason = "attachment_download_not_expected"
 	AttachmentEmpty               Reason = "attachment_empty"
+	// AttachmentDownloadOutOfScope: a download result for an attachment
+	// that the item list shows on an organization item. A warning.
+	AttachmentDownloadOutOfScope Reason = "attachment_download_out_of_scope"
 )
 
 // Reason codes for the comparison with a reference inventory.
@@ -177,13 +183,13 @@ func Reasons() []Reason {
 		DuplicateItemID, ItemMissingFromPlaintextExport,
 		ItemMissingFromEncryptedExport, ItemFormatUnrecognized,
 		ListedItemMissingFromExport, ExportedItemNotListed,
-		OrganizationItemsExcluded,
+		OrganizationItemsExcluded, ItemOrganizationMismatch,
 		PasskeyCountMismatch, PasskeyCountUnverifiable, PasskeyFieldMissing,
 		PasskeyFieldInvalid, PasskeyKeyInvalid, PasskeyKeyFormUnknown,
 		PasskeyCounterInvalid,
 		DuplicateAttachmentID, DuplicateDownloadResult, AttachmentDownloadFailed,
 		AttachmentDownloadMissing, AttachmentDownloadInvalid,
-		AttachmentDownloadNotExpected, AttachmentEmpty,
+		AttachmentDownloadNotExpected, AttachmentEmpty, AttachmentDownloadOutOfScope,
 		ReferenceItemMissing, ReferenceItemNotExpected, ReferencePasskeyMissing,
 		ReferencePasskeyNotExpected, ReferencePasskeyKeyMismatch,
 		ReferencePasskeyCounterMismatch, ReferenceAttachmentMissing,

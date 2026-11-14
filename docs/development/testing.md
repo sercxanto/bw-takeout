@@ -31,7 +31,7 @@ Fourteen variants each break the intact fixture in one place: missing item, dupl
 
 ### Spec Scenario Coverage
 
-Every scenario of the capture-verification spec has one test of the same name in `internal/verify`. The mapping was checked on 14 November 2026 and is complete. Parser cases are tested in addition in `internal/capture/parse_test.go`.
+Every scenario of the capture-verification spec has one test of the same name in `internal/verify`. The mapping was checked on 14 November 2026, again after the review decisions of the same day, and is complete. Parser cases are tested in addition in `internal/capture/parse_test.go`.
 
 | Requirement | Scenario | Test |
 |---|---|---|
@@ -55,6 +55,8 @@ Every scenario of the capture-verification spec has one test of the same name in
 | Reference inventory comparison | Swapped credential without reference | `TestSwappedCredentialWithoutReference` |
 | | Swapped credential with reference | `TestSwappedCredentialWithReference` |
 | | Attachment content differs from reference | `TestAttachmentContentDiffersFromReference` |
+| | Counter grew since the reference | `TestCounterGrewSinceTheReference` |
+| | Counter lower than the reference | `TestCounterLowerThanTheReference` |
 | Attachment accounting by ID | Two attachments with the same name | `TestTwoAttachmentsWithTheSameName` |
 | | One download fails | `TestOneDownloadFails` |
 | | Result missing | `TestResultMissing` |
@@ -62,6 +64,8 @@ Every scenario of the capture-verification spec has one test of the same name in
 | Attachment inventory coverage | Listed item not exported | `TestListedItemNotExported` |
 | | Exported item not listed | `TestExportedItemNotListed` |
 | Organization items stay visible | Organization items present | `TestOrganizationItemsPresent` |
+| | Exported item listed as organization item | `TestExportedItemListedAsOrganizationItem` |
+| | Download result for an organization attachment | `TestDownloadResultForAnOrganizationAttachment` |
 | Attributable findings | Finding for a missing passkey | `TestFindingForAMissingPasskey` |
 | No secrets in results | Failing capture with sensitive content | `TestFailingCaptureWithSensitiveContent` |
 

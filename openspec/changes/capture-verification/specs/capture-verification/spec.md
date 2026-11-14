@@ -103,7 +103,7 @@ The verification SHALL check every passkey in the plaintext export for the requi
 - **THEN** the verdict is unverified
 
 ### Requirement: Reference inventory comparison
-When a reference inventory is supplied, the verification SHALL compare item IDs, credential identity, key fingerprint and counter of every passkey, and the content hash of every attachment against it. Any difference SHALL produce a failed finding.
+When a reference inventory is supplied, the verification SHALL compare item IDs, credential identity, key fingerprint and counter of every passkey, and the content hash of every attachment against it. Any difference SHALL produce a failed finding, except that a passkey counter higher than in the reference SHALL pass, because counters grow with use.
 
 #### Scenario: Swapped credential without reference
 - **WHEN** an item's passkey was replaced by a different valid passkey, the count is unchanged and no reference inventory is supplied
@@ -118,6 +118,15 @@ When a reference inventory is supplied, the verification SHALL compare item IDs,
 #### Scenario: Attachment content differs from reference
 - **WHEN** a downloaded attachment's content hash differs from the reference inventory
 - **THEN** the verdict is failed
+
+#### Scenario: Counter grew since the reference
+- **WHEN** a passkey's counter in the plaintext export is higher than in the reference inventory and everything else matches
+- **THEN** no finding is reported for this passkey
+
+#### Scenario: Counter lower than the reference
+- **WHEN** a passkey's counter in the plaintext export is lower than in the reference inventory
+- **THEN** the verdict is failed
+- **AND** the finding names the item ID and the passkey position
 
 ### Requirement: Attachment accounting by ID
 The verification SHALL expect one download result for every attachment the item list shows on a personal item, identified by item ID and attachment ID. A failed download, a missing result or a result for an attachment the item list does not show SHALL produce a failed finding. File names SHALL NOT be used to identify attachments.
@@ -154,12 +163,22 @@ The verification SHALL compare the personal items in the item list with the item
 - **AND** the finding states that the attachment inventory of this item is unknown
 
 ### Requirement: Organization items stay visible
-Items in the item list that belong to an organization SHALL be excluded from all comparisons and SHALL be reported in a warning with the number of items per organization ID.
+Items in the item list that belong to an organization SHALL be excluded from all comparisons and SHALL be reported in a warning with the number of items per organization ID. An item that both exports hold as a personal item SHALL produce a failed finding when the item list shows it as an organization item, because the documents then disagree about the same snapshot. A download result for an attachment that the item list shows on an organization item SHALL produce a warning.
 
 #### Scenario: Organization items present
 - **WHEN** the item list shows three items across two organizations in addition to the personal items
 - **THEN** a warning reports three excluded items and the count per organization ID
 - **AND** these items are not reported as missing from the export
+
+#### Scenario: Exported item listed as organization item
+- **WHEN** both exports contain an item and the item list shows it as an organization item
+- **THEN** the verdict is failed
+- **AND** the finding names the item ID
+
+#### Scenario: Download result for an organization attachment
+- **WHEN** a download result exists for an attachment that the item list shows on an organization item
+- **THEN** a warning names the item ID and the attachment ID
+- **AND** the verdict is not changed by it
 
 ### Requirement: Attributable findings
 Every finding SHALL carry a severity, a stable machine-readable reason code and, where applicable, the item ID and attachment ID it refers to.

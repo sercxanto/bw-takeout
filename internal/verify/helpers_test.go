@@ -163,6 +163,18 @@ func fixtureRuns() []fixtureRun {
 			i := downloadIndex(t, *in, ct.AttachmentFirst)
 			in.Downloads[i].SHA256, in.Downloads[i].Size = hashOf(nil), 0
 		})},
+		fixtureRun{name: "exported item listed as organization item", build: func(t *testing.T) (*ct.Fixture, capture.Input) {
+			f := listNoteAsOrganizationItem(t)
+			return f, f.Input(t)
+		}},
+		fixtureRun{name: "organization attachment downloaded", build: func(t *testing.T) (*ct.Fixture, capture.Input) {
+			f := variant(t, ct.OrganizationItems)
+			in := f.Input(t)
+			in.Downloads = append(in.Downloads, capture.Download{
+				ItemID: ct.ItemOrgFirstA, AttachmentID: ct.AttachmentOrg, SHA256: hashOf([]byte("x")), Size: 1,
+			})
+			return f, in
+		}},
 		fixtureRun{name: "password-protected export", build: withInput(func(t *testing.T, in *capture.Input) {
 			in.EncryptedExport = passwordProtectedExport
 		})},

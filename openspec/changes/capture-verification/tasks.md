@@ -45,6 +45,16 @@
 - [x] 6.2 Compare every scenario in `specs/capture-verification/spec.md` with the test that covers it; verify the mapping is complete and record it in `docs/development/testing.md`, because the repository has no pull request workflow yet
 - [x] 6.3 Run `openspec validate capture-verification --strict`; verify it passes
 
+## 7. Review decisions of 14 November 2026
+
+- [x] 7.1 Record the finding fields, the additional reason codes and the handling of rejected documents in design.md D2 and D10; verify the design names every field of `verify.Finding`
+- [x] 7.2 Accept a padded base64url key value that parses; verify a test passes a padded key with and without the reference and fails a wrongly padded one
+- [x] 7.3 Report a download result for an attachment of an organization item as a warning; verify the scenario "Download result for an organization attachment" and that an attachment ID the organization item does not show still fails
+- [x] 7.4 Fail an item that both exports hold as personal item when the item list shows it as an organization item; verify the scenario "Exported item listed as organization item"
+- [x] 7.5 Let a passkey counter higher than the reference pass and a lower one fail; verify the scenarios "Counter grew since the reference" and "Counter lower than the reference"
+- [x] 7.6 Record the key values held as strings in the capture model as a risk in design.md
+- [x] 7.7 Rerun `gofmt -l .`, `go vet ./...`, `go test ./...` and `openspec validate capture-verification --strict`, and extend the scenario mapping in `docs/development/testing.md`; verify every scenario has a test
+
 ## Workflow follow-up
 
 - Review scope, risks and acceptance criteria before implementing, as CONTRIBUTING requires.

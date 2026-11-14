@@ -54,6 +54,8 @@ Parsing is separate from judging so that a changed CLI output shape touches only
 
 Failed means a proven deviation or broken input. Unverified means a required check was not possible. Verified means all checks for the stated scope passed. Failed outranks unverified, which outranks verified. Warnings carry information and never change the verdict. This follows the release rules in the completeness research.
 
+If a document is rejected, the result holds only the findings for the rejected documents and no comparison runs. Comparisons against a missing document would only produce follow-up findings, and the verdict is failed either way.
+
 *Alternative considered:* a numeric score or a pass/fail result. Rejected because a single flag would either hide unverifiable items or fail every capture that contains one.
 
 ### D3: The account-bound encrypted export is the second inventory
@@ -84,13 +86,13 @@ An ID that is only in the encrypted export matches the reproduced decrypt omissi
 
 Required and non-empty: `credentialId`, `keyType`, `keyAlgorithm`, `keyCurve`, `keyValue`, `rpId`, `counter`, `discoverable`, `creationDate`. Optional: `userHandle`, `userName`, `rpName`, `userDisplayName`.
 
-For the declared combination `public-key`, `ECDSA`, `P-256`, the key value must decode and parse as a PKCS#8 P-256 private key. Any other declared combination is reported as unverified, not failed, because the verification has no evidence about other forms. The counter must be a non-negative integer and is accepted as a string of digits or as a JSON number. The research observed a string.
+For the declared combination `public-key`, `ECDSA`, `P-256`, the key value must decode and parse as a PKCS#8 P-256 private key. The export writes base64url without padding. A padded value is accepted as well, because padding changes the encoding and not the key. Any other declared combination is reported as unverified, not failed, because the verification has no evidence about other forms. The counter must be a non-negative integer and is accepted as a string of digits or as a JSON number. The research observed a string.
 
 Parsing uses the Go standard library. The parsed key is discarded immediately. No signing test is performed.
 
 ### D7: Attachments are accounted for by ID pair
 
-The expected set is every pair of item ID and attachment ID that the item list shows on a personal item. Each pair needs exactly one download result, which is either an error or a content hash with a byte count. A missing result, an error or a result for an unexpected pair fails.
+The expected set is every pair of item ID and attachment ID that the item list shows on a personal item. Each pair needs exactly one download result, which is either an error or a content hash with a byte count. A missing result, an error, a malformed result, two results for one pair or a result for an unexpected pair fails. A result for an attachment that the item list shows on an organization item is a warning: it lies outside the scope and loses nothing.
 
 An empty attachment is a warning, not a failure. Empty files are legitimate, and the `size` metadata may describe ciphertext, so it is not compared with the downloaded length.
 
@@ -98,19 +100,19 @@ An empty attachment is a warning, not a failure. Empty files are legitimate, and
 
 ### D8: Three-way item coverage
 
-The item list is the only source for attachment metadata. A personal item in the list that is missing from the plaintext export fails. An exported item that is missing from the list is unverified, because its attachments cannot be known. Organization items in the list are counted per organization ID, reported as a warning and excluded from every comparison.
+The item list is the only source for attachment metadata. A personal item in the list that is missing from the plaintext export fails. An exported item that is missing from the list is unverified, because its attachments cannot be known. Organization items in the list are counted per organization ID, reported as a warning and excluded from every comparison. One exception: an item that both exports hold as a personal item fails when the list shows it as an organization item, because the documents disagree about the same snapshot, as in D5.
 
 The caller supplies one merged item list as a bare JSON array. A list wrapped in the `BW_RESPONSE` envelope is rejected as a wrong document form. At code level the default listing leaves out archived items and `--archived` shows only those, so the later capture change has to merge both listings. A capture built from the default listing alone ends unverified as soon as the vault holds an archived item. The same holds for archived items of an account that cannot archive, because the CLI then ignores `--archived`. The verification does not know about archiving. It reports each such item as exported but not listed.
 
 ### D9: Optional reference inventory
 
-A reference inventory holds, for known item IDs, the credential ID, a SHA-256 fingerprint of the decoded key value and the counter of each passkey, and the SHA-256 of each attachment. It never holds key material. When supplied, every difference fails. When absent, the result lists credential identity and attachment content as not checked independently.
+A reference inventory holds, for known item IDs, the credential ID, a SHA-256 fingerprint of the decoded key value and the counter of each passkey, and the SHA-256 of each attachment. It never holds key material. When supplied, every difference fails, except a passkey counter that is higher than in the reference, because counters grow with use. A lower counter fails, because it points to a reset passkey. Passkeys are matched by credential ID, so a swapped credential shows as one missing and one unexpected passkey. When absent, the result lists credential identity and attachment content as not checked independently.
 
 The reference exists so that tests can prove both sides of the equal-count swap. The same type serves the later offline read test with a synthetic inventory, which the product requirements ask for.
 
 ### D10: Results carry IDs, never content
 
-A finding has a severity, a reason code, optional item and attachment IDs, optional counts and an optional passkey position within the item. Reason codes are lowercase snake case constants, for example `item_missing_from_export`, `passkey_count_mismatch`, `passkey_count_unverifiable`, `attachment_download_failed`. The result serializes to JSON deterministically, sorted by item ID, attachment ID and reason code.
+A finding has a severity and a reason code. Where they apply, it also names the input document, the item ID, the attachment ID, the passkey position within the item and the passkey field by its JSON key, and it carries expected and found counts, or a count with a breakdown per organization ID. None of these fields can hold content: document names, field names and reason codes come from fixed vocabularies. Reason codes are lowercase snake case constants, for example `item_missing_from_plaintext_export`, `passkey_count_mismatch`, `passkey_count_unverifiable`, `attachment_download_failed`. The complete list lives in `internal/verify`, including codes for malformed and duplicate download results and for passkeys or attachments that the reference does not know. The result serializes to JSON deterministically, sorted by item ID, attachment ID and reason code.
 
 Names, user names, URIs, notes, field values, credential IDs, key values and attachment file names never enter a finding. Error text from a failed download is not copied into the result, because CLI error messages can contain names. The download result carries an error class chosen by the caller instead.
 
@@ -177,6 +179,7 @@ ADRs expected along the roadmap, beyond this change: archive format and layout, 
 - [A well-formed but wrong key, or a swapped credential, passes without a reference] → Stated as a standing limit in every result and in the user limitations.
 - [The attachment inventory has one source, the decrypted item list] → An item that fails decryption also disappears from the list, but then fails the ID comparison (D5). An attachment missing from an otherwise intact list entry stays undetected. Documented as a limit.
 - [The Go runtime may keep parsed key bytes in memory] → Keys are parsed only to check their form and dropped at once. Memory hygiene belongs to the later ADR on the plaintext boundary.
+- [The capture model holds every passkey key value as a string for the whole verification] → Go strings cannot be wiped, so the values stay in memory until the garbage collector reclaims them. Accepted for this change, which reads no real vault. The later ADR on the plaintext boundary decides how keys are held.
 - [Strict passkey rules could fail real passkeys with unusual forms] → Only the positively known P-256 form is judged. Other forms are unverified.
 
 ## Open Questions

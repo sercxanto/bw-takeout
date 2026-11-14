@@ -398,10 +398,26 @@ func TestCounterForms(t *testing.T) {
 	}
 }
 
+// Padding changes the encoding, not the key: a padded key that parses
+// passes, also against the reference fingerprint. Wrong padding fails.
 func TestKeyValueWithPadding(t *testing.T) {
-	r := run(t, changeSecondPasskey(t, func(p map[string]any) {
-		p["keyValue"] = p["keyValue"].(string) + "=="
-	}), false)
+	pad := func(s string) string {
+		for len(s)%4 != 0 {
+			s += "="
+		}
+		return s
+	}
+	padded := changeSecondPasskey(t, func(p map[string]any) {
+		p["keyValue"] = pad(p["keyValue"].(string))
+	})
+	for _, withReference := range []bool{false, true} {
+		wantVerdict(t, run(t, padded, withReference), verify.Verified)
+	}
+
+	wrong := changeSecondPasskey(t, func(p map[string]any) {
+		p["keyValue"] = pad(p["keyValue"].(string)) + "===="
+	})
+	r := run(t, wrong, false)
 	wantVerdict(t, r, verify.Failed)
 	passkeyFinding(t, r, verify.PasskeyKeyInvalid, "keyValue")
 }
@@ -556,6 +572,54 @@ func TestOrganizationItemsPresent(t *testing.T) {
 	}
 }
 
+func TestExportedItemListedAsOrganizationItem(t *testing.T) {
+	r := run(t, listNoteAsOrganizationItem(t), false)
+	wantVerdict(t, r, verify.Failed)
+	got := only(t, r, verify.ItemOrganizationMismatch)
+	if got.ItemID != ct.ItemNote || got.Document != string(capture.ItemListDocument) {
+		t.Errorf("finding = %+v", got)
+	}
+	// The item is reported as a contradiction, not as unlisted or missing.
+	wantReasons(t, r, verify.ItemOrganizationMismatch)
+	only(t, r, verify.OrganizationItemsExcluded)
+}
+
+// listNoteAsOrganizationItem lets the item list show the secure note as an
+// item of the first organization. Both exports keep it as personal item.
+func listNoteAsOrganizationItem(t *testing.T) *ct.Fixture {
+	t.Helper()
+	f := ct.Intact(t)
+	for _, raw := range f.ItemList {
+		if item := raw.(map[string]any); item["id"] == ct.ItemNote {
+			item["organizationId"] = ct.OrganizationFirst
+		}
+	}
+	return f
+}
+
+func TestDownloadResultForAnOrganizationAttachment(t *testing.T) {
+	f := variant(t, ct.OrganizationItems)
+	in := f.Input(t)
+	in.Downloads = append(in.Downloads, capture.Download{
+		ItemID: ct.ItemOrgFirstA, AttachmentID: ct.AttachmentOrg, SHA256: hashOf([]byte("x")), Size: 1,
+	})
+	r := runInput(t, f, in, false)
+	wantVerdict(t, r, verify.Verified)
+	got := only(t, r, verify.AttachmentDownloadOutOfScope)
+	if got.Severity != verify.SeverityWarning || got.ItemID != ct.ItemOrgFirstA || got.AttachmentID != ct.AttachmentOrg {
+		t.Errorf("warning = %+v", got)
+	}
+	if len(r.Findings) != 0 {
+		t.Errorf("findings: %s", dump(t, r))
+	}
+
+	// An attachment ID that the organization item does not show still fails.
+	in.Downloads[len(in.Downloads)-1].AttachmentID = "att-not-shown"
+	r = runInput(t, f, in, false)
+	wantVerdict(t, r, verify.Failed)
+	only(t, r, verify.AttachmentDownloadNotExpected)
+}
+
 // Organization items never appear as missing, also when a reference
 // inventory is supplied and the exports are otherwise broken.
 func TestOrganizationItemsNeverMissing(t *testing.T) {
@@ -624,10 +688,23 @@ func TestWrongKeyWithReference(t *testing.T) {
 	}
 }
 
-func TestCounterDiffersFromReference(t *testing.T) {
+func TestCounterGrewSinceTheReference(t *testing.T) {
 	f := changeSecondPasskey(t, func(p map[string]any) { p["counter"] = "7" })
 	r := run(t, f, true)
+	wantVerdict(t, r, verify.Verified)
+	if len(r.Findings) != 0 {
+		t.Errorf("findings: %s", dump(t, r))
+	}
+}
+
+func TestCounterLowerThanTheReference(t *testing.T) {
+	f := changeSecondPasskey(t, func(p map[string]any) { p["counter"] = "5" })
+	r := run(t, f, true)
 	wantVerdict(t, r, verify.Failed)
+	got := only(t, r, verify.ReferencePasskeyCounterMismatch)
+	if got.ItemID != ct.ItemPasskeyLogin || got.Passkey == nil || *got.Passkey != 1 {
+		t.Errorf("finding = %+v", got)
+	}
 	wantReasons(t, r, verify.ReferencePasskeyCounterMismatch)
 }
 
