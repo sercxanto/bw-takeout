@@ -32,13 +32,13 @@ Interactive profile → sync and inventory → JSON exports and individual attac
 ## Roadmap
 
 1. `capture-verification`: verdict rules over a captured inventory. Done, archived on 14 November 2026. The agreed behavior is in `openspec/specs/capture-verification/`.
-2. `archive-generation`: container, encryption, manifest, exclusive publishing and an offline verify command. Implemented, review and archiving pending.
+2. `archive-generation`: container, encryption, manifest, exclusive publishing and an offline verify command. Done, archived on 14 November 2026. The agreed behavior is in `openspec/specs/backup-archive/`, `openspec/specs/generation-publishing/` and `openspec/specs/offline-verification/`.
 3. `bw-process-adapter`: `bwcli` and `profile` against a fake `bw`, plus unauthenticated tests with the real binary. Findings of the [Vaultwarden live probe](../research/vaultwarden-live-probe-2026-11-14.md) to account for:
    - bw refuses servers without HTTPS. A self-signed server certificate needs `NODE_EXTRA_CA_CERTS` passed through to the child process (report, method "TLS").
    - `bw login --raw` without any terminal exited with code 0 and empty stdout. The adapter must validate the form of the session key instead of trusting the exit code (report, result 1).
    - On a decryption failure bw wrote error lines to stderr while exiting with 0. They name neither item nor field. They are usable as an additional warning signal, not as a classification (report, result 6).
    - The capture must merge `list items` with `list items --archived`, because the default list leaves archived items out while both exports keep them (report, added case "archived item").
-4. `interactive-backup-run`: login, sync freshness, capture, teardown and user documentation. This completes the first prototype.
+4. `interactive-backup-run`: login, sync freshness, capture, teardown and user documentation. This completes the first prototype. It includes the run on a FAT or exFAT target that was deferred from `archive-generation`, see [testing](testing.md).
 5. Later: platform hardening, configuration and multiple accounts, organizations, release, then batch operation and a KDBX derivative.
 
 The live probe against a disposable Vaultwarden instance ran outside this sequence on 13 and 14 November 2026. Its results are in the [live probe report](../research/vaultwarden-live-probe-2026-11-14.md).
