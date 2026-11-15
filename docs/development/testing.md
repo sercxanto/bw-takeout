@@ -179,6 +179,27 @@ CI covers the tests on Linux amd64, macOS arm64 and Windows amd64 with the file 
 
 The run on FAT or exFAT media is deferred to the change `interactive-backup-run` (maintainer decision of 15 November 2026). Until a backup command exists, no user writes to such a target. A failure there would show as an error with a partial generation left behind, not as a backup that only looks successful. The weak guarantees of these file systems after a power loss are stated in the [limitations](../user/limitations.md) and are beyond what a test run shows. The run must pass before a first release.
 
+## Offline Exercise of 15 November 2026
+
+The maintainer opened a synthetic generation on macOS 26.7.3 on Apple Silicon, following a checklist that repeats the steps of the [recovery page](../user/recovery.md). The generation was left by `TestLeaveGenerationForOfflineExercise` in the dev container, encrypted to a key pair made only for this exercise. `bw-takeout` was built for darwin/arm64 from commit `8b353f4`, and age v1.2.1 for darwin/arm64 from the pinned module. Both were copied with the generation into a folder outside the project. The identity was kept in a separate folder outside the project and outside that folder.
+
+Results, as reported by the maintainer:
+
+- macOS ran both programs without blocking them. `age --version` printed v1.2.1, and `bw-takeout` without arguments ended with status 2.
+- `bw-takeout verify` printed the expected generation, source, counts and the verdict verified, and ended with status 0.
+- `age -d … | tar -tvf -` listed seven entries, starting with `RECOVERY.txt` and ending with `manifest.json`.
+- Unpacking with age and tar produced the documented layout. `RECOVERY.txt` was understandable without further help.
+- `sha256sum` exists on this macOS version. The hash of `documents/export.json` matched the manifest.
+- Both attachments matched a reference list computed from the fixed attachment contents in the fixture source, not from the archive.
+- Nothing was installed or looked up beyond what the exercise folder held.
+
+Evidence level: mock, synthetic data only. Limits of this exercise:
+
+- The Mac is the host of the dev container that wrote the generation. It is a second operating system, not an independent machine.
+- The identity was in a separate folder on the same disk, not on removable media.
+- The network stayed on, by maintainer decision. The maintainer reports that nothing was fetched.
+- The recovery page has shell commands for Unix-like systems only. Recovery on Windows was not exercised.
+
 ## Bootstrap Check of 13 November 2026
 
 Docker build and start as user vscode on Linux/arm64 succeeded. Go 1.27.3, bw 2026.10.1, age 1.2.1 and OpenSpec 2.0.0 were run in the image. A synthetic age round trip succeeded without network access. SHA-256 of bw's installed npm entry point (build/bw.js): `8a443d1190643330826e8cc0b27381fba5af5a06c6c3d7c7254033913a51ee9b`. Package integrity is recorded separately in the npm lockfile.
