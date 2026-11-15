@@ -37,7 +37,7 @@ Interactive profile → sync and inventory → JSON exports and individual attac
 4. `interactive-backup-run`: login, capture collection, sync freshness, teardown and user documentation. This completes the first prototype. It must account for:
    - The capture must merge `list items` with `list items --archived`, because the default list leaves archived items out while both exports keep them ([live probe](../research/vaultwarden-live-probe-2026-11-14.md), added case "archived item").
    - The freshness rule: `lastSync` must be later than the start of the run before the capture. The login ignores a failed sync, so a session key alone does not show that the local state is current.
-   - Teardown on abort of the whole run.
+   - Teardown on abort of the whole run, with a logout after every login attempt, also a failed one, because `bw` can be logged in although the client refused its session key (review of 15 November 2026).
    - What a premium failure of an attachment download means for the verdict. It must never be more lenient than any other failed download.
    - The run on a FAT or exFAT target that was deferred from `archive-generation`, see [testing](testing.md).
 5. Follow-ups recorded by `bw-process-adapter`, not yet ordered:

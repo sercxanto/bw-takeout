@@ -9,7 +9,9 @@
 //
 // It creates a fresh profile, queries the version, sets the server, logs
 // in, reads the status, syncs, reads the status again, logs out and tears
-// down. It prints each step with its result: ok or the failure class, the
+// down. The logout runs after every login attempt, also a failed one,
+// because bw can be logged in although the client refused its session key.
+// It prints each step with its result: ok or the failure class, the
 // form of the session key, the status state, whether lastSync is set and
 // later than the start, and the number of entries in the data file whose
 // name starts with user_ after the logout. It never prints the session key
@@ -92,26 +94,31 @@ func run(args []string, stdout, stderr io.Writer, d deps) int {
 		Stdin: d.stdin, Stderr: d.stderr, Terminal: d.terminal,
 	})
 	ctx := context.Background()
+	loginTried := false
 	if err != nil {
 		fmt.Fprintln(stdout, "client: failed (invalid configuration)")
 		failed = true
-	} else if probe(ctx, c, *server, start, stdout, step) {
+	} else if probe(ctx, c, *server, start, stdout, step, &loginTried) {
 		failed = true
 	}
 
 	var logout func() error
-	if c != nil && c.LoggedIn() {
+	logoutStep := "logout"
+	if loginTried {
+		if !c.LoggedIn() {
+			logoutStep = "logout after failed login"
+		}
 		logout = func() error {
 			err := c.Logout(ctx)
 			fmt.Fprintf(stdout, "data file after logout: %s\n", userEntries(p.DataDir))
 			return err
 		}
 	} else {
-		fmt.Fprintln(stdout, "data file after logout: not read, no login")
+		fmt.Fprintln(stdout, "data file after logout: not read, no login attempted")
 	}
 	logoutErr, removeErr := p.Teardown(logout)
 	if logout != nil {
-		step("logout", logoutErr)
+		step(logoutStep, logoutErr)
 	}
 	if removeErr != nil {
 		failed = true
@@ -130,8 +137,9 @@ func run(args []string, stdout, stderr io.Writer, d deps) int {
 	return 0
 }
 
-// probe runs the steps up to the logout and reports whether one failed.
-func probe(ctx context.Context, c *bwcli.Client, server string, start time.Time, stdout io.Writer, step func(string, error) bool) bool {
+// probe runs the steps up to the logout and reports whether one failed. It
+// sets loginTried before it starts the login.
+func probe(ctx context.Context, c *bwcli.Client, server string, start time.Time, stdout io.Writer, step func(string, error) bool, loginTried *bool) bool {
 	failed := false
 	if _, err := c.Version(ctx); !step("version", err) {
 		return true
@@ -139,6 +147,7 @@ func probe(ctx context.Context, c *bwcli.Client, server string, start time.Time,
 	if !step("server", c.SetServer(ctx, server)) {
 		return true
 	}
+	*loginTried = true
 	err := c.Login(ctx)
 	switch {
 	case err == nil:

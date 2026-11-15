@@ -191,7 +191,7 @@ func (e *RemoveError) Unwrap() error { return e.Err }
 
 // Teardown calls logout if it is not nil, then removes the profile
 // directory with everything in it, also when the logout failed. The caller
-// passes nil when no login succeeded. Both errors are returned separately.
+// passes nil when no login was attempted. Both errors are returned separately.
 // A removal error is a *RemoveError that names the directory.
 func (p *Profile) Teardown(logout func() error) (logoutErr, removeErr error) {
 	if logout != nil {

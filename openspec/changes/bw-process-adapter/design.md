@@ -176,7 +176,7 @@ The profile location is `bw-takeout/profiles` under the user cache directory of 
 
 Leftovers are the other directories in the location whose names have this form. Their age comes from the time in the name. They are listed and never touched, for the reason given for partial generations in ADR 0005: without a lock, a leftover of a dead run cannot be told from the profile of a running one.
 
-Teardown takes the logout as a function, calls it if a login succeeded, then removes the profile directory in any case and returns both errors. The package does not know `bw`.
+Teardown takes the logout as a function, calls it if a login was attempted, also a failed one, then removes the profile directory in any case and returns both errors. `bw` can be logged in although the client refused its session key, for example after exit code 0 with a key of the wrong form, and `bw logout` runs without a key. The package does not know `bw`.
 
 *Alternative considered:* the temporary directory of the system. It is often cleaned automatically and may be in memory, which is good for secrets. Rejected because leftovers would then appear and vanish without the user learning about them, and because `/tmp` is shared between users on Linux.
 

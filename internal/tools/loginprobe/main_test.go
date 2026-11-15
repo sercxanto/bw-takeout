@@ -128,12 +128,41 @@ func TestProbeLoginWithOtherText(t *testing.T) {
 		"config":    {},
 		"login":     {Stdout: sentinel + " " + testKey + "\n", Stderr: sentinel + "\n"},
 		"status":    statusDoc("unauthenticated"),
+		"logout":    {Stdout: sentinel, Stderr: sentinel + "\n"},
 	}})
 	if code != 1 {
 		t.Errorf("exit status %d", code)
 	}
-	if !strings.Contains(out, "session key form invalid") || !strings.Contains(out, "not read, no login") {
-		t.Errorf("output:\n%s", out)
+	// bw exited with code 0, so it may be logged in although the key was
+	// refused. The logout must run all the same.
+	for _, want := range []string{"session key form invalid", "data file after logout: ", "logout after failed login: ok", "teardown: profile removed"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "not read") {
+		t.Errorf("data file not read after a login attempt:\n%s", out)
+	}
+	assertClean(t, out)
+}
+
+func TestProbeWithoutLoginAttempt(t *testing.T) {
+	code, out, _ := probeWith(t, bwclitest.Scenario{Commands: map[string]bwclitest.Behavior{
+		"--version": {Exit: 1, Stderr: sentinel + "\n"},
+		"logout":    {Stdout: sentinel},
+	}})
+	if code != 1 {
+		t.Errorf("exit status %d", code)
+	}
+	for _, want := range []string{"version: failed (class exit)", "data file after logout: not read, no login attempted", "teardown: profile removed"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "logout") {
+			t.Errorf("logout ran without a login attempt:\n%s", out)
+		}
 	}
 	assertClean(t, out)
 }

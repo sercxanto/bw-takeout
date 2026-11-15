@@ -35,7 +35,7 @@ The current profile lifetime, a fresh CLI data directory per run that is removed
 ## Consequences
 
 - The session key is visible to processes of the same user that can read the environment of a child process. This is accepted, as the [CLI analysis](../research/bitwarden-cli-analysis-2026-10-31.md) of 31 October 2026 recommended `BW_SESSION` only in the environment of the child that needs it.
-- Copies of the session key can stay in the memory of this process, because the Go runtime builds the environment of a child from strings. Overwriting the byte slice does not reach them.
+- Copies of the session key can stay in the memory of this process. The Go runtime builds the environment of a child from strings, and `os/exec` copies the standard output of the login into the client through an internal buffer. Overwriting the byte slice of the client reaches neither.
 - Diagnostic text of `bw` is not available to the user. A failure names the operation, the class and the exit code, so the user has to run `bw` by hand to learn more.
 - One failure class, premium required, still depends on an English sentence of `bw`. It is therefore not allowed to improve a result, and a changed sentence falls back to a general failure.
 
