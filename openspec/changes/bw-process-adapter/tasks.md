@@ -58,7 +58,7 @@
 
 - [x] 7.1 Add the tests `TestRealBW…` of design D13, which run only when `BW_TAKEOUT_REAL_BW` holds a path; verify they report a skip with the reason without the variable, and add them to `.github/expected-skips.txt` for every platform with the reason
 - [x] 7.2 Run them in the dev container with `BW_TAKEOUT_REAL_BW="$(command -v bw)"`; verify all pass, and compare each result with the fake behavior it corresponds to
-- [ ] 7.3 Describe the fake, the switch, the Cloud contact of these tests and how to run them in `docs/development/testing.md` and `docs/development/getting-started.md`; verify the documented command runs as written
+- [x] 7.3 Describe the fake, the switch, the Cloud contact of these tests and how to run them in `docs/development/testing.md` and `docs/development/getting-started.md`; verify the documented command runs as written
 
 ## 8. Manual login exercise
 

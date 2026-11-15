@@ -155,6 +155,33 @@ The module cache of this container belonged to root, so the session used a `GOPA
 
 Not run: macOS, Windows, Linux/amd64, FAT or exFAT media, network shares, the manual offline exercise on a second system, attachments larger than a few hundred kilobytes, any live capture and the real `bw` binary.
 
+## bw Process and Profile Tests
+
+The change bw-process-adapter adds tests in two packages. Neither needs a network, an account or a `bw` installation in its default run.
+
+- `internal/bwcli`: the client runs against a fake `bw`, the `main` package `internal/bwcli/fakebw`. `TestMain` builds it once per package run into a temporary directory, so it works on Linux, macOS and Windows without a shell or Node. The fake reads a scenario file from the data directory it receives in `BITWARDENCLI_APPDATA_DIR` and appends one record per start: arguments, the full environment, the working directory and whether standard input was empty. Tests check the allowlist, the session key rule and the arguments from these records. Each behavior of the fake names its evidence in the package comment: the [code notes](../research/bw-cli-code-notes-2026-11-15.md), the [live probe](../research/vaultwarden-live-probe-2026-11-14.md) or an unauthenticated run. The login tests use a fake terminal, because `go test` has none.
+- `internal/profile`: temporary directories as profile location, an injected clock, random source and removal function, and a logout function supplied by the test. Every pre-existing file in the location is hashed before and after the listing of leftovers.
+
+The fake can drift from the real `bw`. The tests `TestRealBW…` in `internal/bwcli` compare the cases that need no login with the real program. They run only when `BW_TAKEOUT_REAL_BW` holds the absolute path of a `bw` executable, and report a skip otherwise. Run them by hand in the dev container:
+
+```sh
+BW_TAKEOUT_REAL_BW="$(command -v bw)" go test -count=1 -run TestRealBW -v ./internal/bwcli/
+```
+
+They are not offline. Each test creates a fresh profile, and the first start of a fresh profile sends one anonymous configuration request to `https://api.bitwarden.com` (finding 12 of the code notes). `bw` has no switch to turn this off. CI does not run them, because CI has no `bw`. Cases with a login wait for an automated Vaultwarden test setup.
+
+| Test | Real behavior checked | Fake behavior it corresponds to |
+|---|---|---|
+| `TestRealBWVersionAndHash` | version line, SHA-256 of the resolved file, `data.json` created in the given directory | version line and `data.json` |
+| `TestRealBWStatusWithoutLogin` | status `unauthenticated` without `lastSync` | status `unauthenticated` without `lastSync` |
+| `TestRealBWNotLoggedIn` | class `not_logged_in` for sync, item list and plaintext export | failure followed by an unauthenticated status |
+| `TestRealBWCleanExitInCallingEnvironment` | `BW_CLEANEXIT=true` in the calling environment does not reach `bw`, the sync still fails | exit code 0 when `BW_CLEANEXIT` is present |
+| `TestRealBWLoginWithoutTerminal` | the real terminal check refuses the login with `/dev/null` on standard input | login refused by the fake terminal |
+
+### Run of 15 November 2026 with the real bw
+
+Dev container, Debian 12, Linux aarch64, Go 1.27.3, `bw` 2026.10.1 in the npm layout, SHA-256 of `bw.js` `8a443d1190643330826e8cc0b27381fba5af5a06c6c3d7c7254033913a51ee9b`. All five tests passed, in 19.6 s together. Each sent one configuration request to Bitwarden Cloud. Not run: the official single-file `bw` for macOS or Windows, and any case with a login.
+
 ## Skip Report
 
 A skipped test is not a passed test. The program `internal/tools/skipreport` reads the output of `go test -json`, echoes it, and lists every skipped test with its reason. It exits with status 1 when a test failed or when a test was skipped that the list of expected skips does not allow for the platform. Run it the same way locally and in CI:

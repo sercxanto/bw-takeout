@@ -16,7 +16,17 @@ go vet ./...
 go test ./...
 ```
 
-`gofmt -l .` prints the files that need formatting and prints nothing when all files are formatted. The tests need no network, no login and no `bw` process. A few tests start the built command, the `age` and `tar` commands or a helper copy of the test binary. Run `go test -race ./...` as well before a review. The [test strategy](testing.md) describes the fixtures and their evidence level.
+`gofmt -l .` prints the files that need formatting and prints nothing when all files are formatted. The tests need no network, no login and no `bw` installation. A few tests start the built command, the `age` and `tar` commands, a helper copy of the test binary or a fake `bw` that the tests build from this repository. Run `go test -race ./...` as well before a review. The [test strategy](testing.md) describes the fixtures and their evidence level.
+
+### Tests with the real bw
+
+The tests `TestRealBW…` start the installed `bw` without a login. They report a skip unless `BW_TAKEOUT_REAL_BW` is set:
+
+```sh
+BW_TAKEOUT_REAL_BW="$(command -v bw)" go test -count=1 -run TestRealBW -v ./internal/bwcli/
+```
+
+Each of them contacts Bitwarden Cloud once with an anonymous configuration request, so run them only when that is acceptable. See [bw process and profile tests](testing.md#bw-process-and-profile-tests).
 
 ## CI results
 

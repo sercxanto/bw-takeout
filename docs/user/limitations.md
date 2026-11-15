@@ -42,7 +42,7 @@ It does not show:
 
 ## Using bw
 
-The program starts the official `bw` program. The handling of it is tested against a stand-in for `bw`. The points below come from reading the code of `bw` 2026.10.1 and from runs without a login, see the [code notes](../research/bw-cli-code-notes-2026-11-15.md).
+The program starts the official `bw` program. The handling of it is tested against a stand-in for `bw`, and without a login against `bw` 2026.10.1 on Linux. The points below come from reading the code of `bw` 2026.10.1 and from runs without a login, see the [code notes](../research/bw-cli-code-notes-2026-11-15.md).
 
 - **One device entry per run.** Each run uses a fresh CLI profile, and each fresh profile registers as a new device. The server keeps one device entry per run. `bw` offers no command that removes it, and the logout does not remove it. Whether Bitwarden Cloud limits device entries, throttles repeated logins or sends a message for each new device is unknown.
 - **Contact with Bitwarden Cloud also for a self-hosted server.** The first start of a fresh profile requests configuration from `https://api.bitwarden.com`, before the server address of your own server is set. This request carries no account data. It cannot be avoided with the public commands of `bw`.
