@@ -16,7 +16,8 @@ func TestWorkflowStructure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(raw)
+	// A Windows checkout may convert line endings.
+	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
 	if strings.Contains(text, "\t") {
 		t.Error("the file contains a tab")
 	}

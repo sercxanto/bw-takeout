@@ -297,6 +297,12 @@ func TestPartialGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Windows cannot remove a directory that holds an open file.
+	t.Cleanup(func() {
+		if err := g.Abort(); err != nil {
+			t.Error(err)
+		}
+	})
 	f, v := fixtureFor(t, verify.Verified)
 	// A complete archive inside a directory that still carries the marker.
 	archivetest.WriteTo(t, g.Writer(), f, v, id.Recipient().String())
@@ -313,6 +319,12 @@ func TestPartialGenerationByAnotherPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Windows cannot remove a directory that holds an open file.
+	t.Cleanup(func() {
+		if err := g.Abort(); err != nil {
+			t.Error(err)
+		}
+	})
 	f, v := fixtureFor(t, verify.Verified)
 	archivetest.WriteTo(t, g.Writer(), f, v, id.Recipient().String())
 	partial := filepath.Join(target, g.PartialName())

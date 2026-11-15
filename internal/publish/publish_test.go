@@ -379,6 +379,10 @@ func (f *faultFS) hit(op string) error {
 	if f.fault.op == op && f.calls[op] == f.fault.nth {
 		return f.fault.err
 	}
+	// A rename that keeps failing: on Windows the run retries it.
+	if op == "rename" && f.fault.op == op && f.calls[op] > f.fault.nth {
+		return f.fault.err
+	}
 	return nil
 }
 

@@ -38,7 +38,14 @@ func TestRecoveryWithStandardTools(t *testing.T) {
 	tarFile := filepath.Join(dir, "vault.tar")
 	run(t, exec.Command(agePath, "-d", "-i", identity, "-o", tarFile, encrypted))
 
-	listing := run(t, exec.Command(tarPath, "-tf", tarFile))
+	// Relative names and the working directory keep a drive letter out of
+	// the arguments: GNU tar on Windows reads "C:\..." as host:path.
+	tarCmd := func(args ...string) *exec.Cmd {
+		c := exec.Command(tarPath, args...)
+		c.Dir = dir
+		return c
+	}
+	listing := run(t, tarCmd("-tf", "vault.tar"))
 	names := strings.Fields(listing)
 	if len(names) == 0 || names[0] != archive.RecoveryPath || names[len(names)-1] != archive.ManifestPath {
 		t.Errorf("tar listing: %v", names)
@@ -48,7 +55,7 @@ func TestRecoveryWithStandardTools(t *testing.T) {
 	if err := os.Mkdir(out, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	run(t, exec.Command(tarPath, "-xf", tarFile, "-C", out))
+	run(t, tarCmd("-xf", "vault.tar", "-C", "out"))
 
 	docs := archivetest.Documents(t, f)
 	want := map[string][]byte{
