@@ -169,6 +169,14 @@ Use `bash` with `-o pipefail`, so that a failing `go test` fails the pipe. The t
 
 Rule for a new entry: it needs a reason that holds in review, for example a platform limit named in a spec or a non-goal. A test that should run, such as `TestRecoveryWithStandardTools`, stays off the list, so that a missing tool fails the run instead of hiding.
 
+## CI Run of 15 November 2026
+
+The workflow `.github/workflows/ci.yml` ran on GitHub Actions after the commit `7d13507`. The maintainer reports that all four jobs passed: `test` on `ubuntu-24.04`, `macos-26` and `windows-2025`, and `checks` on `ubuntu-24.04`. A passing `test` job means that vet, the tests with the skip report and the race tests all passed on that runner, and that every skip was on the list of expected skips. The first run on Windows failed in four tests, which were fixed in the tests and not in product code, see the change repository-ci-setup.
+
+Evidence level: mock, on three platforms. The runner image versions, the Go and age versions, the durations and the runner minutes were not recorded, because the maintainer did not need them. This page therefore names the platforms by runner label only.
+
+CI covers the tests on Linux amd64, macOS arm64 and Windows amd64 with the file systems of the runners (ext4, APFS and NTFS, as far as the images use them). It does not cover Linux arm64, which stays with the dev container, nor FAT or exFAT media, network shares, the manual offline exercise on a second system, any live capture or the real `bw` binary. CI passing is not a statement of platform support.
+
 ## Bootstrap Check of 13 November 2026
 
 Docker build and start as user vscode on Linux/arm64 succeeded. Go 1.27.3, bw 2026.10.1, age 1.2.1 and OpenSpec 2.0.0 were run in the image. A synthetic age round trip succeeded without network access. SHA-256 of bw's installed npm entry point (build/bw.js): `8a443d1190643330826e8cc0b27381fba5af5a06c6c3d7c7254033913a51ee9b`. Package integrity is recorded separately in the npm lockfile.

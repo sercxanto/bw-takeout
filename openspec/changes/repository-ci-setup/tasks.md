@@ -26,20 +26,20 @@
 
 ## 4. First CI run
 
-- [ ] 4.1 Maintainer step: create a private GitHub repository, add it as remote and push the branch with this change; verify `git remote -v` shows it and a run of the workflow appears
-- [ ] 4.2 Review the first run per job: test results, race results, the skip report and the age version per runner; verify the result per platform is stated with the failures found, if any
-- [ ] 4.3 Handle failures by the rules of design D9, each test fix or product fix with a regression test and listed in this task; verify a later run passes on all three runners with only expected skips
+- [x] 4.1 Maintainer step: create a private GitHub repository, add it as remote and push the branch with this change; verify `git remote -v` shows it and a run of the workflow appears
+- [x] 4.2 Review the first run: the maintainer states the result per job; verify the failures found are stated
+- [x] 4.3 Handle failures by the rules of design D9, each test fix or product fix with a regression test and listed in this task; verify a later run passes on all three runners with only expected skips
   Fixes after the first run, all in tests, none in product code (design D9):
   - `TestPartialGeneration`, `TestPartialGenerationByAnotherPath`: the open generation is aborted in a cleanup, because Windows cannot remove a directory that holds an open file.
   - `TestFailingRunNextToOlderGenerations/rename_#1`: the injected rename fault now persists, because the Windows retry of the rename otherwise succeeds on the second attempt.
   - `TestRecoveryWithStandardTools`: `tar` runs in the test directory with relative names, because GNU tar of Git for Windows reads `C:\...` as `host:path`.
   - `TestWorkflowStructure`: CRLF line endings of a Windows checkout are normalized before the text is checked.
-- [ ] 4.4 Record the passing run in `docs/development/testing.md`: date, runner labels and image versions from the log, Go and age versions, skips per platform, duration per job and the minutes used; update the list of what was not run; verify each statement is taken from the run log
+- [x] 4.4 Record the passing run in `docs/development/testing.md`: date, commit, that all four jobs passed on the maintainer's report, and what CI covers; update the list of what was not run. Runner image versions, tool versions, durations and minutes are not recorded, by decision of the maintainer on 15 November 2026
 
 ## 5. Integration check
 
-- [ ] 5.1 Run `gofmt -l .`, `go vet ./...`, `go test ./...` and `go test -race ./...` in the dev container after all fixes; verify all pass and gofmt prints nothing
-- [ ] 5.2 Run `openspec validate repository-ci-setup --strict`; verify it passes
+- [x] 5.1 Run `gofmt -l .`, `go vet ./...`, `go test ./...` and `go test -race ./...` in the dev container after all fixes; verify all pass and gofmt prints nothing
+- [x] 5.2 Run `openspec validate repository-ci-setup --strict`; verify it passes
 
 ## Workflow follow-up
 
