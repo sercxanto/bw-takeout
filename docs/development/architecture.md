@@ -19,8 +19,8 @@ Interactive profile → sync and inventory → JSON exports and individual attac
 
 | Component | Responsibility | Status |
 |---|---|---|
-| `bwcli` | Start `bw`, build the child environment from an allowlist, report the version and the SHA-256 of the executable without judging them ([ADR 0007](../decisions/0007-bw-versions.md)), pass the session key to child processes only, collect stdout in memory, count decryption error lines, classify failures without CLI text, run the interactive login | implemented, tested against a fake `bw` in the dev container, login exercised by hand against Vaultwarden on Linux and macOS |
-| `profile` | Own CLI data directory per run, list leftovers of earlier runs without removing them, teardown also when the logout fails | implemented, tested in the dev container. A fresh profile per run is a maintainer decision for the prototype (15 November 2026) |
+| `bwcli` | Start `bw`, build the child environment from an allowlist, report the version and the SHA-256 of the executable without judging them ([ADR 0007](../decisions/0007-bw-versions.md)), pass the session key to child processes only, collect stdout in memory, count decryption error lines, classify failures without CLI text, run the interactive login | implemented, tested against a fake `bw` in the dev container and in CI on Linux, macOS and Windows, login exercised by hand against Vaultwarden on Linux and macOS |
+| `profile` | Own CLI data directory per run, list leftovers of earlier runs without removing them, teardown also when the logout fails | implemented, tested in the dev container and in CI on Linux, macOS and Windows. A fresh profile per run is a maintainer decision for the prototype (15 November 2026) |
 | `capture` | Capture model and parsers. Later: collect the documents and attachments and compare before and after | model and parsers implemented, collection planned |
 | `verify` | Turn a capture into a verdict with reasons per ID | implemented |
 | `manifest` | Format version, creation time, source, versions, entry sizes and hashes, embedded verification result | implemented |

@@ -359,7 +359,7 @@ Every scenario of the two specs of the change bw-process-adapter has one test of
 
 In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3 and OpenSpec 2.0.0: `gofmt -l .` printed nothing, `go vet ./...` passed, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed in all packages with only expected skips, and `go test -race ./...` passed. The skips were `TestLeaveGenerationForOfflineExercise`, `TestKillHelper` and the five `TestRealBW…` tests, each with its reason. `GOOS=darwin` and `GOOS=windows` builds and `go vet` passed for `./...`. Evidence level: mock, against the fake `bw`.
 
-Not run: the tests on macOS, Windows and Linux amd64, which wait for the next CI run; the `TestRealBW…` tests in this run, which ran separately on the same day (see above); any automated test with a login; Bitwarden Cloud.
+Not run in the dev container: the tests on macOS, Windows and Linux amd64, which ran in CI afterwards, see [CI run of bw-process-adapter](#ci-run-of-15-november-2026-bw-process-adapter); the `TestRealBW…` tests in this run, which ran separately on the same day (see above); any automated test with a login; Bitwarden Cloud.
 
 ## Skip Report
 
@@ -384,6 +384,19 @@ Evidence level: mock, on three platforms. The runner image versions, the Go and 
 CI covers the tests on Linux amd64, macOS arm64 and Windows amd64 with the file systems of the runners (ext4, APFS and NTFS, as far as the images use them). It does not cover Linux arm64, which stays with the dev container, nor FAT or exFAT media, network shares, the manual offline exercise on a second system, any live capture or the real `bw` binary. CI passing is not a statement of platform support.
 
 The run on FAT or exFAT media is deferred to the change `interactive-backup-run` (maintainer decision of 15 November 2026). Until a backup command exists, no user writes to such a target. A failure there would show as an error with a partial generation left behind, not as a backup that only looks successful. The weak guarantees of these file systems after a power loss are stated in the [limitations](../user/limitations.md) and are beyond what a test run shows. The run must pass before a first release.
+
+## CI Run of 15 November 2026, bw-process-adapter
+
+The workflow ran on the branch `bw-process-adapter` after the commit `e522570`. It was the first run with the tests of `internal/bwcli`, `internal/profile` and `internal/tools/loginprobe`, and with the fake `bw` built on each runner. The maintainer reports that it passed on all three platforms, `ubuntu-24.04`, `macos-26` and `windows-2025`.
+
+The run before it, on the commit `2ff6abb`, passed on Linux and failed in two tests, which were fixed in the tests and not in product code:
+
+- `TestUnrelatedEntriesInTheProfileLocation` failed on macOS and Windows. It created a file and a directory whose names differ only in case, and these collide on the case-insensitive file systems of both runners. The directory now has another random part.
+- `TestLoginWithATerminal` failed on macOS. It compared the working directory as a string, while the temporary directory on macOS is reached through the symbolic link `/var` and the fake reports the resolved path. The test now compares the directories by identity.
+
+Both failures were reproduced in the dev container with `TMPDIR` on a symbolic link into the case-insensitive bind mount of the macOS host. The fixed tests and the whole suite with the skip report passed there.
+
+Evidence level: mock, on three platforms, against the fake `bw`. Runner image versions and durations were not recorded. The interactive login is not covered by CI. It was exercised by hand on Linux and macOS, see the [login exercise](#login-exercise-of-15-november-2026).
 
 ## Offline Exercise of 15 November 2026
 
