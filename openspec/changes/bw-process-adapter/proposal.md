@@ -63,7 +63,7 @@ None. `capture-verification`, `backup-archive`, `generation-publishing` and `off
 
 **Follow-ups this change records but does not do:**
 
-- `interactive-backup-run`: capture collection, the freshness rule "lastSync is later than the start of the run" before the capture, teardown on abort, and what a premium failure means for the verdict.
+- `interactive-backup-run`: capture collection, the freshness rule "lastSync is later than the start of the run" before the capture, teardown on abort, and what a premium failure means for the verdict, never more lenient than another failed download.
 - A separate explore session on an automated Vaultwarden test setup, including account creation without a person.
 - A separate small change that reports export fields unknown to this project at run time.
 - Reusing one profile across runs in a logged-out state, so that the server keeps one device entry. To be looked at before a first release.

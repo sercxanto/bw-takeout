@@ -145,13 +145,20 @@ A failure carries the operation, a class, the exit code and, for a download, the
 | `no_terminal` | Login without a terminal |
 | `start` | The process could not be started |
 | `timeout`, `cancelled` | The process was stopped |
-| `not_logged_in`, `locked`, `premium_required` | Non-zero exit code and a recognized sentence on standard error |
-| `exit` | Non-zero exit code without a recognized sentence |
+| `not_logged_in`, `locked` | Non-zero exit code of a vault command, and a status query afterwards reports `unauthenticated` or `locked` |
+| `premium_required` | Non-zero exit code of an attachment download and the premium sentence on standard error |
+| `exit` | Any other non-zero exit code |
 | `output` | Exit code 0 with output of an unexpected form, or output beyond the limit |
 | `stray_file` | A file appeared in the working directory |
 | `profile_not_used` | `bw` did not use the data directory |
 
-The three recognized sentences are the fixed strings of the 2026.10.1 bundle: "You are not logged in.", "Vault is locked." and "Premium status is required to use this feature.". Colour codes are removed before the comparison. A sentence that changes in a later version falls back to `exit`, which is still a failure.
+`bw` has no error codes. Every failure exits with code 1 (32091), and `--response` carries only the message text (31452). The classes are therefore taken from structured data where it exists. After a non-zero exit code of a vault command (sync, export, list, attachment), the client runs one status query with the same session key and takes the class from the status document: `unauthenticated` gives `not_logged_in`, `locked` gives `locked`, and anything else, a failed status query and a cancelled context give `exit`. Only `premium_required` has no structured signal. It is recognized from the fixed sentence "Premium status is required to use this feature." of the 2026.10.1 bundle, for the attachment download only, when the sentence fills a whole line after colour codes and surrounding white space are removed. A changed sentence falls back to `exit`.
+
+A class refines a report and never improves a result. No class may lead to a more favorable outcome than `exit`. In particular, the backup run must not treat `premium_required` more leniently than any other failed download (maintainer decision of 15 November 2026).
+
+The status query after a failure costs one more start of `bw`, about 2.6 s, on failure only.
+
+*Alternative considered:* recognizing all three sentences on standard error. Rejected because it couples program logic to English text of one version where a structured signal exists.
 
 Standard error is read as a stream. Lines that contain `ERROR bitwarden_crypto::` are counted. Nothing else is kept. The count is returned with every result, also with a successful one. The probe showed that these lines name neither item nor field, so the count is a signal and not a classification.
 
@@ -192,7 +199,7 @@ A scenario states per command: exit code, standard output, standard error, a del
 - login with exit code 0 and empty output, with a valid key, with a key and a line ending, with extra text;
 - login that writes a prompt to standard error and reads a line from standard input;
 - exit code 0 instead of 1 when `BW_CLEANEXIT` is present, and a failure when `BW_NOINTERACTION` is missing on a command other than login;
-- "You are not logged in.", "Vault is locked." and the premium sentence with exit code 1;
+- a failure followed by a status document with each state, and the premium sentence with exit code 1. The sentences "You are not logged in." and "Vault is locked." stay available, so that a test can show that they no longer select a class;
 - success with three decryption error lines;
 - a status with each state, with and without `lastSync`, and with an unknown state;
 - an error text that carries a sentinel value;
@@ -225,7 +232,7 @@ The results go into a research report with version, method and scope, and into A
 
 ### D15: A proposed ADR on the secret boundary
 
-How the session key, the environment, the output and the profile are handled is an essential security assumption, so it meets the ADR criteria in CONTRIBUTING. The architecture page already expects this ADR. The new ADR `0006` starts as proposed and covers D3, D4, D6, D7 and the session key rule of D2. Context: the false successes at the process boundary and the secrets that cross it. Alternatives: an inherited environment, `--session` as an argument, a pseudo-terminal, forwarding standard error. Consequences: the session key is visible to processes of the same user that can read the environment of a child, copies of it can stay in memory, and diagnostic text of `bw` is not available to the user.
+How the session key, the environment, the output and the profile are handled is an essential security assumption, so it meets the ADR criteria in CONTRIBUTING. The architecture page already expects this ADR. The new ADR `0006` starts as proposed and covers D3, D4, D6, D7 and the session key rule of D2. Context: the false successes at the process boundary and the secrets that cross it. Alternatives: an inherited environment, `--session` as an argument, a pseudo-terminal, forwarding standard error. Consequences: the session key is visible to processes of the same user that can read the environment of a child, copies of it can stay in memory, diagnostic text of `bw` is not available to the user, and one failure class still depends on English text of `bw` and is therefore not allowed to improve a result.
 
 The profile lifetime of D9 is named there as a current choice, not as part of the decision, because the maintainer wants to revisit it.
 
@@ -243,7 +250,7 @@ The architecture page expects an ADR on how `bw` versions are qualified, and it 
 - [Windows is not exercised] → ADR 0002 stays proposed with this point open. The procedure of D14 is written so that it can be repeated there.
 - [On Windows a timeout may leave the Node process of an npm-installed `bw` running] → Recorded as open evidence. The official single-file `bw` has no intermediate process.
 - [The fake drifts from the real `bw`] → Every fake behavior names its evidence. The switch-gated tests of D13 compare the cases that need no login. Cases with login wait for the Vaultwarden test setup.
-- [The recognized sentences change with a `bw` version] → They fall back to the class `exit`. A failure never becomes a success.
+- [The premium sentence changes with a `bw` version] → It falls back to the class `exit`. `not_logged_in` and `locked` come from the status document. A failure never becomes a success.
 - [The allowlist breaks a setup that needs another variable, for example a proxy] → Stated as a non-goal and in the limitations. Adding a configured value is a small later change.
 - [The check for `data.json` depends on observed behavior] → If a later version creates the file lazily, the check fails closed with `profile_not_used` before any login.
 - [The session key is in the environment of child processes] → Readable by processes of the same user. Accepted, as the CLI analysis of October did. Recorded in ADR 0006.

@@ -2,25 +2,26 @@
 
 ## 1. Evidence and setup
 
-- [ ] 1.1 Write `docs/research/bw-cli-code-notes-2026-11-15.md` with the code-level and unauthenticated findings listed in the design context: version, bundle hash, method, each finding with its line number, and what was not tested; add a row to `docs/research/research-summary.md`; verify every finding of the design context appears in the note with its evidence level
-- [ ] 1.2 Add `golang.org/x/term` to `go.mod` and commit `go.sum` (design D17); verify `go mod tidy` leaves both files unchanged and `go build ./...` succeeds
-- [ ] 1.3 Add the third-party notice for `golang.org/x/term` to `docs/development/releases.md`; verify the page names the module and its license
-- [ ] 1.4 Move `ValidItemID` and `ValidAttachmentID` to `internal/vaultid` and let `internal/archive` use them (design D5); verify `go test ./internal/archive/...` passes unchanged and `go list -deps ./internal/vaultid` shows only standard library packages
+- [x] 1.1 Write `docs/research/bw-cli-code-notes-2026-11-15.md` with the code-level and unauthenticated findings listed in the design context: version, bundle hash, method, each finding with its line number, and what was not tested; add a row to `docs/research/research-summary.md`; verify every finding of the design context appears in the note with its evidence level
+- [x] 1.2 Add `golang.org/x/term` to `go.mod` and commit `go.sum` (design D17); verify `go mod tidy` leaves both files unchanged and `go build ./...` succeeds
+- [x] 1.3 Add the third-party notice for `golang.org/x/term` to `docs/development/releases.md`; verify the page names the module and its license
+- [x] 1.4 Move `ValidItemID` and `ValidAttachmentID` to `internal/vaultid` and let `internal/archive` use them (design D5); verify `go test ./internal/archive/...` passes unchanged and `go list -deps ./internal/vaultid` shows only standard library packages
+- [ ] 1.5 Add to the research note that `bw` has no error codes (32091, 31452); verify the note names both lines
 
 ## 2. Fake bw
 
-- [ ] 2.1 Implement `internal/bwcli/fakebw` as a `main` package that reads its scenario from the data directory and appends one record per start with arguments, environment, working directory and whether standard input was empty (design D12); verify a test builds it, runs it directly and reads the record
-- [ ] 2.2 Add the test helper that builds the fake once per package run into a temporary directory and writes scenario files; verify it works with `GOOS` set to the host and that `GOOS=windows go vet ./internal/bwcli/...` passes
-- [ ] 2.3 Implement the scenario behaviors of design D12, including exit code 0 when `BW_CLEANEXIT` is present and a failure when `BW_NOINTERACTION` is missing on a command other than login; verify one test per behavior against the fake alone, and that the package comment of the fake names the evidence for each behavior
+- [x] 2.1 Implement `internal/bwcli/fakebw` as a `main` package that reads its scenario from the data directory and appends one record per start with arguments, environment, working directory and whether standard input was empty (design D12); verify a test builds it, runs it directly and reads the record
+- [x] 2.2 Add the test helper that builds the fake once per package run into a temporary directory and writes scenario files; verify it works with `GOOS` set to the host and that `GOOS=windows go vet ./internal/bwcli/...` passes
+- [x] 2.3 Implement the scenario behaviors of design D12, including exit code 0 when `BW_CLEANEXIT` is present and a failure when `BW_NOINTERACTION` is missing on a command other than login; verify one test per behavior against the fake alone, and that the package comment of the fake names the evidence for each behavior
 
 ## 3. Process core
 
-- [ ] 3.1 Implement the client configuration and the environment allowlist of design D3; verify the scenarios "Exit code override in the calling environment", "Runtime options in the calling environment", "Certificate authority file configured" and "Certificate authority file only in the calling environment" from the records of the fake
-- [ ] 3.2 Implement the command runner of design D4: empty standard input, output in memory with the limit of D8, time limit, process group on Unix; verify the scenarios "Command does not end", "Run is cancelled" and "Output exceeds the limit", and that the fake process no longer exists after a timeout on Unix
-- [ ] 3.3 Implement the failure type and classes of design D7 with a text built only from operation, class, exit code and IDs; verify the scenarios "Not logged in", "Locked vault", "Premium required" and "Unrecognized error text", including a recognized sentence wrapped in colour codes
-- [ ] 3.4 Scan standard error as a stream, count decryption error lines and keep nothing else; verify the scenarios "Export with decryption errors" and "Export without error lines", and that a standard error of several megabytes neither blocks the command nor is held in memory
-- [ ] 3.5 Check the working directory after every command; verify the scenarios "Export" and "bw writes a file"
-- [ ] 3.6 Verify the scenario "Failed download with a name in the error text" with a sentinel value in standard error and in standard output, searching the failure text and every exported field of the failure
+- [x] 3.1 Implement the client configuration and the environment allowlist of design D3; verify the scenarios "Exit code override in the calling environment", "Runtime options in the calling environment", "Certificate authority file configured" and "Certificate authority file only in the calling environment" from the records of the fake
+- [x] 3.2 Implement the command runner of design D4: empty standard input, output in memory with the limit of D8, time limit, process group on Unix; verify the scenarios "Command does not end", "Run is cancelled" and "Output exceeds the limit", and that the fake process no longer exists after a timeout on Unix
+- [ ] 3.3 Implement the failure type and classes of design D7 with a text built only from operation, class, exit code and IDs, the status query after a failed vault command, using the strict status parsing that task 4.3 exposes as an operation, and the premium sentence for the download only; verify the scenarios "Not logged in", "Locked vault", "Premium required", "Unrecognized error text", "Not-logged-in text with an unlocked vault" and "Status query after a failure fails", a premium sentence wrapped in colour codes, and the premium sentence on a command other than the download
+- [x] 3.4 Scan standard error as a stream, count decryption error lines and keep nothing else; verify the scenarios "Export with decryption errors" and "Export without error lines", and that a standard error of several megabytes neither blocks the command nor is held in memory
+- [x] 3.5 Check the working directory after every command; verify the scenarios "Export" and "bw writes a file"
+- [x] 3.6 Verify the scenario "Failed download with a name in the error text" with a sentinel value in standard error and in standard output, searching the failure text and every exported field of the failure
 - [ ] 3.7 Review checkpoint: stop and show the maintainer the output of `go test -v ./internal/bwcli/...` with every skipped test and its reason; verify the maintainer confirmed before any task of group 4 starts
 
 ## 4. Operations
