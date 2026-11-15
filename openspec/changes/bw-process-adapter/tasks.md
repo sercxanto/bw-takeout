@@ -47,12 +47,12 @@
 
 ## 6. Profile
 
-- [ ] 6.1 Implement `internal/profile` with creation as in design D9, injectable location, clock and random source; verify the scenarios "Two runs in the same second", "Chosen name already exists", "Profile location is missing" and "New profile"
-- [ ] 6.2 Verify the scenario "Permissions on Linux and macOS" and skip the mode check with a reason on Windows; add the skip to `.github/expected-skips.txt` for Windows with the reason
-- [ ] 6.3 Implement teardown with the logout as a function; verify the scenarios "Teardown after a successful run", "Logout fails", "Removal fails" with an injected removal error, and "Teardown without login"
-- [ ] 6.4 Implement the listing of leftovers; verify the scenarios "Leftover from a killed run", "Own profile" and "Unrelated entries in the profile location", hashing every pre-existing file before and after
-- [ ] 6.5 Verify with `go list -deps ./internal/profile` that the package imports neither `internal/bwcli` nor `os/exec`
-- [ ] 6.6 Update `docs/user/security.md` (session key, profile content, leftovers and how to remove them) and `docs/user/limitations.md` (one device entry per run, the Cloud contact also for self-hosted servers, the premium requirement as code-level evidence, no proxy support yet); verify each statement corresponds to a finding in the research note or a risk in design.md
+- [x] 6.1 Implement `internal/profile` with creation as in design D9, injectable location, clock and random source; verify the scenarios "Two runs in the same second", "Chosen name already exists", "Profile location is missing" and "New profile"
+- [x] 6.2 Verify the scenario "Permissions on Linux and macOS" and skip the mode check with a reason on Windows; add the skip to `.github/expected-skips.txt` for Windows with the reason
+- [x] 6.3 Implement teardown with the logout as a function; verify the scenarios "Teardown after a successful run", "Logout fails", "Removal fails" with an injected removal error, and "Teardown without login"
+- [x] 6.4 Implement the listing of leftovers; verify the scenarios "Leftover from a killed run", "Own profile" and "Unrelated entries in the profile location", hashing every pre-existing file before and after
+- [x] 6.5 Verify with `go list -deps ./internal/profile` that the package imports neither `internal/bwcli` nor `os/exec`
+- [x] 6.6 Update `docs/user/security.md` (session key, profile content, leftovers and how to remove them) and `docs/user/limitations.md` (one device entry per run, the Cloud contact also for self-hosted servers, the premium requirement as code-level evidence, no proxy support yet); verify each statement corresponds to a finding in the research note or a risk in design.md
 
 ## 7. Tests with the real bw
 

@@ -40,6 +40,15 @@ It does not show:
 - **That the documents import elsewhere.** The plaintext export is stored as `bw` wrote it. Whether another program imports it is not tested.
 - **The state of other generations.** Each generation is checked on its own.
 
+## Using bw
+
+The program starts the official `bw` program. The handling of it is tested against a stand-in for `bw`. The points below come from reading the code of `bw` 2026.10.1 and from runs without a login, see the [code notes](../research/bw-cli-code-notes-2026-11-15.md).
+
+- **One device entry per run.** Each run uses a fresh CLI profile, and each fresh profile registers as a new device. The server keeps one device entry per run. `bw` offers no command that removes it, and the logout does not remove it. Whether Bitwarden Cloud limits device entries, throttles repeated logins or sends a message for each new device is unknown.
+- **Contact with Bitwarden Cloud also for a self-hosted server.** The first start of a fresh profile requests configuration from `https://api.bitwarden.com`, before the server address of your own server is set. This request carries no account data. It cannot be avoided with the public commands of `bw`.
+- **Attachments of personal items may need premium.** According to the code of `bw` 2026.10.1, downloading an attachment of a personal item requires a premium account. This was not observed at run time. Such a download is reported as failed, and the capture is never judged more favorably because of it.
+- **No proxy support yet.** Proxy variables of your environment are not passed to `bw`, so `bw` connects without a proxy. `bw` itself reads only the lowercase `http_proxy` and `https_proxy`. How a proxy is configured is decided together with the configuration format.
+
 ## Storage Guarantees
 
 A generation directory loses its `.partial` marker only after its archive file was flushed to storage. Where the platform supports it, the generation directory and the target directory are flushed as well. Some guarantees depend on the platform and the file system:
