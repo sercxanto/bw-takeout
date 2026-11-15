@@ -32,7 +32,7 @@ Each run uses its own CLI profile, a new directory that is separate from your ow
 | macOS | `~/Library/Caches/bw-takeout/profiles` |
 | Windows | `%LocalAppData%\bw-takeout\profiles` |
 
-Each profile is a directory `profile-<time>-<random>` with a data directory and an empty working directory. The data directory holds the file `bw` keeps: a device ID and the server configuration from the first start, and after a login the access tokens and the encrypted vault cache. At the end of a run the program logs out and removes the whole profile, also when the logout fails. What `bw logout` leaves in a profile is known from reading the `bw` code only.
+Each profile is a directory `profile-<time>-<random>` with a data directory and an empty working directory. The data directory holds the file `bw` keeps: a device ID and the server configuration from the first start, and after a login the access tokens and the encrypted vault cache. At the end of a run the program logs out and removes the whole profile, also when the logout fails. In a manual exercise against Vaultwarden, the data file still held 12 account entries after `bw logout`. Whether they still hold values was not examined, so treat a profile as sensitive until it is removed.
 
 On Windows no access control lists are set for the profile.
 

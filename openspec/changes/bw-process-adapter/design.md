@@ -127,6 +127,8 @@ The child inherits standard input and standard error. Standard output is a pipe 
 
 Before the start, the client saves the terminal state. While the child runs, the client receives interrupt signals instead of ending, because the terminal sends the interrupt to the child and to the caller alike. It waits for the child, restores the terminal state and then reports the result. Without this, an interrupt at the password prompt can leave the terminal without echo.
 
+The manual exercise of 15 November 2026 in the dev container showed a second path. Ctrl-C at the password prompt did not reach the caller as a signal. `bw` ended with exit code 0 and empty output, and the login failed with the class `output` through the session key check. The likely reason, not confirmed, is that the prompt of `bw` puts the terminal into raw mode, so that Ctrl-C reaches `bw` as a character. Holding the signal stays for the case that it does arrive. An interrupted login therefore fails with the class `cancelled` or `output`. Both are failures, and the terminal is restored on both paths.
+
 The result follows the spec: exit code 0 and exactly one session key, optionally followed by `\n` or `\r\n`. The probe saw no line ending, and the code writes one when standard output is a terminal on a system other than Windows, so one line ending is accepted and nothing else.
 
 The terminal is an interface with three functions: is this a terminal, save the state, restore the state. The implementation uses `golang.org/x/term`. Tests supply a fake terminal, because `go test` has none.

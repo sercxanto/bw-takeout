@@ -63,18 +63,18 @@
 ## 8. Manual login exercise
 
 - [x] 8.1 Implement `internal/tools/loginprobe` as described in design D14; verify it builds for linux, darwin and windows, and verify against the fake that its output contains neither the session key nor any text the fake wrote
-- [ ] 8.2 Write the procedure of design D14 into `docs/development/testing.md`: starting Vaultwarden with TLS in the dev container, forwarding the port, the account with TOTP, the five cases for the dev container, the two cases for macOS and what to record; update the sentence on the Vaultwarden instance in `docs/development/integrations.md`; verify every command of the procedure was run as written in the dev container up to the point where an account is needed
-- [ ] 8.3 Review checkpoint: stop and ask the maintainer to run the five cases in a terminal of the dev container first, and then the successful login and the interrupt at the password prompt on macOS; verify the maintainer reported the result of each of the seven runs, and do not ask for the macOS runs when the login fails in the dev container
-- [ ] 8.4 Write the results as a report under `docs/research/` with versions, method, scope and what was not tested, including what the logout left in the profile, and add a row to the research overview; verify the report separates Linux and macOS, states which cases ran on which system, and names Bitwarden Cloud and Windows as not tested
-- [ ] 8.5 Update `docs/decisions/0002-go.md` with the evidence and the open Windows point and keep its status proposed; verify the index still lists it as proposed
+- [x] 8.2 Write the procedure of design D14 into `docs/development/testing.md`: starting Vaultwarden with TLS in the dev container, forwarding the port, the account with TOTP, the five cases for the dev container, the two cases for macOS and what to record; update the sentence on the Vaultwarden instance in `docs/development/integrations.md`; verify every command of the procedure was run as written in the dev container up to the point where an account is needed
+- [x] 8.3 Review checkpoint: stop and ask the maintainer to run the five cases in a terminal of the dev container first, and then the successful login and the interrupt at the password prompt on macOS; verify the maintainer reported the result of each of the seven runs, and do not ask for the macOS runs when the login fails in the dev container
+- [x] 8.4 Write the results as a report under `docs/research/` with versions, method, scope and what was not tested, including what the logout left in the profile, and add a row to the research overview; verify the report separates Linux and macOS, states which cases ran on which system, and names Bitwarden Cloud and Windows as not tested
+- [x] 8.5 Update `docs/decisions/0002-go.md` with the evidence and the open Windows point and keep its status proposed; verify the index still lists it as proposed
 
 ## 9. Integration check
 
-- [ ] 9.1 Run `gofmt -l .`, `go vet ./...`, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` and `go test -race ./...` in the dev container; verify no output from gofmt, all tests pass and every skip is on the list of expected skips
-- [ ] 9.2 Cross-compile with `GOOS=darwin` and `GOOS=windows` for `./...` and run `go vet` for both; verify both succeed
-- [ ] 9.3 Compare every scenario of the two specs with the test that covers it and add the mapping to `docs/development/testing.md`, together with the test run, its platform, versions and date and what was not run; verify the mapping is complete
-- [ ] 9.4 Update `docs/development/architecture.md` (profile per run as a maintainer decision for the prototype, `bwcli` reports version and hash, component status, roadmap step 3 done, the follow-ups of the proposal in the roadmap, the two new ADRs) and the project status in `README.md`; verify the page no longer states "check version and hash" and names every follow-up of the proposal
-- [ ] 9.5 Run `openspec validate bw-process-adapter --strict`; verify it passes
+- [x] 9.1 Run `gofmt -l .`, `go vet ./...`, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` and `go test -race ./...` in the dev container; verify no output from gofmt, all tests pass and every skip is on the list of expected skips
+- [x] 9.2 Cross-compile with `GOOS=darwin` and `GOOS=windows` for `./...` and run `go vet` for both; verify both succeed
+- [x] 9.3 Compare every scenario of the two specs with the test that covers it and add the mapping to `docs/development/testing.md`, together with the test run, its platform, versions and date and what was not run; verify the mapping is complete
+- [x] 9.4 Update `docs/development/architecture.md` (profile per run as a maintainer decision for the prototype, `bwcli` reports version and hash, component status, roadmap step 3 done, the follow-ups of the proposal in the roadmap, the two new ADRs) and the project status in `README.md`; verify the page no longer states "check version and hash" and names every follow-up of the proposal
+- [x] 9.5 Run `openspec validate bw-process-adapter --strict`; verify it passes
 
 ## Workflow follow-up
 

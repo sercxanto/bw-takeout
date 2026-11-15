@@ -2,7 +2,7 @@
 
 The Dockerfile pins Debian-based Go and Node images by manifest digest. npm ci verifies the bw and OpenSpec packages against the integrity values in the lockfile. age and age-keygen come from the versioned Go module, verified by the Go checksum database. When updating, review pins and lockfile together, rebuild the image and repeat the relevant regression tests.
 
-The unmodified bw version is deliberately pinned to the version used in the research. For later integration runs, use only isolated test profiles and synthetic accounts. Report Bitwarden Cloud and Vaultwarden separately. Run a Vaultwarden test instance outside the development container if needed.
+The unmodified bw version is deliberately pinned to the version used in the research. For later integration runs, use only isolated test profiles and synthetic accounts. Report Bitwarden Cloud and Vaultwarden separately. The live probe and the [manual login exercise](testing.md#manual-login-exercise) run Vaultwarden 1.37.4 inside the development container, bound to loopback with TLS, from an image fetched by digest without Docker. The port is forwarded to the host only, so that a browser and a `bw` on the host reach it. An instance outside the container remains possible for other runs.
 
 The age library `filippo.io/age` in `go.mod` and the age CLI installed by the Dockerfile are pinned to the same version, v1.2.1. Update both together, because the recovery test checks archives written by the library against the CLI. `go.sum` holds the checksums of the library and its dependencies.
 
@@ -14,8 +14,8 @@ The `bw` client of this project runs any `bw` version and produces no message ab
 
 | Version | Platform | Evidence |
 |---|---|---|
-| 2026.10.1 (npm package `@bitwarden/cli`) | Linux arm64, dev container | Code reading of the bundle, unauthenticated runs, live probe against Vaultwarden 1.37.4 ([code notes](../research/bw-cli-code-notes-2026-11-15.md), [live probe](../research/vaultwarden-live-probe-2026-11-14.md)) |
-| 2026.10.1 | macOS | Not yet run. The manual login exercise of the change `bw-process-adapter` is planned |
+| 2026.10.1 (npm package `@bitwarden/cli`) | Linux arm64, dev container | Code reading of the bundle, unauthenticated runs, live probe against Vaultwarden 1.37.4, manual login exercise from a Go parent against Vaultwarden 1.37.4 with five cases ([code notes](../research/bw-cli-code-notes-2026-11-15.md), [live probe](../research/vaultwarden-live-probe-2026-11-14.md), [login exercise](../research/login-exercise-2026-11-15.md)) |
+| 2026.10.1 (official single-file program, `bw-macos-arm64`) | macOS 26.7.3 arm64 | Manual login exercise from a Go parent against Vaultwarden 1.37.4 in the dev container: successful login, wrong password and interrupt at the password prompt ([login exercise](../research/login-exercise-2026-11-15.md)) |
 | 2026.10.1 | Windows | Not run |
 
 Bitwarden Cloud with an account is untested for every version.

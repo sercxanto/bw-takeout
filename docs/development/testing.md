@@ -182,6 +182,185 @@ They are not offline. Each test creates a fresh profile, and the first start of 
 
 Dev container, Debian 12, Linux aarch64, Go 1.27.3, `bw` 2026.10.1 in the npm layout, SHA-256 of `bw.js` `8a443d1190643330826e8cc0b27381fba5af5a06c6c3d7c7254033913a51ee9b`. All five tests passed, in 19.6 s together. Each sent one configuration request to Bitwarden Cloud. Not run: the official single-file `bw` for macOS or Windows, and any case with a login.
 
+### Manual Login Exercise
+
+The login cannot run in `go test`, because it needs a terminal and a person who types. The development tool `internal/tools/loginprobe` runs it by hand against a Vaultwarden instance with a synthetic account. It creates a profile, queries the version, sets the server, logs in, reads the status, syncs, reads the status again, logs out and tears down. It prints each step with ok or the failure class, the form of the session key, the status values, whether `lastSync` is later than the start, and the number of `user_` entries left in the data file after the logout. It never prints the session key or any text of `bw`.
+
+The procedure follows the [live probe](../research/vaultwarden-live-probe-2026-11-14.md). Vaultwarden runs inside the dev container on loopback, and the port is forwarded to the host. All files go to the ignored `.local/` directory. Run every command from the repository root.
+
+**1. Fetch Vaultwarden 1.37.4.** The image index is pinned by digest. The manifest for the architecture of the container is taken from the index, and every blob is checked against its digest before it is used. Only the server binary `vaultwarden` and the directory `web-vault/` are unpacked, not the Alpine system around them. Docker is not needed.
+
+```sh
+VW="$PWD/.local/vaultwarden"
+mkdir -p "$VW/blobs" "$VW/root" "$VW/data"
+REPO=vaultwarden/server
+INDEX=sha256:19ea2b669945d842dadc3d500f2d6a795866a003330f59a47b9634658bae98bb
+ARCH=$(go env GOARCH)
+TOKEN=$(curl -fsS "https://auth.docker.io/token?service=registry.docker.io&scope=repository:$REPO:pull" | jq -r .token)
+fetch() {
+  curl -fsSL -H "Authorization: Bearer $TOKEN" -H "Accept: $3" \
+    -o "$VW/blobs/${2#sha256:}" "https://registry-1.docker.io/v2/$REPO/$1/$2" &&
+  echo "${2#sha256:}  $VW/blobs/${2#sha256:}" | sha256sum -c --quiet
+}
+fetch manifests "$INDEX" application/vnd.oci.image.index.v1+json
+MANIFEST=$(jq -r --arg a "$ARCH" '.manifests[] | select(.platform.os == "linux" and .platform.architecture == $a) | .digest' "$VW/blobs/${INDEX#sha256:}")
+fetch manifests "$MANIFEST" application/vnd.oci.image.manifest.v1+json
+for d in $(jq -r '.config.digest, .layers[].digest' "$VW/blobs/${MANIFEST#sha256:}"); do fetch blobs "$d" '*/*'; done
+for d in $(jq -r '.layers[].digest' "$VW/blobs/${MANIFEST#sha256:}"); do
+  tar -tzf "$VW/blobs/${d#sha256:}" | grep -E '^(vaultwarden$|web-vault/)' >"$VW/members" || continue
+  tar -xzf "$VW/blobs/${d#sha256:}" -C "$VW/root" --no-recursion -T "$VW/members"
+done
+"$VW/root/vaultwarden" --version
+sha256sum "$VW/root/vaultwarden"
+cat "$VW/root/web-vault/vw-version.json"
+```
+
+On Linux arm64 the manifest is `sha256:c82bc74bb0a88821fd3fbce48e7867e8aca4e492e512970a309d02a629ab91d4`, the binary prints `Vaultwarden 1.37.4` and has the SHA-256 of the live probe, `ae658947f85964e934d7673d9cab4c0edbce8e6167422d6ff3b10008e125421d`, and the web vault file names version 2026.7.0. A different value stops the exercise. The line `Web-Vault Version file missing` after the version is expected, because the binary looks for the web vault in its default place.
+
+**2. Create a certificate for `localhost`,** valid for seven days. `bw` refuses servers without HTTPS and trusts this certificate through `NODE_EXTRA_CA_CERTS`, which the tool sets from `-ca`.
+
+```sh
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 7 \
+  -subj /CN=localhost -addext subjectAltName=DNS:localhost,IP:127.0.0.1 \
+  -keyout "$VW/key.pem" -out "$VW/cert.pem"
+chmod 600 "$VW/key.pem"
+```
+
+**3. Start the server** in its own terminal of the dev container. Sign-ups are open, SMTP is not configured and icon downloads are off. Stop it later with Ctrl-C.
+
+```sh
+VW="$PWD/.local/vaultwarden"
+DATA_FOLDER="$VW/data" WEB_VAULT_FOLDER="$VW/root/web-vault" \
+ROCKET_ADDRESS=127.0.0.1 ROCKET_PORT=8087 \
+ROCKET_TLS="{certs=\"$VW/cert.pem\",key=\"$VW/key.pem\"}" \
+DOMAIN=https://localhost:8087 SIGNUPS_ALLOWED=true DISABLE_ICON_DOWNLOAD=true \
+"$VW/root/vaultwarden"
+```
+
+Check it from another terminal with `curl -fsS --cacert "$VW/cert.pem" https://localhost:8087/alive`, which prints a time.
+
+**4. Forward the port.** VS Code forwards port 8087 to the host when the server starts listening. Otherwise add it in the Ports view. The local address must be `localhost:8087`, because the certificate and `DOMAIN` name it. The instance is then reachable from the host only.
+
+**5. Register the account.** The maintainer opens `https://localhost:8087` in a browser on the host, accepts the self-signed certificate, registers a synthetic account with an address under `example.invalid` and a password used nowhere else, and enables two-step login with an authenticator app. Nothing else goes into the vault. The password and the TOTP seed never go into the repository, a file or the chat.
+
+**6. Build the tool** for the dev container and for macOS:
+
+```sh
+go build -o .local/bin/loginprobe ./internal/tools/loginprobe
+GOOS=darwin GOARCH=arm64 go build -o .local/bin/loginprobe-darwin-arm64 ./internal/tools/loginprobe
+```
+
+**7. Run the five cases in a terminal of the dev container** (Linux arm64, `bw` in the npm layout). The terminal must be a real one, not the output panel of a task. Use a second terminal, because the server runs in the first. Define the call once from the repository root, then run the cases one after the other:
+
+```sh
+VW="$PWD/.local/vaultwarden"
+probe() { .local/bin/loginprobe -bw "$(command -v bw)" -server https://localhost:8087 -ca "$VW/cert.pem"; }
+echoed() { stty -a | tr ' ;' '\n\n' | grep -x -- '-\{0,1\}echo'; }
+```
+
+| Case | Command | What the person does |
+|---|---|---|
+| 1. Successful login with TOTP | `probe; echo "exit $?"; echoed` | Enter address, password and code |
+| 2. Wrong password | `probe; echo "exit $?"; echoed` | Enter address and a wrong password |
+| 3. Interrupt at the password prompt | `probe; echo "exit $?"; echoed` | Enter the address, then press Ctrl-C at the password prompt |
+| 4. Standard input from `/dev/null` | `probe </dev/null; echo "exit $?"; echoed` | Nothing. No prompt may appear |
+| 5. Standard output of the tool to a file | `probe >"$VW/probe-out.txt"; echo "exit $?"; echoed; cat "$VW/probe-out.txt"; grep -cE '[A-Za-z0-9+/]{80,}' "$VW/probe-out.txt"` | As in case 1. The prompts still appear, because they go to standard error |
+
+`echoed` prints `echo` when the terminal echoes typed characters and `-echo` when it does not. In case 5 the `grep` counts lines that could hold a session key and must print 0.
+
+**8. Run the two terminal-dependent cases on macOS** with the official single-file `bw`, which is not the npm package under Node, and with the tool built for darwin/arm64. Saving and restoring the terminal state uses other system calls there. In a folder outside the project, in Terminal on the Mac:
+
+```sh
+curl -fLO https://github.com/bitwarden/clients/releases/download/cli-v2026.10.1/bw-macos-arm64-2026.10.1.zip
+shasum -a 256 bw-macos-arm64-2026.10.1.zip
+unzip bw-macos-arm64-2026.10.1.zip
+./bw --version
+```
+
+The hash must be `4e595f9da80ef8b30abca808d0c78a1560d9589466d1bccd2b3e70f321fb12bf`, the digest that GitHub lists for this asset of the release `cli-v2026.10.1`. Copy `.local/bin/loginprobe-darwin-arm64` and `.local/vaultwarden/cert.pem` from the dev container into the same folder. Then check the forwarded port with `curl -fsS --cacert cert.pem https://localhost:8087/alive` and define the call:
+
+```sh
+probe() { ./loginprobe-darwin-arm64 -bw "$PWD/bw" -server https://localhost:8087 -ca "$PWD/cert.pem"; }
+echoed() { stty -a | tr ' ;' '\n\n' | grep -x -- '-\{0,1\}echo'; }
+```
+
+Run case 1 and case 3 of the table above. The other three cases do not depend on the platform and are not repeated (maintainer decision of 15 November 2026). Do not run the macOS cases when the login fails in the dev container.
+
+**What to record.** For each run: the system, the case, every line the tool printed, the exit status, the output of `echoed`, which prompts appeared, and anything unexpected on the terminal. Once per system: the output of `bw --version`, the SHA-256 of the resolved `bw` file (`sha256sum "$(readlink -f "$(command -v bw)")"` in the dev container, `shasum -a 256 bw` on macOS), `go version`, the operating system version (`uname -a`, `sw_vers` on macOS), and whether the profile location is empty after the last run (`ls -A ~/.cache/bw-takeout/profiles` in the dev container, `ls -A ~/Library/Caches/bw-takeout/profiles` on macOS). Once for the server: the Vaultwarden version, the web vault version and, if the web vault shows them, the number of device entries of the account after all runs. Never record the session key, the password, the code, the TOTP seed or text that `bw` wrote to the terminal beyond the prompt names.
+
+**9. Clean up.** Stop the server with Ctrl-C, remove `.local/vaultwarden` and `.local/bin/loginprobe*` in the dev container, remove the folder on the Mac, and delete the entry of the synthetic account from the authenticator app.
+
+### Login Exercise of 15 November 2026
+
+The maintainer ran the five cases in the dev container (Linux arm64, npm `bw` 2026.10.1) and on macOS 26.7.3 arm64 (official single-file `bw` 2026.10.1) the successful login, the interrupt at the password prompt and, in addition, a wrong password, against Vaultwarden 1.37.4 in the dev container. Every case gave the expected failure or success, and the terminal echoed afterwards in every run. An interrupt at the password prompt failed the login with the class `output`, because `bw` ended with exit code 0 and no session key and no signal reached the Go parent. Versions, results, what the logout left in the profile and what was not tested are in the [report](../research/login-exercise-2026-11-15.md). Evidence level: manual end-to-end run with a synthetic account, Vaultwarden only.
+
+### Spec Scenario Coverage of bw-process-adapter
+
+Every scenario of the two specs of the change bw-process-adapter has one test of the same name. The mapping was checked on 15 November 2026 and is complete: 42 scenarios of bw-invocation in `internal/bwcli` and 12 of bw-profile in `internal/profile`. The tests of `internal/bwcli` run against the fake `bw`, those of `internal/profile` against temporary directories. `TestInterruptAtThePasswordPrompt` is built on Unix only, because it sends an interrupt signal to the fake. `TestPermissionsOnLinuxAndMacOS` is skipped on Windows. The scenarios "Login with a terminal" and "Interrupt at the password prompt" were also run by hand with the real `bw`, see the login exercise above.
+
+| Spec | Requirement | Scenario | Test |
+|---|---|---|---|
+| bw-invocation | Child environment from an allowlist | Exit code override in the calling environment | `bwcli.TestExitCodeOverrideInTheCallingEnvironment` |
+|  |  | Runtime options in the calling environment | `bwcli.TestRuntimeOptionsInTheCallingEnvironment` |
+|  |  | Certificate authority file configured | `bwcli.TestCertificateAuthorityFileConfigured` |
+|  |  | Certificate authority file only in the calling environment | `bwcli.TestCertificateAuthorityFileOnlyInTheCallingEnvironment` |
+|  | Every process uses the run's data directory | Version query | `bwcli.TestVersionQuery` |
+|  |  | bw uses another data directory | `bwcli.TestBwUsesAnotherDataDirectory` |
+|  | No interaction outside the login | Locked vault | `bwcli.TestLockedVault` |
+|  |  | Command does not end | `bwcli.TestCommandDoesNotEnd` |
+|  |  | Run is cancelled | `bwcli.TestRunIsCancelled` |
+|  | Session key stays in the child environment | Command after login | `bwcli.TestCommandAfterLogin` |
+|  |  | Command before login | `bwcli.TestCommandBeforeLogin` |
+|  |  | Command after logout | `bwcli.TestCommandAfterLogout` |
+|  |  | Failure with a session key in use | `bwcli.TestFailureWithASessionKeyInUse` |
+|  | Interactive login needs a terminal | Login without a terminal | `bwcli.TestLoginWithoutATerminal` |
+|  |  | Login with a terminal | `bwcli.TestLoginWithATerminal` |
+|  | Session key form decides the login result | Exit code 0 with empty output | `bwcli.TestExitCode0WithEmptyOutput` |
+|  |  | Valid session key | `bwcli.TestValidSessionKey` |
+|  |  | Session key followed by a line ending | `bwcli.TestSessionKeyFollowedByALineEnding` |
+|  |  | Other text next to the key | `bwcli.TestOtherTextNextToTheKey` |
+|  |  | Non-zero exit code with a key | `bwcli.TestNonZeroExitCodeWithAKey` |
+|  | Interrupted login leaves a usable terminal | Interrupt at the password prompt | `bwcli.TestInterruptAtThePasswordPrompt` |
+|  | Output stays in memory | Export | `bwcli.TestExport` |
+|  |  | bw writes a file | `bwcli.TestBwWritesAFile` |
+|  |  | Output exceeds the limit | `bwcli.TestOutputExceedsTheLimit` |
+|  | Results are read from the output | Status of a profile without login | `bwcli.TestStatusOfAProfileWithoutLogin` |
+|  |  | Status without a sync time | `bwcli.TestStatusWithoutASyncTime` |
+|  |  | Status document does not parse | `bwcli.TestStatusDocumentDoesNotParse` |
+|  |  | Unknown status value | `bwcli.TestUnknownStatusValue` |
+|  | Failures carry a class and no CLI text | Failed download with a name in the error text | `bwcli.TestFailedDownloadWithANameInTheErrorText` |
+|  |  | Not logged in | `bwcli.TestNotLoggedIn` |
+|  |  | Not-logged-in text with an unlocked vault | `bwcli.TestNotLoggedInTextWithAnUnlockedVault` |
+|  |  | Status query after a failure fails | `bwcli.TestStatusQueryAfterAFailureFails` |
+|  |  | Premium required | `bwcli.TestPremiumRequired` |
+|  |  | Unrecognized error text | `bwcli.TestUnrecognizedErrorText` |
+|  | Decryption error lines are counted | Export with decryption errors | `bwcli.TestExportWithDecryptionErrors` |
+|  |  | Export without error lines | `bwcli.TestExportWithoutErrorLines` |
+|  | Identity of bw is reported and never judged | Version unknown to this project | `bwcli.TestVersionUnknownToThisProject` |
+|  |  | Version output is empty | `bwcli.TestVersionOutputIsEmpty` |
+|  | Attachments are requested by ID | Download by ID pair | `bwcli.TestDownloadByIDPair` |
+|  |  | ID that starts with a dash | `bwcli.TestIDThatStartsWithADash` |
+|  | Server address is checked before use | Address without HTTPS | `bwcli.TestAddressWithoutHTTPS` |
+|  |  | HTTPS address | `bwcli.TestHTTPSAddress` |
+| bw-profile | Fresh profile for every run | Two runs in the same second | `profile.TestTwoRunsInTheSameSecond` |
+|  |  | Chosen name already exists | `profile.TestChosenNameAlreadyExists` |
+|  |  | Profile location is missing | `profile.TestProfileLocationIsMissing` |
+|  | Profile is readable by the owner only | Permissions on Linux and macOS | `profile.TestPermissionsOnLinuxAndMacOS` |
+|  | Separate data and working directories | New profile | `profile.TestNewProfile` |
+|  | Teardown removes the profile | Teardown after a successful run | `profile.TestTeardownAfterASuccessfulRun` |
+|  |  | Logout fails | `profile.TestLogoutFails` |
+|  |  | Removal fails | `profile.TestRemovalFails` |
+|  |  | Teardown without login | `profile.TestTeardownWithoutLogin` |
+|  | Leftover profiles are reported and never removed | Leftover from a killed run | `profile.TestLeftoverFromAKilledRun` |
+|  |  | Own profile | `profile.TestOwnProfile` |
+|  |  | Unrelated entries in the profile location | `profile.TestUnrelatedEntriesInTheProfileLocation` |
+
+### Test Run of 15 November 2026, bw-process-adapter
+
+In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3 and OpenSpec 2.0.0: `gofmt -l .` printed nothing, `go vet ./...` passed, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed in all packages with only expected skips, and `go test -race ./...` passed. The skips were `TestLeaveGenerationForOfflineExercise`, `TestKillHelper` and the five `TestRealBW…` tests, each with its reason. `GOOS=darwin` and `GOOS=windows` builds and `go vet` passed for `./...`. Evidence level: mock, against the fake `bw`.
+
+Not run: the tests on macOS, Windows and Linux amd64, which wait for the next CI run; the `TestRealBW…` tests in this run, which ran separately on the same day (see above); any automated test with a login; Bitwarden Cloud.
+
 ## Skip Report
 
 A skipped test is not a passed test. The program `internal/tools/skipreport` reads the output of `go test -json`, echoes it, and lists every skipped test with its reason. It exits with status 1 when a test failed or when a test was skipped that the list of expected skips does not allow for the platform. Run it the same way locally and in CI:
