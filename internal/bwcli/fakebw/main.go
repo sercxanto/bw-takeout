@@ -30,9 +30,13 @@
 //     login: notes 4. Real bw would prompt or try the desktop application;
 //     the fake writes a prompt to standard error and exits with code 1, so
 //     that a missing variable can never pass unnoticed.
-//   - "You are not logged in.", "Vault is locked." and "Premium status is
-//     required to use this feature." with exit code 1: notes 5, 9 and 14
-//     (configured through Stderr and Exit).
+//   - A failure with exit code 1 followed by a status document with each
+//     state: notes 13, 14 and 17 (bw has no error codes; configured through
+//     Exit for the command and Stdout for "status").
+//   - "Premium status is required to use this feature." with exit code 1:
+//     notes 5 and 9. "You are not logged in." and "Vault is locked." with
+//     exit code 1: notes 5 and 14; they stay available so that a test can
+//     show that they select no class (configured through Stderr and Exit).
 //   - Success with three decryption error lines on standard error: probe,
 //     result 6 (configured through Stderr).
 //   - A status document with each state, with and without lastSync, and

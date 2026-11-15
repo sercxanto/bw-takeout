@@ -8,6 +8,18 @@ The age library `filippo.io/age` in `go.mod` and the age CLI installed by the Do
 
 Adding or updating a module needs a module cache that the container user can write to. The Dockerfile makes the content of `/go` belong to that user after the tools are installed. A container built before that change has a cache owned by root, so `go mod download` fails there until the image is rebuilt.
 
+## Tested bw versions
+
+The `bw` client of this project runs any `bw` version and produces no message about it ([ADR 0007](../decisions/0007-bw-versions.md)). This list is for developers only and is not shown to users. It records which version the project was tested with, on which platform and with which evidence level. Add a row when the pin of the dev container changes or a version is exercised on another platform.
+
+| Version | Platform | Evidence |
+|---|---|---|
+| 2026.10.1 (npm package `@bitwarden/cli`) | Linux arm64, dev container | Code reading of the bundle, unauthenticated runs, live probe against Vaultwarden 1.37.4 ([code notes](../research/bw-cli-code-notes-2026-11-15.md), [live probe](../research/vaultwarden-live-probe-2026-11-14.md)) |
+| 2026.10.1 | macOS | Not yet run. The manual login exercise of the change `bw-process-adapter` is planned |
+| 2026.10.1 | Windows | Not run |
+
+Bitwarden Cloud with an account is untested for every version.
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on GitHub Actions. Every input is pinned, and the pins are reviewed together with the pins above when they are updated:

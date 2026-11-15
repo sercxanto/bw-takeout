@@ -6,7 +6,7 @@
 - [x] 1.2 Add `golang.org/x/term` to `go.mod` and commit `go.sum` (design D17); verify `go mod tidy` leaves both files unchanged and `go build ./...` succeeds
 - [x] 1.3 Add the third-party notice for `golang.org/x/term` to `docs/development/releases.md`; verify the page names the module and its license
 - [x] 1.4 Move `ValidItemID` and `ValidAttachmentID` to `internal/vaultid` and let `internal/archive` use them (design D5); verify `go test ./internal/archive/...` passes unchanged and `go list -deps ./internal/vaultid` shows only standard library packages
-- [ ] 1.5 Add to the research note that `bw` has no error codes (32091, 31452); verify the note names both lines
+- [x] 1.5 Add to the research note that `bw` has no error codes (32091, 31452); verify the note names both lines
 
 ## 2. Fake bw
 
@@ -18,32 +18,32 @@
 
 - [x] 3.1 Implement the client configuration and the environment allowlist of design D3; verify the scenarios "Exit code override in the calling environment", "Runtime options in the calling environment", "Certificate authority file configured" and "Certificate authority file only in the calling environment" from the records of the fake
 - [x] 3.2 Implement the command runner of design D4: empty standard input, output in memory with the limit of D8, time limit, process group on Unix; verify the scenarios "Command does not end", "Run is cancelled" and "Output exceeds the limit", and that the fake process no longer exists after a timeout on Unix
-- [ ] 3.3 Implement the failure type and classes of design D7 with a text built only from operation, class, exit code and IDs, the status query after a failed vault command, using the strict status parsing that task 4.3 exposes as an operation, and the premium sentence for the download only; verify the scenarios "Not logged in", "Locked vault", "Premium required", "Unrecognized error text", "Not-logged-in text with an unlocked vault" and "Status query after a failure fails", a premium sentence wrapped in colour codes, and the premium sentence on a command other than the download
+- [x] 3.3 Implement the failure type and classes of design D7 with a text built only from operation, class, exit code and IDs, the status query after a failed vault command, using the strict status parsing that task 4.3 exposes as an operation, and the premium sentence for the download only; verify the scenarios "Not logged in", "Locked vault", "Premium required", "Unrecognized error text", "Not-logged-in text with an unlocked vault" and "Status query after a failure fails", a premium sentence wrapped in colour codes, and the premium sentence on a command other than the download
 - [x] 3.4 Scan standard error as a stream, count decryption error lines and keep nothing else; verify the scenarios "Export with decryption errors" and "Export without error lines", and that a standard error of several megabytes neither blocks the command nor is held in memory
 - [x] 3.5 Check the working directory after every command; verify the scenarios "Export" and "bw writes a file"
 - [x] 3.6 Verify the scenario "Failed download with a name in the error text" with a sentinel value in standard error and in standard output, searching the failure text and every exported field of the failure
-- [ ] 3.7 Review checkpoint: stop and show the maintainer the output of `go test -v ./internal/bwcli/...` with every skipped test and its reason; verify the maintainer confirmed before any task of group 4 starts
+- [x] 3.7 Review checkpoint: stop and show the maintainer the output of `go test -v ./internal/bwcli/...` with every skipped test and its reason; verify the maintainer confirmed before any task of group 4 starts
 
 ## 4. Operations
 
-- [ ] 4.1 Implement the version query and the SHA-256 of the resolved executable (design D5); verify the scenarios "Version query", "Version unknown to this project" and "Version output is empty", and a test where the executable is reached through a symbolic link on Unix
-- [ ] 4.2 Implement the check that `bw` uses the data directory; verify the scenario "bw uses another data directory" and that no login process appears in the records of the fake
-- [ ] 4.3 Implement the status operation with strict parsing; verify the scenarios "Status of a profile without login", "Status without a sync time", "Status document does not parse" and "Unknown status value", and a `lastSync` value that is not a time
-- [ ] 4.4 Implement the server configuration with the address check; verify the scenarios "Address without HTTPS" and "HTTPS address", and addresses with user information, without host and with a line break
-- [ ] 4.5 Implement sync, both exports and both item listings with the arguments of design D5; verify from the records of the fake that each call has exactly these arguments and that the documents are returned byte for byte
-- [ ] 4.6 Implement the attachment download with the ID rules of `internal/vaultid`; verify the scenarios "Download by ID pair" and "ID that starts with a dash", and an ID with a path separator, an empty ID and an ID of wrong length
-- [ ] 4.7 Implement the logout, which overwrites the session key whatever the outcome; verify the scenarios "Command before login", "Command after login", "Command after logout" and "Failure with a session key in use" from the records of the fake
-- [ ] 4.8 Write `docs/decisions/0007-bw-versions.md` with status proposed as described in design D16 and add it to `docs/decisions/README.md`; verify the index lists it as proposed and that it names the three alternatives and the consequences
-- [ ] 4.9 Add the internal list of tested `bw` versions to `docs/development/integrations.md` and state that it is not shown to users; verify it names 2026.10.1 with the evidence level per platform
+- [x] 4.1 Implement the version query and the SHA-256 of the resolved executable (design D5); verify the scenarios "Version query", "Version unknown to this project" and "Version output is empty", and a test where the executable is reached through a symbolic link on Unix
+- [x] 4.2 Implement the check that `bw` uses the data directory; verify the scenario "bw uses another data directory" and that no login process appears in the records of the fake
+- [x] 4.3 Implement the status operation with strict parsing; verify the scenarios "Status of a profile without login", "Status without a sync time", "Status document does not parse" and "Unknown status value", and a `lastSync` value that is not a time
+- [x] 4.4 Implement the server configuration with the address check; verify the scenarios "Address without HTTPS" and "HTTPS address", and addresses with user information, without host and with a line break
+- [x] 4.5 Implement sync, both exports and both item listings with the arguments of design D5; verify from the records of the fake that each call has exactly these arguments and that the documents are returned byte for byte
+- [x] 4.6 Implement the attachment download with the ID rules of `internal/vaultid`; verify the scenarios "Download by ID pair" and "ID that starts with a dash", and an ID with a path separator, an empty ID and an ID of wrong length
+- [x] 4.7 Implement the logout, which overwrites the session key whatever the outcome; verify the scenarios "Command before login", "Command after login", "Command after logout" and "Failure with a session key in use" from the records of the fake
+- [x] 4.8 Write `docs/decisions/0007-bw-versions.md` with status proposed as described in design D16 and add it to `docs/decisions/README.md`; verify the index lists it as proposed and that it names the three alternatives and the consequences
+- [x] 4.9 Add the internal list of tested `bw` versions to `docs/development/integrations.md` and state that it is not shown to users; verify it names 2026.10.1 with the evidence level per platform
 
 ## 5. Interactive login
 
-- [ ] 5.1 Implement the terminal interface with the implementation on `golang.org/x/term` and a fake for tests (design D6); verify `GOOS=darwin` and `GOOS=windows` builds
-- [ ] 5.2 Implement the login: terminal check first, inherited standard input and standard error, piped standard output, no `BW_NOINTERACTION`, no session key in the environment; verify the scenarios "Login without a terminal" and "Login with a terminal", the latter with a fake that prompts on standard error and reads a line from standard input
-- [ ] 5.3 Validate the form of the session key; verify the scenarios "Exit code 0 with empty output", "Valid session key", "Session key followed by a line ending", "Other text next to the key" and "Non-zero exit code with a key", and keys of 87 and 89 characters, with two line endings and with a wrong alphabet
-- [ ] 5.4 Save and restore the terminal state and hold interrupt signals while the child runs; verify the scenario "Interrupt at the password prompt" with the fake terminal and a fake that ends on a signal, and that the state is restored also when the login fails for another reason
-- [ ] 5.5 Write `docs/decisions/0006-secret-boundary.md` with status proposed as described in design D15 and add it to `docs/decisions/README.md`; verify the index lists it as proposed and that it names the four alternatives and the three consequences
-- [ ] 5.6 Review checkpoint: stop and show the maintainer the output of `go test -v -race ./internal/bwcli/...` with every skipped test and its reason; verify the maintainer confirmed before any task of group 6 starts
+- [x] 5.1 Implement the terminal interface with the implementation on `golang.org/x/term` and a fake for tests (design D6); verify `GOOS=darwin` and `GOOS=windows` builds
+- [x] 5.2 Implement the login: terminal check first, inherited standard input and standard error, piped standard output, no `BW_NOINTERACTION`, no session key in the environment; verify the scenarios "Login without a terminal" and "Login with a terminal", the latter with a fake that prompts on standard error and reads a line from standard input
+- [x] 5.3 Validate the form of the session key; verify the scenarios "Exit code 0 with empty output", "Valid session key", "Session key followed by a line ending", "Other text next to the key" and "Non-zero exit code with a key", and keys of 87 and 89 characters, with two line endings and with a wrong alphabet
+- [x] 5.4 Save and restore the terminal state and hold interrupt signals while the child runs; verify the scenario "Interrupt at the password prompt" with the fake terminal and a fake that ends on a signal, and that the state is restored also when the login fails for another reason
+- [x] 5.5 Write `docs/decisions/0006-secret-boundary.md` with status proposed as described in design D15 and add it to `docs/decisions/README.md`; verify the index lists it as proposed and that it names the four alternatives and the three consequences
+- [x] 5.6 Review checkpoint: stop and show the maintainer the output of `go test -v -race ./internal/bwcli/...` with every skipped test and its reason; verify the maintainer confirmed before any task of group 6 starts
 
 ## 6. Profile
 

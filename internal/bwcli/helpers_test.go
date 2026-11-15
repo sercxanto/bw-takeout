@@ -139,6 +139,8 @@ type fakeTerminal struct {
 	saves, restores   int
 	saveErr, restErr  error
 	restoredAfterSave bool
+	// onRestore runs inside RestoreState, before it returns.
+	onRestore func()
 }
 
 func (f *fakeTerminal) IsTerminal() bool { return f.terminal }
@@ -151,6 +153,9 @@ func (f *fakeTerminal) SaveState() error {
 func (f *fakeTerminal) RestoreState() error {
 	f.restores++
 	f.restoredAfterSave = f.saves > 0
+	if f.onRestore != nil {
+		f.onRestore()
+	}
 	return f.restErr
 }
 

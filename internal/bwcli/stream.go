@@ -5,13 +5,12 @@ import (
 	"errors"
 )
 
-// The sentences of the 2026.10.1 bundle that select a failure class (design
-// D7). A sentence that changes in a later version falls back to ClassExit.
-var sentences = map[string]Class{
-	"You are not logged in.":                          ClassNotLoggedIn,
-	"Vault is locked.":                                ClassLocked,
-	"Premium status is required to use this feature.": ClassPremiumRequired,
-}
+// premiumSentence is the only text of bw that selects a failure class, and
+// only for the attachment download (design D7). bw has no error codes, and
+// no structured signal exists for this case. The sentence is that of the
+// 2026.10.1 bundle; a sentence that changes in a later version falls back
+// to ClassExit.
+const premiumSentence = "Premium status is required to use this feature."
 
 // decryptionMarker starts each decryption error line of the bundled SDK.
 var decryptionMarker = []byte("ERROR bitwarden_crypto::")
@@ -21,12 +20,12 @@ var decryptionMarker = []byte("ERROR bitwarden_crypto::")
 const maxStderrLine = 4096
 
 // stderrScanner reads standard error as a stream. It counts decryption
-// error lines and remembers the class of the first recognized sentence.
-// It keeps no other text: each line is cleared once it is judged.
+// error lines and remembers whether a line was exactly the premium
+// sentence. It keeps no other text: each line is cleared once it is judged.
 type stderrScanner struct {
 	line             []byte
 	decryptionErrors int
-	recognized       Class
+	premium          bool
 }
 
 func (s *stderrScanner) Write(p []byte) (int, error) {
@@ -64,10 +63,8 @@ func (s *stderrScanner) endLine() {
 	if bytes.Contains(text, decryptionMarker) {
 		s.decryptionErrors++
 	}
-	if s.recognized == "" {
-		if c, ok := sentences[string(bytes.TrimSpace(text))]; ok {
-			s.recognized = c
-		}
+	if string(bytes.TrimSpace(text)) == premiumSentence {
+		s.premium = true
 	}
 	clear(text)
 	clear(s.line)

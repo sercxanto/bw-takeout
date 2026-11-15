@@ -38,6 +38,7 @@ Evidence levels: **code** for a reading of the bundle, **run** for an unauthenti
 | 14 | `bw sync` and `bw list items` without login exited with code 1 and "You are not logged in.". With `BW_CLEANEXIT=false` the failing sync exited with code 0 | run | |
 | 15 | `--version` took 0.8 s and `status` 2.6 s | run | |
 | 16 | The login can run account migrations after a successful authentication. What these migrations change on the account was not read | code | 39147 |
+| 17 | `bw` has no error codes. Every failed command exits with code 1, or 0 under `BW_CLEANEXIT` (32091). The error response that `--response` prints has only the fields `success`, `message` and, for an ambiguous lookup, `data` with the matching IDs (31452). No field distinguishes one failure from another, so a failure can be told apart only by its message text or by a later query such as `bw status` | code | 32091, 31452 |
 
 Findings that the change also relies on and that the [live probe](vaultwarden-live-probe-2026-11-14.md) already records: the session key form of `bw login --raw`, exit code 0 without a terminal, decryption error lines on standard error with exit code 0, the attachment download by ID without a file, and the refusal of servers without HTTPS.
 

@@ -15,15 +15,40 @@ import (
 
 var notLoggedIn = bwclitest.Behavior{Exit: 1, Stderr: "You are not logged in.\n"}
 
+// Status documents in the form of the 2026.10.1 bundle (notes 13, probe
+// result 5).
+var (
+	statusUnauthenticated = bwclitest.Behavior{Stdout: `{"serverUrl":null,"lastSync":null,"status":"unauthenticated"}`}
+	statusLocked          = bwclitest.Behavior{Stdout: `{"serverUrl":"https://localhost:8087","lastSync":"2026-11-14T09:06:29.835Z","userEmail":"a@example.invalid","userId":"` + testItem + `","status":"locked"}`}
+	statusUnlocked        = bwclitest.Behavior{Stdout: `{"serverUrl":"https://localhost:8087","lastSync":"2026-11-14T09:06:29.835Z","userEmail":"a@example.invalid","userId":"` + testItem + `","status":"unlocked"}`}
+)
+
+const premiumLine = "Premium status is required to use this feature.\n"
+
+// wantStatusQuery fails the test unless the records are exactly the
+// command and one status query after it.
+func wantStatusQuery(t *testing.T, recs []bwclitest.Record, cmd command) {
+	t.Helper()
+	if len(recs) != 2 || !slices.Equal(recs[0].Args, cmd.args) || !slices.Equal(recs[1].Args, []string{"status"}) {
+		var args [][]string
+		for _, r := range recs {
+			args = append(args, r.Args)
+		}
+		t.Fatalf("%s: started %q, want the command and one status query", cmd.op, args)
+	}
+}
+
 // Requirement: Child environment from an allowlist.
 
 func TestExitCodeOverrideInTheCallingEnvironment(t *testing.T) {
 	t.Setenv("BW_CLEANEXIT", "1")
-	f := newFixture(t, scenario("sync --force --raw", notLoggedIn))
+	f := newFixture(t, scenario("sync --force --raw", notLoggedIn, "status", statusUnauthenticated))
 	_, err := f.client.run(bg, f.client.cmdSync())
 	wantClass(t, err, ClassNotLoggedIn)
-	if _, ok := f.lastRecord().Lookup("BW_CLEANEXIT"); ok {
-		t.Error("BW_CLEANEXIT reached the process")
+	for _, rec := range f.records() {
+		if _, ok := rec.Lookup("BW_CLEANEXIT"); ok {
+			t.Errorf("BW_CLEANEXIT reached %q", rec.Args)
+		}
 	}
 }
 
@@ -141,12 +166,23 @@ func TestEmptyStandardInputAndNoInteraction(t *testing.T) {
 }
 
 func TestLockedVault(t *testing.T) {
-	f := newFixture(t, scenario("list items --raw", bwclitest.Behavior{Exit: 1, Stderr: "Vault is locked.\n"}))
-	_, err := f.client.run(bg, f.client.cmdListItems())
-	wantClass(t, err, ClassLocked)
-	rec := f.lastRecord()
-	if rec.StdinEmpty == nil || !*rec.StdinEmpty {
-		t.Error("standard input not empty")
+	f := newFixture(t, scenario("list items --raw", bwclitest.Behavior{Exit: 1, Stderr: "Vault is locked.\n"}, "status", statusLocked),
+		func(c *Config) { c.Timeouts.Long = 10 * time.Second })
+	cmd := f.client.cmdListItems()
+	_, err := f.client.run(bg, cmd)
+	e := wantClass(t, err, ClassLocked)
+	if e.ExitCode != 1 {
+		t.Errorf("exit code %d", e.ExitCode)
+	}
+	recs := f.records()
+	wantStatusQuery(t, recs, cmd)
+	for _, rec := range recs {
+		if rec.StdinEmpty == nil || !*rec.StdinEmpty {
+			t.Errorf("%q: standard input not empty", rec.Args)
+		}
+		if v, _ := rec.Lookup("BW_NOINTERACTION"); v != "true" {
+			t.Errorf("%q: BW_NOINTERACTION is %q", rec.Args, v)
+		}
 	}
 }
 
@@ -216,44 +252,180 @@ func TestStartFailure(t *testing.T) {
 // Requirement: Failures carry a class and no CLI text.
 
 func TestNotLoggedIn(t *testing.T) {
-	f := newFixture(t, scenario("*", notLoggedIn))
-	for _, cmd := range []command{f.client.cmdSync(), f.client.cmdListItems(), f.client.cmdExportJSON(), f.client.cmdExportEncrypted()} {
+	f := newFixture(t, scenario("status", statusUnauthenticated))
+	for _, cmd := range []command{f.client.cmdSync(), f.client.cmdExportJSON(), f.client.cmdExportEncrypted(),
+		f.client.cmdListItems(), f.client.cmdListArchived(), f.client.cmdAttachment(testItem, testAttachment)} {
+		t.Run(string(cmd.op), func(t *testing.T) {
+			f := newFixture(t, scenario(strings.Join(cmd.args, " "), notLoggedIn, "status", statusUnauthenticated))
+			_, err := f.client.run(bg, cmd)
+			e := wantClass(t, err, ClassNotLoggedIn)
+			if e.ExitCode != 1 {
+				t.Errorf("exit code %d", e.ExitCode)
+			}
+			wantStatusQuery(t, f.records(), cmd)
+		})
+	}
+}
+
+func TestStatusQueryUsesTheSameSessionKey(t *testing.T) {
+	f := newFixture(t, scenario("sync --force --raw", notLoggedIn, "status", statusUnauthenticated))
+	f.client.session = []byte(testKey)
+	cmd := f.client.cmdSync()
+	_, err := f.client.run(bg, cmd)
+	wantClass(t, err, ClassNotLoggedIn)
+	recs := f.records()
+	wantStatusQuery(t, recs, cmd)
+	if v, ok := recs[1].Lookup("BW_SESSION"); !ok || v != testKey {
+		t.Error("the status query did not receive the session key")
+	}
+	assertNoText(t, err, testKey)
+}
+
+func TestNotLoggedInTextWithAnUnlockedVault(t *testing.T) {
+	f := newFixture(t, scenario("sync --force --raw", notLoggedIn, "status", statusUnlocked))
+	cmd := f.client.cmdSync()
+	_, err := f.client.run(bg, cmd)
+	wantClass(t, err, ClassExit)
+	wantStatusQuery(t, f.records(), cmd)
+}
+
+func TestLockedTextWithAnUnlockedVault(t *testing.T) {
+	f := newFixture(t, scenario("list items --raw", bwclitest.Behavior{Exit: 1, Stderr: "Vault is locked.\n"}, "status", statusUnlocked))
+	_, err := f.client.run(bg, f.client.cmdListItems())
+	wantClass(t, err, ClassExit)
+}
+
+func TestNoSentenceWithALockedVault(t *testing.T) {
+	f := newFixture(t, scenario("export --format json --raw", bwclitest.Behavior{Exit: 1}, "status", statusLocked))
+	_, err := f.client.run(bg, f.client.cmdExportJSON())
+	wantClass(t, err, ClassLocked)
+}
+
+func TestStatusQueryAfterAFailureFails(t *testing.T) {
+	for name, status := range map[string]bwclitest.Behavior{
+		"exit code":         {Exit: 1, Stderr: "You are not logged in.\n", Stdout: statusUnauthenticated.Stdout},
+		"not a document":    {Stdout: "unauthenticated"},
+		"empty output":      {},
+		"trailing data":     {Stdout: statusUnauthenticated.Stdout + "{}"},
+		"unknown state":     {Stdout: `{"status":"logged_out"}`},
+		"no state":          {Stdout: `{"serverUrl":null,"lastSync":null}`},
+		"state not a text":  {Stdout: `{"status":0}`},
+		"lastSync not time": {Stdout: `{"lastSync":"yesterday","status":"unauthenticated"}`},
+		"stray file":        {Stdout: statusUnauthenticated.Stdout, WriteFile: "status.json"},
+		"does not end":      {Hang: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t, scenario("sync --force --raw", notLoggedIn, "status", status),
+				func(c *Config) { c.Timeouts.Short = 300 * time.Millisecond })
+			cmd := f.client.cmdSync()
+			_, err := f.client.run(bg, cmd)
+			e := wantClass(t, err, ClassExit)
+			if e.Op != OpSync || e.ExitCode != 1 {
+				t.Errorf("got %v", e)
+			}
+			wantStatusQuery(t, f.records(), cmd)
+		})
+	}
+}
+
+func TestStatusQueryCancelled(t *testing.T) {
+	f := newFixture(t, scenario("sync --force --raw", notLoggedIn, "status", bwclitest.Behavior{Hang: true}))
+	ctx, cancel := context.WithCancel(bg)
+	go func() {
+		for len(f.records()) < 2 {
+			time.Sleep(20 * time.Millisecond)
+		}
+		cancel()
+	}()
+	_, err := f.client.run(ctx, f.client.cmdSync())
+	wantClass(t, err, ClassExit)
+}
+
+func TestNoStatusQueryForOtherCommands(t *testing.T) {
+	f := newFixture(t, scenario("*", notLoggedIn, "status", notLoggedIn))
+	for _, cmd := range []command{f.client.cmdVersion(), f.client.cmdStatus(), f.client.cmdServer("https://localhost:8087"), f.client.cmdLogout()} {
+		before := len(f.records())
 		_, err := f.client.run(bg, cmd)
-		wantClass(t, err, ClassNotLoggedIn)
+		wantClass(t, err, ClassExit)
+		if n := len(f.records()) - before; n != 1 {
+			t.Errorf("%s: %d processes started", cmd.op, n)
+		}
 	}
 }
 
 func TestPremiumRequired(t *testing.T) {
-	f := newFixture(t, scenario("*", bwclitest.Behavior{Exit: 1, Stderr: "Premium status is required to use this feature.\n"}))
+	f := newFixture(t, scenario("*", bwclitest.Behavior{Exit: 1, Stderr: premiumLine}, "status", statusUnlocked))
+	_, err := f.client.run(bg, f.client.cmdAttachment(testItem, testAttachment))
+	e := wantClass(t, err, ClassPremiumRequired)
+	if e.ExitCode != 1 || e.ItemID != testItem || e.AttachmentID != testAttachment {
+		t.Errorf("got %v", e)
+	}
+	// The premium sentence needs no status query.
+	if n := len(f.records()); n != 1 {
+		t.Errorf("%d processes started", n)
+	}
+}
+
+func TestPremiumSentenceInColour(t *testing.T) {
+	f := newFixture(t, scenario("*", bwclitest.Behavior{Exit: 1, Stderr: "\x1b[91m  Premium status is required to use this feature.\x1b[39m\r\n"}))
 	_, err := f.client.run(bg, f.client.cmdAttachment(testItem, testAttachment))
 	wantClass(t, err, ClassPremiumRequired)
 }
 
+func TestPremiumSentenceOnAnotherCommand(t *testing.T) {
+	f := newFixture(t, scenario("*", bwclitest.Behavior{Exit: 1, Stderr: premiumLine}, "status", statusUnlocked))
+	for _, cmd := range []command{f.client.cmdSync(), f.client.cmdExportJSON(), f.client.cmdListItems(), f.client.cmdVersion(), f.client.cmdLogout()} {
+		_, err := f.client.run(bg, cmd)
+		wantClass(t, err, ClassExit)
+	}
+}
+
+func TestPremiumSentenceInsideOtherText(t *testing.T) {
+	f := newFixture(t, scenario("*", bwclitest.Behavior{Exit: 1, Stderr: "Note: Premium status is required to use this feature. Retry\n"}, "status", statusUnlocked))
+	cmd := f.client.cmdAttachment(testItem, testAttachment)
+	_, err := f.client.run(bg, cmd)
+	wantClass(t, err, ClassExit)
+	wantStatusQuery(t, f.records(), cmd)
+}
+
+func TestPremiumSentenceWithExitCodeZero(t *testing.T) {
+	f := newFixture(t, scenario("*", bwclitest.Behavior{Stdout: "content", Stderr: premiumLine}))
+	out, err := f.client.run(bg, f.client.cmdAttachment(testItem, testAttachment))
+	if err != nil || string(out.stdout) != "content" {
+		t.Errorf("a sentence turned exit code 0 into %v", err)
+	}
+}
+
 func TestUnrecognizedErrorText(t *testing.T) {
-	f := newFixture(t, scenario("*", bwclitest.Behavior{Exit: 1, Stderr: "Something went wrong.\n"}))
-	_, err := f.client.run(bg, f.client.cmdSync())
+	f := newFixture(t, scenario("*", bwclitest.Behavior{Exit: 1, Stderr: "Something went wrong.\n"}, "status", statusUnlocked))
+	cmd := f.client.cmdSync()
+	_, err := f.client.run(bg, cmd)
 	e := wantClass(t, err, ClassExit)
 	if e.ExitCode != 1 {
 		t.Errorf("exit code %d", e.ExitCode)
 	}
+	wantStatusQuery(t, f.records(), cmd)
 }
 
-func TestRecognizedSentenceInColour(t *testing.T) {
-	f := newFixture(t, scenario("*", bwclitest.Behavior{Exit: 1, Stderr: "\x1b[91mYou are not logged in.\x1b[39m\r\n"}))
-	_, err := f.client.run(bg, f.client.cmdSync())
-	wantClass(t, err, ClassNotLoggedIn)
-}
-
-func TestSentenceInsideOtherText(t *testing.T) {
-	f := newFixture(t, scenario("*", bwclitest.Behavior{Exit: 1, Stderr: "Note: You are not logged in. Retry\n"}))
-	_, err := f.client.run(bg, f.client.cmdSync())
-	wantClass(t, err, ClassExit)
-}
-
-func TestSentenceWithExitCodeZero(t *testing.T) {
-	f := newFixture(t, scenario("*", bwclitest.Behavior{Stderr: "You are not logged in.\n"}))
-	if _, err := f.client.run(bg, f.client.cmdSync()); err != nil {
-		t.Errorf("a sentence turned exit code 0 into %v", err)
+func TestParseStatus(t *testing.T) {
+	st, err := parseStatus([]byte(statusUnauthenticated.Stdout))
+	if err != nil || st.State != StateUnauthenticated || st.ServerURL != "" || st.UserID != "" || st.LastSync != nil {
+		t.Errorf("unauthenticated: %+v, %v", st, err)
+	}
+	st, err = parseStatus([]byte(statusUnlocked.Stdout + "\n"))
+	want := time.Date(2026, 11, 14, 9, 6, 29, 835e6, time.UTC)
+	if err != nil || st.State != StateUnlocked || st.ServerURL != "https://localhost:8087" || st.UserID != testItem ||
+		st.UserEmail != "a@example.invalid" || st.LastSync == nil || !st.LastSync.Equal(want) {
+		t.Errorf("unlocked: %+v, %v", st, err)
+	}
+	if st, err := parseStatus([]byte(`{"status":"locked","added":1}`)); err != nil || st.State != StateLocked {
+		t.Errorf("unknown field: %+v, %v", st, err)
+	}
+	for _, doc := range []string{"", "null", "[]", `{"status":"Unlocked"}`, `{"status":null}`, `{"status":"locked","userId":5}`,
+		`{"status":"locked","lastSync":1}`, `{"status":"locked","lastSync":"2026-11-14"}`, `{"status":"locked"} x`} {
+		if _, err := parseStatus([]byte(doc)); err == nil {
+			t.Errorf("%q: accepted", doc)
+		}
 	}
 }
 
@@ -277,7 +449,7 @@ func TestFailureText(t *testing.T) {
 }
 
 func TestFailedDownloadWithANameInTheErrorText(t *testing.T) {
-	f := newFixture(t, scenario("*", bwclitest.Behavior{Exit: 1, Stdout: sentinel + "\n", Stderr: "Not found: " + sentinel + "\n"}))
+	f := newFixture(t, scenario("*", bwclitest.Behavior{Exit: 1, Stdout: sentinel + "\n", Stderr: "Not found: " + sentinel + "\n"}, "status", statusUnlocked))
 	out, err := f.client.run(bg, f.client.cmdAttachment(testItem, testAttachment))
 	e := wantClass(t, err, ClassExit)
 	if e.ItemID != testItem || e.AttachmentID != testAttachment {
@@ -347,8 +519,12 @@ func TestStderrScannerHoldsOneBoundedLine(t *testing.T) {
 	}
 	s.Write([]byte("\nERROR bitwarden_crypto::x\nVault is locked.\nYou are not logged in.\n"))
 	s.flush()
-	if s.decryptionErrors != 1 || s.recognized != ClassLocked {
-		t.Errorf("count %d, class %s", s.decryptionErrors, s.recognized)
+	if s.decryptionErrors != 1 || s.premium {
+		t.Errorf("count %d, premium %v", s.decryptionErrors, s.premium)
+	}
+	s.Write([]byte(premiumLine))
+	if !s.premium {
+		t.Error("premium sentence not seen")
 	}
 	if len(s.line) != 0 {
 		t.Error("text kept after the last line")
@@ -357,11 +533,11 @@ func TestStderrScannerHoldsOneBoundedLine(t *testing.T) {
 
 func TestStderrScannerLastLineWithoutEnding(t *testing.T) {
 	s := &stderrScanner{}
-	s.Write([]byte("Vault is "))
-	s.Write([]byte("locked."))
+	s.Write([]byte("Premium status is required "))
+	s.Write([]byte("to use this feature."))
 	s.flush()
-	if s.recognized != ClassLocked {
-		t.Errorf("class %q", s.recognized)
+	if !s.premium {
+		t.Error("premium sentence not seen")
 	}
 }
 

@@ -9,6 +9,9 @@ type command struct {
 	timeout time.Duration
 	// session gives the process the session key, if the client holds one.
 	session bool
+	// vault marks a command on the vault. A non-zero exit code of such a
+	// command is followed by a status query (design D7).
+	vault bool
 	// itemID and attachmentID are set for a download and name it in a
 	// failure. They are validated before the command is built.
 	itemID, attachmentID string
@@ -27,30 +30,30 @@ func (c *Client) cmdServer(url string) command {
 }
 
 func (c *Client) cmdSync() command {
-	return command{op: OpSync, args: []string{"sync", "--force", "--raw"}, timeout: c.cfg.Timeouts.Long, session: true}
+	return command{op: OpSync, args: []string{"sync", "--force", "--raw"}, timeout: c.cfg.Timeouts.Long, session: true, vault: true}
 }
 
 func (c *Client) cmdExportJSON() command {
-	return command{op: OpExportJSON, args: []string{"export", "--format", "json", "--raw"}, timeout: c.cfg.Timeouts.Long, session: true}
+	return command{op: OpExportJSON, args: []string{"export", "--format", "json", "--raw"}, timeout: c.cfg.Timeouts.Long, session: true, vault: true}
 }
 
 func (c *Client) cmdExportEncrypted() command {
-	return command{op: OpExportEncrypted, args: []string{"export", "--format", "encrypted_json", "--raw"}, timeout: c.cfg.Timeouts.Long, session: true}
+	return command{op: OpExportEncrypted, args: []string{"export", "--format", "encrypted_json", "--raw"}, timeout: c.cfg.Timeouts.Long, session: true, vault: true}
 }
 
 func (c *Client) cmdListItems() command {
-	return command{op: OpListItems, args: []string{"list", "items", "--raw"}, timeout: c.cfg.Timeouts.Long, session: true}
+	return command{op: OpListItems, args: []string{"list", "items", "--raw"}, timeout: c.cfg.Timeouts.Long, session: true, vault: true}
 }
 
 func (c *Client) cmdListArchived() command {
-	return command{op: OpListArchived, args: []string{"list", "items", "--archived", "--raw"}, timeout: c.cfg.Timeouts.Long, session: true}
+	return command{op: OpListArchived, args: []string{"list", "items", "--archived", "--raw"}, timeout: c.cfg.Timeouts.Long, session: true, vault: true}
 }
 
 func (c *Client) cmdAttachment(itemID, attachmentID string) command {
 	return command{
 		op:      OpAttachment,
 		args:    []string{"get", "attachment", attachmentID, "--itemid", itemID, "--raw"},
-		timeout: c.cfg.Timeouts.Attachment, session: true,
+		timeout: c.cfg.Timeouts.Attachment, session: true, vault: true,
 		itemID: itemID, attachmentID: attachmentID,
 	}
 }

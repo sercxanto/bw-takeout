@@ -14,15 +14,56 @@ type outcome struct {
 	decryptionErrors int
 }
 
-// run starts one non-interactive command (design D4): empty standard input,
-// standard output in memory up to the limit, standard error scanned and not
-// stored, the time limit of the command, and the empty working directory,
-// which is checked afterwards.
+// run starts one non-interactive command and classifies a non-zero exit
+// code of a vault command (design D7).
 func (c *Client) run(ctx context.Context, cmd command) (outcome, error) {
-	fail := func(class Class, exitCode int) (outcome, error) {
+	out, premium, err := c.start(ctx, cmd)
+	var e *Error
+	if errors.As(err, &e) && e.Class == ClassExit && cmd.vault {
+		e.Class = c.classifyExit(ctx, cmd, premium)
+	}
+	return out, err
+}
+
+// classifyExit selects the class of a vault command that ended with a
+// non-zero exit code. bw has no error codes, so the class is taken from a
+// status query with the same session key: unauthenticated gives
+// ClassNotLoggedIn and locked gives ClassLocked. An unlocked vault, a
+// failed status query and a cancelled context give ClassExit. The premium
+// sentence of an attachment download gives ClassPremiumRequired without a
+// status query, because bw checks premium only after it has found the
+// vault unlocked, and a vault without premium can hold many attachments.
+func (c *Client) classifyExit(ctx context.Context, cmd command, premium bool) Class {
+	if cmd.op == OpAttachment && premium {
+		return ClassPremiumRequired
+	}
+	if ctx.Err() != nil {
+		return ClassExit
+	}
+	st, err := c.queryStatus(ctx)
+	if err != nil {
+		return ClassExit
+	}
+	switch st.State {
+	case StateUnauthenticated:
+		return ClassNotLoggedIn
+	case StateLocked:
+		return ClassLocked
+	}
+	return ClassExit
+}
+
+// start starts one non-interactive command (design D4): empty standard
+// input, standard output in memory up to the limit, standard error scanned
+// and not stored, the time limit of the command, and the empty working
+// directory, which is checked afterwards. It also reports whether standard
+// error held the premium sentence.
+func (c *Client) start(ctx context.Context, cmd command) (outcome, bool, error) {
+	premium := false
+	fail := func(class Class, exitCode int) (outcome, bool, error) {
 		e := failure(cmd.op, class, exitCode)
 		e.ItemID, e.AttachmentID = cmd.itemID, cmd.attachmentID
-		return outcome{}, e
+		return outcome{}, premium, e
 	}
 	if ctx.Err() != nil {
 		return fail(ClassCancelled, NoExitCode)
@@ -47,6 +88,7 @@ func (c *Client) run(ctx context.Context, cmd command) (outcome, error) {
 	// process state, the contexts and the output buffer.
 	_ = p.Run()
 	stderr.flush()
+	premium = stderr.premium
 	if p.ProcessState == nil {
 		stdout.wipe()
 		return fail(ClassStart, NoExitCode)
@@ -69,12 +111,9 @@ func (c *Client) run(ctx context.Context, cmd command) (outcome, error) {
 	}
 	if exitCode != 0 {
 		stdout.wipe()
-		if stderr.recognized != "" {
-			return fail(stderr.recognized, exitCode)
-		}
 		return fail(ClassExit, exitCode)
 	}
-	return outcome{stdout: stdout.buf, decryptionErrors: stderr.decryptionErrors}, nil
+	return outcome{stdout: stdout.buf, decryptionErrors: stderr.decryptionErrors}, premium, nil
 }
 
 // workDirEmpty reports whether the working directory is still empty. A

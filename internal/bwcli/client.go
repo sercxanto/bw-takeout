@@ -83,6 +83,9 @@ type Config struct {
 type Client struct {
 	cfg     Config
 	session []byte
+	// profileUsed records that Version found data.json in the data
+	// directory. The login does not start without it.
+	profileUsed bool
 }
 
 // New checks the configuration and returns a client. It starts no process.

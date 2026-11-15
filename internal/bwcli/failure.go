@@ -40,12 +40,15 @@ const (
 	// ClassCancelled: the process was stopped because the caller
 	// cancelled.
 	ClassCancelled Class = "cancelled"
-	// ClassNotLoggedIn, ClassLocked and ClassPremiumRequired: a non-zero
-	// exit code and a recognized sentence on standard error.
-	ClassNotLoggedIn     Class = "not_logged_in"
-	ClassLocked          Class = "locked"
+	// ClassNotLoggedIn and ClassLocked: a non-zero exit code of a vault
+	// command, and a status query afterwards reports unauthenticated or
+	// locked.
+	ClassNotLoggedIn Class = "not_logged_in"
+	ClassLocked      Class = "locked"
+	// ClassPremiumRequired: a non-zero exit code of an attachment download
+	// and the premium sentence on standard error.
 	ClassPremiumRequired Class = "premium_required"
-	// ClassExit: a non-zero exit code without a recognized sentence.
+	// ClassExit: any other non-zero exit code.
 	ClassExit Class = "exit"
 	// ClassOutput: exit code 0 with output of an unexpected form, or
 	// output beyond the limit.
