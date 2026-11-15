@@ -62,7 +62,7 @@
 
 ## 8. Manual login exercise
 
-- [ ] 8.1 Implement `internal/tools/loginprobe` as described in design D14; verify it builds for linux, darwin and windows, and verify against the fake that its output contains neither the session key nor any text the fake wrote
+- [x] 8.1 Implement `internal/tools/loginprobe` as described in design D14; verify it builds for linux, darwin and windows, and verify against the fake that its output contains neither the session key nor any text the fake wrote
 - [ ] 8.2 Write the procedure of design D14 into `docs/development/testing.md`: starting Vaultwarden with TLS in the dev container, forwarding the port, the account with TOTP, the five cases for the dev container, the two cases for macOS and what to record; update the sentence on the Vaultwarden instance in `docs/development/integrations.md`; verify every command of the procedure was run as written in the dev container up to the point where an account is needed
 - [ ] 8.3 Review checkpoint: stop and ask the maintainer to run the five cases in a terminal of the dev container first, and then the successful login and the interrupt at the password prompt on macOS; verify the maintainer reported the result of each of the seven runs, and do not ask for the macOS runs when the login fails in the dev container
 - [ ] 8.4 Write the results as a report under `docs/research/` with versions, method, scope and what was not tested, including what the logout left in the profile, and add a row to the research overview; verify the report separates Linux and macOS, states which cases ran on which system, and names Bitwarden Cloud and Windows as not tested
