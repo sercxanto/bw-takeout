@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	"bitwarden-backup/internal/capture"
+	"bw-takeout/internal/capture"
 )
 
 // Marker is part of every sentinel value.

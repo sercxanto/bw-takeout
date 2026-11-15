@@ -13,10 +13,10 @@ import (
 
 	"filippo.io/age"
 
-	"bitwarden-backup/internal/archive"
-	"bitwarden-backup/internal/archive/archivetest"
-	"bitwarden-backup/internal/capture/capturetest"
-	"bitwarden-backup/internal/manifest"
+	"bw-takeout/internal/archive"
+	"bw-takeout/internal/archive/archivetest"
+	"bw-takeout/internal/capture/capturetest"
+	"bw-takeout/internal/manifest"
 )
 
 type rawEntry struct {

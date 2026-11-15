@@ -2,12 +2,12 @@ package archive
 
 // RecoveryText is the content of RECOVERY.txt. It is fixed, so it holds no
 // data from the vault.
-const RecoveryText = `BITWARDEN-BACKUP GENERATION
+const RecoveryText = `BW-TAKEOUT GENERATION
 ===========================
 
 This archive holds one backup of a personal Bitwarden vault, made with the
-official Bitwarden CLI (bw) and stored by bitwarden-backup. It can be opened
-without bitwarden-backup.
+official Bitwarden CLI (bw) and stored by bw-takeout. It can be opened
+without bw-takeout.
 
 
 LAYOUT
@@ -68,6 +68,6 @@ CHECKING INTEGRITY
 
 Compare the SHA-256 of each unpacked file with the value in manifest.json,
 for example with "sha256sum documents/export.json". The command
-"bitwarden-backup verify --identity identity.txt <generation-directory>"
+"bw-takeout verify --identity identity.txt <generation-directory>"
 performs all checks without writing any file.
 `

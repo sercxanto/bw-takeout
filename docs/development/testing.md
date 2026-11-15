@@ -82,15 +82,15 @@ The change archive-generation adds tests in four packages. All of them use the s
 - `internal/manifest`: serialization, the byte-identical embedded verification result, format version and entry validation.
 - `internal/archive`: the encrypted tar stream. Malformed archives are built for the purpose by re-encrypting changed tar entries. Truncation and altered bytes are tested at several positions of an archive whose payload spans several age chunks. `TestRecoveryWithStandardTools` decrypts with the `age` command and unpacks with the `tar` command from the search path. It is skipped with a message where either is missing, and it is the only test that writes synthetic plaintext to a test directory on purpose.
 - `internal/publish`: the target directory. A fault-injecting file system fails each step of design D8 in turn, and every pre-existing file in the target is hashed before and after. Eight publishers run concurrently with the same clock value and the same first random value. `TestProcessKilledWhileWriting` starts the test binary as a helper process, lets it write more than one age chunk into a new generation and kills it. `TestKillHelper` is that helper and reports a skip when run on its own.
-- `cmd/bitwarden-backup`: the command is built once and run as a separate process against generations made from the fixtures, including runs with an empty search path. `TestEndToEnd` runs the whole chain from fixture capture to the verify command.
+- `cmd/bw-takeout`: the command is built once and run as a separate process against generations made from the fixtures, including runs with an empty search path. `TestEndToEnd` runs the whole chain from fixture capture to the verify command.
 
-`TestLeaveGenerationForOfflineExercise` in `cmd/bitwarden-backup` writes one synthetic generation for the manual offline exercise on a second system. It runs only when both environment variables are set, otherwise it reports a skip:
+`TestLeaveGenerationForOfflineExercise` in `cmd/bw-takeout` writes one synthetic generation for the manual offline exercise on a second system. It runs only when both environment variables are set, otherwise it reports a skip:
 
 ```sh
 age-keygen -o identity.txt
-BITWARDEN_BACKUP_EXERCISE_TARGET=/path/to/target \
-BITWARDEN_BACKUP_EXERCISE_RECIPIENT="$(age-keygen -y identity.txt)" \
-go test -count=1 -run TestLeaveGenerationForOfflineExercise -v ./cmd/bitwarden-backup/
+BW_TAKEOUT_EXERCISE_TARGET=/path/to/target \
+BW_TAKEOUT_EXERCISE_RECIPIENT="$(age-keygen -y identity.txt)" \
+go test -count=1 -run TestLeaveGenerationForOfflineExercise -v ./cmd/bw-takeout/
 ```
 
 Copy the generation and the identity to the second system separately and follow [recovery](../user/recovery.md) there.
@@ -154,6 +154,20 @@ In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3, age 1.2.1,
 The module cache of this container belonged to root, so the session used a `GOPATH` under the ignored `.local/` ([integrations](integrations.md)). After the image was rebuilt on 14 November 2026, `/go/pkg/mod` belongs to `vscode`, and `go mod download` and `go test ./...` passed with the default `GOPATH=/go`.
 
 Not run: macOS, Windows, Linux/amd64, FAT or exFAT media, network shares, the manual offline exercise on a second system, attachments larger than a few hundred kilobytes, any live capture and the real `bw` binary.
+
+## Skip Report
+
+A skipped test is not a passed test. The program `internal/tools/skipreport` reads the output of `go test -json`, echoes it, and lists every skipped test with its reason. It exits with status 1 when a test failed or when a test was skipped that the list of expected skips does not allow for the platform. Run it the same way locally and in CI:
+
+```sh
+go test -count=1 -json ./... | go run ./internal/tools/skipreport
+```
+
+Use `bash` with `-o pipefail`, so that a failing `go test` fails the pipe. The table goes to the job summary when `GITHUB_STEP_SUMMARY` is set and to standard output otherwise. Only the standard library is used, and no other package imports the program.
+
+`.github/expected-skips.txt` lists the allowed skips, one per line: platform (`linux`, `darwin`, `windows` or `*`), package, test name, then `#` and the reason. An entry allows a skip and does not require it; entries that did not skip are shown as information. An entry also covers the subtests of its test. A malformed line or a line without reason stops the program with status 2.
+
+Rule for a new entry: it needs a reason that holds in review, for example a platform limit named in a spec or a non-goal. A test that should run, such as `TestRecoveryWithStandardTools`, stays off the list, so that a missing tool fails the run instead of hiding.
 
 ## Bootstrap Check of 13 November 2026
 

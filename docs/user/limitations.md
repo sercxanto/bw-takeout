@@ -26,7 +26,7 @@ Organization items are not checked. They are counted per organization and report
 
 ## What Offline Verification Shows
 
-`bitwarden-backup verify` shows that:
+`bw-takeout verify` shows that:
 
 - the identity file holds an identity that opens the archive,
 - the archive is complete and unaltered: a truncated file or a changed byte fails the check,

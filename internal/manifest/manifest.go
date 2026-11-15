@@ -17,7 +17,7 @@ import (
 )
 
 // FormatName is the fixed value of the format key.
-const FormatName = "bitwarden-backup-generation"
+const FormatName = "bw-takeout-generation"
 
 // FormatVersion is the only format version this package writes and reads.
 const FormatVersion = 1

@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"bitwarden-backup/internal/archive"
-	"bitwarden-backup/internal/archive/archivetest"
-	"bitwarden-backup/internal/capture/capturetest"
+	"bw-takeout/internal/archive"
+	"bw-takeout/internal/archive/archivetest"
+	"bw-takeout/internal/capture/capturetest"
 )
 
 const (
-	helperTargetEnv    = "BITWARDEN_BACKUP_KILL_HELPER_TARGET"
-	helperRecipientEnv = "BITWARDEN_BACKUP_KILL_HELPER_RECIPIENT"
+	helperTargetEnv    = "BW_TAKEOUT_KILL_HELPER_TARGET"
+	helperRecipientEnv = "BW_TAKEOUT_KILL_HELPER_RECIPIENT"
 )
 
 // TestKillHelper is not a test of its own. TestProcessKilledWhileWriting

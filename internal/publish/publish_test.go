@@ -21,10 +21,10 @@ import (
 
 	"filippo.io/age"
 
-	"bitwarden-backup/internal/archive"
-	"bitwarden-backup/internal/archive/archivetest"
-	"bitwarden-backup/internal/capture/capturetest"
-	"bitwarden-backup/internal/verify"
+	"bw-takeout/internal/archive"
+	"bw-takeout/internal/archive/archivetest"
+	"bw-takeout/internal/capture/capturetest"
+	"bw-takeout/internal/verify"
 )
 
 var testNow = time.Date(2026, 11, 14, 17, 0, 0, 0, time.UTC)

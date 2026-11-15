@@ -19,11 +19,11 @@ import (
 
 	"filippo.io/age"
 
-	"bitwarden-backup/internal/archive"
-	"bitwarden-backup/internal/archive/archivetest"
-	"bitwarden-backup/internal/capture/capturetest"
-	"bitwarden-backup/internal/publish"
-	"bitwarden-backup/internal/verify"
+	"bw-takeout/internal/archive"
+	"bw-takeout/internal/archive/archivetest"
+	"bw-takeout/internal/capture/capturetest"
+	"bw-takeout/internal/publish"
+	"bw-takeout/internal/verify"
 )
 
 // binary is the command built once for all tests, so that they run the
@@ -31,12 +31,12 @@ import (
 var binary string
 
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "bitwarden-backup-cmd-test-")
+	dir, err := os.MkdirTemp("", "bw-takeout-cmd-test-")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	binary = filepath.Join(dir, "bitwarden-backup")
+	binary = filepath.Join(dir, "bw-takeout")
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
@@ -370,7 +370,7 @@ func TestNoNetworkOrProcessPackage(t *testing.T) {
 		t.Fatalf("dependency list too short: %v", deps)
 	}
 	for _, d := range deps {
-		if d == "net" || strings.HasPrefix(d, "net/") || d == "os/exec" || d == "bitwarden-backup/internal/verify" {
+		if d == "net" || strings.HasPrefix(d, "net/") || d == "os/exec" || d == "bw-takeout/internal/verify" {
 			t.Errorf("the command depends on %s", d)
 		}
 	}

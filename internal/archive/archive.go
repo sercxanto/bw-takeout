@@ -18,7 +18,7 @@ import (
 
 	"filippo.io/age"
 
-	"bitwarden-backup/internal/manifest"
+	"bw-takeout/internal/manifest"
 )
 
 // Fixed entry names of the layout (design D2).

@@ -1,6 +1,6 @@
 {
-  "name": "bitwarden-backup",
+  "name": "bw-takeout",
   "build": { "dockerfile": "Dockerfile" },
-  "runArgs": ["--hostname=bitwarden-backup"],
+  "runArgs": ["--hostname=bw-takeout"],
   "remoteUser": "vscode"
 }

@@ -1,4 +1,4 @@
-module bitwarden-backup
+module bw-takeout
 
 go 1.27.3
 

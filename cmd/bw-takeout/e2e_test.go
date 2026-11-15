@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"bitwarden-backup/internal/archive"
-	"bitwarden-backup/internal/archive/archivetest"
-	"bitwarden-backup/internal/capture"
-	"bitwarden-backup/internal/capture/capturetest"
-	"bitwarden-backup/internal/manifest"
-	"bitwarden-backup/internal/publish"
-	"bitwarden-backup/internal/verify"
+	"bw-takeout/internal/archive"
+	"bw-takeout/internal/archive/archivetest"
+	"bw-takeout/internal/capture"
+	"bw-takeout/internal/capture/capturetest"
+	"bw-takeout/internal/manifest"
+	"bw-takeout/internal/publish"
+	"bw-takeout/internal/verify"
 )
 
 // backup runs the whole chain the later backup command will run: parse the
@@ -51,7 +51,7 @@ func backup(t *testing.T, target string, f *capturetest.Fixture, recipients []st
 		}
 		return w.Finish(archive.Meta{
 			Source:       archivetest.Source,
-			Tool:         manifest.Tool{Name: "bitwarden-backup", Version: "test"},
+			Tool:         manifest.Tool{Name: "bw-takeout", Version: "test"},
 			Verification: verification,
 		})
 	})
@@ -124,8 +124,8 @@ func TestEndToEnd(t *testing.T) {
 
 // Environment variables of the manual offline exercise (design D12).
 const (
-	exerciseTargetEnv    = "BITWARDEN_BACKUP_EXERCISE_TARGET"
-	exerciseRecipientEnv = "BITWARDEN_BACKUP_EXERCISE_RECIPIENT"
+	exerciseTargetEnv    = "BW_TAKEOUT_EXERCISE_TARGET"
+	exerciseRecipientEnv = "BW_TAKEOUT_EXERCISE_RECIPIENT"
 )
 
 // TestLeaveGenerationForOfflineExercise writes one synthetic generation for

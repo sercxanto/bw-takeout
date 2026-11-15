@@ -5,9 +5,9 @@ import (
 	"strings"
 	"testing"
 
-	"bitwarden-backup/internal/capture"
-	ct "bitwarden-backup/internal/capture/capturetest"
-	"bitwarden-backup/internal/verify"
+	"bw-takeout/internal/capture"
+	ct "bw-takeout/internal/capture/capturetest"
+	"bw-takeout/internal/verify"
 )
 
 // Two runs over the same capture produce byte-identical output, although

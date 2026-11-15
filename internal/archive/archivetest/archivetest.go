@@ -12,10 +12,10 @@ import (
 
 	"filippo.io/age"
 
-	"bitwarden-backup/internal/archive"
-	"bitwarden-backup/internal/capture/capturetest"
-	"bitwarden-backup/internal/manifest"
-	"bitwarden-backup/internal/verify"
+	"bw-takeout/internal/archive"
+	"bw-takeout/internal/capture/capturetest"
+	"bw-takeout/internal/manifest"
+	"bw-takeout/internal/verify"
 )
 
 // Created is the creation time of the archives this package builds.
@@ -82,7 +82,7 @@ func Verification(t testing.TB, f *capturetest.Fixture, withReference bool) ([]b
 func Meta(verification []byte) archive.Meta {
 	return archive.Meta{
 		Source:       Source,
-		Tool:         manifest.Tool{Name: "bitwarden-backup", Version: "test"},
+		Tool:         manifest.Tool{Name: "bw-takeout", Version: "test"},
 		Verification: verification,
 	}
 }

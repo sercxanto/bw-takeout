@@ -38,7 +38,7 @@ const (
 	// ArchiveName is the only file of a generation.
 	ArchiveName = "vault.tar.age"
 	// NamePrefix starts every generation name.
-	NamePrefix = "bitwarden-backup-"
+	NamePrefix = "bw-takeout-"
 	// PartialMarker ends the name of a generation that is not complete.
 	PartialMarker = ".partial"
 	// UnverifiedMarker ends the name of a generation whose capture is

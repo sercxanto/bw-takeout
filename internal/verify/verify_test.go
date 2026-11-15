@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"bitwarden-backup/internal/capture"
-	ct "bitwarden-backup/internal/capture/capturetest"
-	"bitwarden-backup/internal/verify"
+	"bw-takeout/internal/capture"
+	ct "bw-takeout/internal/capture/capturetest"
+	"bw-takeout/internal/verify"
 )
 
 // Requirement: Three-state verdict.

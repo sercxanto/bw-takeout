@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"bitwarden-backup/internal/capture/capturetest"
-	"bitwarden-backup/internal/verify"
+	"bw-takeout/internal/capture/capturetest"
+	"bw-takeout/internal/verify"
 )
 
 const hashA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -29,7 +29,7 @@ func sample(t *testing.T) *Manifest {
 	return &Manifest{
 		Created: time.Date(2026, 11, 14, 17, 0, 0, 0, time.UTC),
 		Source:  Source{ServerURL: "https://vault.example.test", AccountEmail: "user@example.test", AccountID: "a0000000-0000-4000-8000-000000000001"},
-		Tool:    Tool{Name: "bitwarden-backup", Version: "test"},
+		Tool:    Tool{Name: "bw-takeout", Version: "test"},
 		Counts:  Counts{Items: 3, Attachments: 1},
 		// The result is indented, so the test also shows that Marshal does
 		// not compact it.
@@ -84,7 +84,7 @@ func TestRoundTripKeepsVerificationBytes(t *testing.T) {
 			t.Errorf("key %s missing", k)
 		}
 	}
-	if string(keys["format"]) != `"bitwarden-backup-generation"` || string(keys["format_version"]) != "1" {
+	if string(keys["format"]) != `"bw-takeout-generation"` || string(keys["format_version"]) != "1" {
 		t.Errorf("format keys: %s %s", keys["format"], keys["format_version"])
 	}
 	if string(keys["created"]) != `"2026-11-14T17:00:00Z"` {

@@ -5,7 +5,7 @@ An interactive backup of one account with TOTP is planned. Its command, progress
 ## Checking a Generation Offline
 
 ```sh
-bitwarden-backup verify --identity <identity-file> <generation-directory>
+bw-takeout verify --identity <identity-file> <generation-directory>
 ```
 
 The command checks one backup generation with an age identity file. It needs no network access and no `bw`, starts no other program and writes no file. The identity can only be given as a file, never as an argument or environment variable. The flag comes before the directory.

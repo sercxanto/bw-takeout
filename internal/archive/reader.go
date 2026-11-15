@@ -12,8 +12,8 @@ import (
 
 	"filippo.io/age"
 
-	"bitwarden-backup/internal/capture"
-	"bitwarden-backup/internal/manifest"
+	"bw-takeout/internal/capture"
+	"bw-takeout/internal/manifest"
 )
 
 // maxManifestSize bounds the memory the manifest may take.

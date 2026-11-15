@@ -23,9 +23,9 @@ manifest.json
 
 The recovery instructions come first and hold no vault data. The three captured documents are stored byte for byte. Attachments are stored by item ID and attachment ID. Their file names appear only in the manifest, inside the encryption.
 
-**Manifest last.** `manifest.json` is the last entry. It holds the format name `bitwarden-backup-generation` and version 1, the creation time, the source server and account, the tool and `bw` versions, the item and attachment counts, the verification result embedded byte for byte, and size and SHA-256 of every other entry. A reader refuses an unknown format version and ignores unknown additional keys.
+**Manifest last.** `manifest.json` is the last entry. It holds the format name `bw-takeout-generation` and version 1, the creation time, the source server and account, the tool and `bw` versions, the item and attachment counts, the verification result embedded byte for byte, and size and SHA-256 of every other entry. A reader refuses an unknown format version and ignores unknown additional keys.
 
-**Generation directory.** A generation is a directory `bitwarden-backup-<YYYYMMDD>T<HHMMSS>Z-<8 hex digits>` in an existing target, with the time in UTC and a random part. It is created with the marker `.partial` and renamed only after the archive is written and flushed. An unverified capture is published with the marker `.unverified`, a failed capture is not published. A directory without `.partial` is complete by construction. No run modifies content that existed before it.
+**Generation directory.** A generation is a directory `bw-takeout-<YYYYMMDD>T<HHMMSS>Z-<8 hex digits>` in an existing target, with the time in UTC and a random part. It is created with the marker `.partial` and renamed only after the archive is written and flushed. An unverified capture is published with the marker `.unverified`, a failed capture is not published. A directory without `.partial` is complete by construction. No run modifies content that existed before it.
 
 ## Alternatives
 

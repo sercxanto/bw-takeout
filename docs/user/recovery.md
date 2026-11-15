@@ -1,6 +1,6 @@
 # Offline Recovery
 
-A backup generation is a directory in your backup target, for example `bitwarden-backup-20261114T170000Z-1a2b3c4d`. It holds one file, `vault.tar.age`: a tar archive encrypted with [age](https://age-encryption.org). The archive is described in [ADR 0005](../decisions/0005-archive-format.md) and in the file `RECOVERY.txt` inside it.
+A backup generation is a directory in your backup target, for example `bw-takeout-20261114T170000Z-1a2b3c4d`. It holds one file, `vault.tar.age`: a tar archive encrypted with [age](https://age-encryption.org). The archive is described in [ADR 0005](../decisions/0005-archive-format.md) and in the file `RECOVERY.txt` inside it.
 
 A directory name ending in `.partial` belongs to a run that has not finished or was aborted. It is not a backup. A name ending in `.unverified` is a complete backup whose completeness could not be confirmed. Its findings are listed in the manifest.
 
@@ -17,13 +17,13 @@ A key pair can be created with `age-keygen -o identity.txt`. The command `age-ke
 Set `G` to the generation directory, for example:
 
 ```sh
-G=/media/backup/bitwarden-backup-20261114T170000Z-1a2b3c4d
+G=/media/backup/bw-takeout-20261114T170000Z-1a2b3c4d
 ```
 
 Check it with this project. The check needs no network and no `bw`, and it writes no file:
 
 ```sh
-bitwarden-backup verify --identity identity.txt "$G"
+bw-takeout verify --identity identity.txt "$G"
 ```
 
 It reads the whole archive, compares every entry with the manifest and prints the creation time, the server and account, the number of items and attachments, and the stored verdict. Exit status 0 means intact and verified, 3 intact and unverified, 1 failed. See [usage](usage.md).

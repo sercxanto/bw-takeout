@@ -2,7 +2,7 @@
 
 Start with [getting started](docs/development/getting-started.md). Explore collects questions, evidence and alternatives. For a well-scoped change, Propose creates a change with motivation, spec delta, design and verifiable tasks. Review scope, risks and acceptance criteria together before implementing. After implementing, run the tests, compare the spec with the actual behavior and archive the reviewed change.
 
-Keep changes small. Future Go code follows gofmt, explicit error handling and testable error paths for external processes and file operations. A PR names the change, its impact, the tests that were run and remaining gaps. For behavior changes, add matching regression tests according to the [test strategy](docs/development/testing.md).
+Keep changes small. Future Go code follows gofmt, explicit error handling and testable error paths for external processes and file operations. A PR names the change, its impact, the tests that were run, its CI run (see the [test strategy](docs/development/testing.md#skip-report)) and remaining gaps. For behavior changes, add matching regression tests according to the [test strategy](docs/development/testing.md).
 
 Write all repository content in English, regardless of the language used in discussions.
 

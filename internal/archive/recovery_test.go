@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"bitwarden-backup/internal/archive"
-	"bitwarden-backup/internal/archive/archivetest"
+	"bw-takeout/internal/archive"
+	"bw-takeout/internal/archive/archivetest"
 )
 
 // TestRecoveryWithStandardTools decrypts an archive with the age command and

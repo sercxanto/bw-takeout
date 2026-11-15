@@ -1,0 +1,11 @@
+# Skips that a test run may report. One entry per line:
+#   platform package test # reason
+# The platform is linux, darwin, windows or *. An entry allows a skip and does
+# not require it. A test may be added only with a reason that holds in review.
+# TestRecoveryWithStandardTools is deliberately absent: it must run everywhere.
+
+*       bw-takeout/internal/publish        TestKillHelper                          # helper process of TestProcessKilledWhileWriting, reports a skip when run on its own
+*       bw-takeout/cmd/bw-takeout    TestLeaveGenerationForOfflineExercise   # opt-in for the manual offline exercise, needs its environment variables
+windows bw-takeout/internal/publish        TestPermissionsOnLinux                  # Windows has no POSIX permissions, access control lists are a non-goal
+windows bw-takeout/cmd/bw-takeout    TestSystemWithoutBW                     # the empty search path is tested on Unix only
+windows bw-takeout/cmd/bw-takeout    TestPartialGenerationByAnotherPath      # needs symbolic links, which an unprivileged Windows user may not create

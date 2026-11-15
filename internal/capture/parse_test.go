@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"bitwarden-backup/internal/capture"
-	ct "bitwarden-backup/internal/capture/capturetest"
+	"bw-takeout/internal/capture"
+	ct "bw-takeout/internal/capture/capturetest"
 )
 
 func itemIn(t *testing.T, items []any, id string) map[string]any {

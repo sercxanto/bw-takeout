@@ -1,8 +1,8 @@
-// Command bitwarden-backup backs up a personal Bitwarden vault with the
+// Command bw-takeout backs up a personal Bitwarden vault with the
 // official CLI. This version offers only the offline check of a published
 // generation:
 //
-//	bitwarden-backup verify --identity <file> <generation-directory>
+//	bw-takeout verify --identity <file> <generation-directory>
 //
 // verify needs no network, no bw and no other program. It writes no file
 // and prints no vault content. See the design of the change
@@ -23,9 +23,9 @@ import (
 
 	"filippo.io/age"
 
-	"bitwarden-backup/internal/archive"
-	"bitwarden-backup/internal/manifest"
-	"bitwarden-backup/internal/publish"
+	"bw-takeout/internal/archive"
+	"bw-takeout/internal/manifest"
+	"bw-takeout/internal/publish"
 )
 
 // Exit statuses (design D10).
@@ -36,7 +36,7 @@ const (
 	exitUnverified = 3
 )
 
-const usage = `usage: bitwarden-backup verify --identity <file> <generation-directory>
+const usage = `usage: bw-takeout verify --identity <file> <generation-directory>
 
 Checks a backup generation offline with an age identity file.
 
@@ -163,7 +163,7 @@ func reportReadError(stderr io.Writer, err error) int {
 	case errors.Is(err, archive.ErrNoIdentityMatch):
 		return failed(stderr, "no identity in the identity file matches the archive")
 	case errors.As(err, &uv):
-		return failed(stderr, "format version %d is not supported by this version of bitwarden-backup", uv.Version)
+		return failed(stderr, "format version %d is not supported by this version of bw-takeout", uv.Version)
 	}
 	if entries := archive.EntryErrors(err); len(entries) > 0 {
 		for _, e := range entries {

@@ -2,7 +2,7 @@
 
 The fixed integration boundary is the unmodified official bw CLI. Decisions and their status are in the [decision index](../decisions/README.md).
 
-**Everything on this page is planned, except where a status says otherwise.** The code that exists is the Go module with the packages `internal/capture` and `internal/verify` from the archived change `capture-verification`, and the packages `internal/manifest`, `internal/archive` and `internal/publish` and the command `cmd/bitwarden-backup` with its single subcommand `verify` from the change `archive-generation`. The component model and the roadmap come from the explore session of 13 November 2026 and may change with each later change.
+**Everything on this page is planned, except where a status says otherwise.** The code that exists is the Go module with the packages `internal/capture` and `internal/verify` from the archived change `capture-verification`, and the packages `internal/manifest`, `internal/archive` and `internal/publish` and the command `cmd/bw-takeout` with its single subcommand `verify` from the change `archive-generation`. The component model and the roadmap come from the explore session of 13 November 2026 and may change with each later change.
 
 ## Planned flow
 
