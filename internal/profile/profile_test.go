@@ -417,7 +417,9 @@ func TestUnrelatedEntriesInTheProfileLocation(t *testing.T) {
 	write("notes.txt")
 	write(nameAt(testNow, "0123abcd")) // a file with a profile name
 	mkdir("notes")
-	mkdir(nameAt(testNow, "0123ABCD"))
+	// Another random part than the file above, because the file systems of
+	// macOS and Windows do not tell names apart by case.
+	mkdir(nameAt(testNow, "4567ABCD"))
 	mkdir(nameAt(testNow, "0123abcd") + ".old")
 	before := snapshot(t, loc)
 	got, err := (&Creator{Location: loc, Now: fixedClock}).Leftovers(nil)

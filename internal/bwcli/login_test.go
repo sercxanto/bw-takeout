@@ -76,6 +76,22 @@ func (f *fixture) loginRecords() []bwclitest.Record {
 	return out
 }
 
+// sameDir compares two directories by identity, because the fake reports
+// the resolved path, and on macOS the temporary directory is reached through
+// the symbolic link /var.
+func sameDir(t *testing.T, a, b string) bool {
+	t.Helper()
+	ai, err := os.Stat(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bi, err := os.Stat(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return os.SameFile(ai, bi)
+}
+
 func wantRestored(t *testing.T, term *fakeTerminal) {
 	t.Helper()
 	if term.saves != 1 || term.restores != 1 || !term.restoredAfterSave {
@@ -128,8 +144,8 @@ func TestLoginWithATerminal(t *testing.T) {
 	if rec.Line != testPassword {
 		t.Errorf("bw read %q from the terminal", rec.Line)
 	}
-	if rec.Dir != f.work {
-		t.Errorf("working directory %q", rec.Dir)
+	if !sameDir(t, rec.Dir, f.work) {
+		t.Errorf("working directory %q, want %q", rec.Dir, f.work)
 	}
 	for _, name := range []string{"BW_NOINTERACTION", "BW_SESSION"} {
 		if _, ok := rec.Lookup(name); ok {
