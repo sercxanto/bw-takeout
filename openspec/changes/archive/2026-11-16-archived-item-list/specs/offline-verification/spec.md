@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Unsafe or unknown archive structure is rejected
-The verify command SHALL accept only regular file entries with the names the format defines. Any other entry type, an unexpected name, a duplicate entry, recovery instructions that are not the first entry, a manifest that is not the last entry, an absent entry that the format requires and an unknown format version SHALL each make the verification fail. The format requires the recovery instructions, the plaintext export, the account-bound encrypted export, the default item list and the archived item list.
+The verify command SHALL accept only regular file entries with the names the format defines. Any other entry type, an unexpected name, a duplicate entry, recovery instructions that are not the first entry, a manifest that is not the last entry, a missing required entry and an unknown format version SHALL each make the verification fail. Required are the recovery instructions, both exports and both item lists.
 
 #### Scenario: Symbolic link entry
 - **WHEN** an archive contains a symbolic link entry
