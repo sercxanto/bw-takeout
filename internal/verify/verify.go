@@ -31,7 +31,7 @@ var documentReasons = map[capture.Problem]Reason{
 func Verify(c *capture.Capture, ref *capture.Reference) *Result {
 	v := &verifier{c: c}
 	if len(c.Errors) > 0 {
-		// Without all three documents no comparison is meaningful.
+		// Without all four documents no comparison is meaningful.
 		for _, e := range c.Errors {
 			reason, ok := documentReasons[e.Problem]
 			if !ok {
@@ -50,6 +50,7 @@ func Verify(c *capture.Capture, ref *capture.Reference) *Result {
 	v.coverage()
 	v.attachments()
 	v.organizations()
+	v.archiveFilter()
 	if ref != nil {
 		v.reference(ref)
 	}
@@ -64,7 +65,13 @@ type verifier struct {
 	// First occurrence of each ID. Duplicates are reported separately.
 	encrypted map[string]capture.EncryptedItem
 	plaintext map[string]capture.PlaintextItem
+	// listed combines the default and the archived item list (design D2 of
+	// archived-item-list). An ID in both lists enters once, from the
+	// default list. listedDoc names the list each entry came from.
 	listed    map[string]capture.ListedItem
+	listedDoc map[string]capture.Document
+	// shared lists, in order, the item IDs that both lists show.
+	shared    []string
 	downloads map[capture.AttachmentRef]capture.Download
 
 	encryptedOrder []string
@@ -113,10 +120,30 @@ func (v *verifier) index() {
 		}
 	}
 	v.listed = map[string]capture.ListedItem{}
+	v.listedDoc = map[string]capture.Document{}
 	for _, item := range v.c.List.Items {
 		if _, ok := v.listed[item.ID]; !ok {
 			v.listed[item.ID] = item
+			v.listedDoc[item.ID] = capture.ItemListDocument
 			v.listedOrder = append(v.listedOrder, item.ID)
+		}
+	}
+	compared := map[string]bool{}
+	for _, item := range v.c.ArchivedList.Items {
+		first, ok := v.listed[item.ID]
+		switch {
+		case !ok:
+			v.listed[item.ID] = item
+			v.listedDoc[item.ID] = capture.ArchivedItemListDocument
+			v.listedOrder = append(v.listedOrder, item.ID)
+		case v.listedDoc[item.ID] == capture.ItemListDocument && !compared[item.ID]:
+			// A repeated ID within the archived list is a duplicate of that
+			// list and is compared only once.
+			compared[item.ID] = true
+			v.shared = append(v.shared, item.ID)
+			if !sameListing(first, item) {
+				v.add(Finding{Severity: SeverityFailed, Reason: ListedItemDiffersBetweenLists, ItemID: item.ID})
+			}
 		}
 	}
 	v.downloads = map[capture.AttachmentRef]capture.Download{}
@@ -128,21 +155,53 @@ func (v *verifier) index() {
 	}
 }
 
+// sameListing reports whether two entries of one item agree in
+// organization ID and in the set of attachment IDs (design D3 of
+// archived-item-list). The order of attachments carries no meaning.
+func sameListing(a, b capture.ListedItem) bool {
+	if a.OrganizationID != b.OrganizationID {
+		return false
+	}
+	set := func(ids []string) map[string]bool {
+		m := make(map[string]bool, len(ids))
+		for _, id := range ids {
+			m[id] = true
+		}
+		return m
+	}
+	as, bs := set(a.AttachmentIDs), set(b.AttachmentIDs)
+	if len(as) != len(bs) {
+		return false
+	}
+	for id := range as {
+		if !bs[id] {
+			return false
+		}
+	}
+	return true
+}
+
 // duplicates reports every ID and ID pair that occurs more than once in one
 // input.
 func (v *verifier) duplicates() {
 	for doc, ids := range map[capture.Document][]string{
-		capture.PlaintextExportDocument: v.c.Plaintext.DuplicateIDs,
-		capture.EncryptedExportDocument: v.c.Encrypted.DuplicateIDs,
-		capture.ItemListDocument:        v.c.List.DuplicateIDs,
+		capture.PlaintextExportDocument:  v.c.Plaintext.DuplicateIDs,
+		capture.EncryptedExportDocument:  v.c.Encrypted.DuplicateIDs,
+		capture.ItemListDocument:         v.c.List.DuplicateIDs,
+		capture.ArchivedItemListDocument: v.c.ArchivedList.DuplicateIDs,
 	} {
 		for _, id := range ids {
 			v.add(Finding{Severity: SeverityFailed, Reason: DuplicateItemID, Document: string(doc), ItemID: id})
 		}
 	}
-	for _, r := range v.c.List.DuplicateAttachments {
-		v.add(Finding{Severity: SeverityFailed, Reason: DuplicateAttachmentID,
-			Document: string(capture.ItemListDocument), ItemID: r.ItemID, AttachmentID: r.AttachmentID})
+	for doc, refs := range map[capture.Document][]capture.AttachmentRef{
+		capture.ItemListDocument:         v.c.List.DuplicateAttachments,
+		capture.ArchivedItemListDocument: v.c.ArchivedList.DuplicateAttachments,
+	} {
+		for _, r := range refs {
+			v.add(Finding{Severity: SeverityFailed, Reason: DuplicateAttachmentID,
+				Document: string(doc), ItemID: r.ItemID, AttachmentID: r.AttachmentID})
+		}
 	}
 	for _, r := range v.c.DuplicateDownloads {
 		v.add(Finding{Severity: SeverityFailed, Reason: DuplicateDownloadResult,
@@ -283,8 +342,8 @@ func isP256Key(keyValue string) bool {
 	return ok && key.Curve == elliptic.P256()
 }
 
-// coverage compares the personal items of the item list with the plaintext
-// export (design D8).
+// coverage compares the personal items of both item lists with the
+// plaintext export (design D8).
 func (v *verifier) coverage() {
 	for _, id := range v.listedOrder {
 		if v.listed[id].OrganizationID != "" {
@@ -299,13 +358,14 @@ func (v *verifier) coverage() {
 		item, ok := v.listed[id]
 		switch {
 		case !ok:
-			v.add(Finding{Severity: SeverityUnverified, Reason: ExportedItemNotListed,
-				Document: string(capture.ItemListDocument), ItemID: id})
+			// The item is in neither list, so the finding names no single
+			// document (design D2 of archived-item-list).
+			v.add(Finding{Severity: SeverityUnverified, Reason: ExportedItemNotListed, ItemID: id})
 		case item.OrganizationID != "":
 			// The exports leave organization items out, so the documents
 			// disagree about the same snapshot (design D5, D8).
 			v.add(Finding{Severity: SeverityFailed, Reason: ItemOrganizationMismatch,
-				Document: string(capture.ItemListDocument), ItemID: id})
+				Document: string(v.listedDoc[id]), ItemID: id})
 		}
 	}
 }
@@ -382,8 +442,8 @@ func validDownload(d capture.Download) bool {
 	return err == nil
 }
 
-// organizations counts the organization items of the item list per
-// organization ID. They are excluded from every other check.
+// organizations counts the organization items of both item lists per
+// organization ID, each item once. They are excluded from every other check.
 func (v *verifier) organizations() {
 	perOrg := map[string]int{}
 	total := 0
@@ -401,8 +461,19 @@ func (v *verifier) organizations() {
 		counts = append(counts, OrganizationCount{OrganizationID: org, Count: n})
 	}
 	sort.Slice(counts, func(i, j int) bool { return counts[i].OrganizationID < counts[j].OrganizationID })
+	// The count spans both lists, so the warning names no single document.
 	v.add(Finding{Severity: SeverityWarning, Reason: OrganizationItemsExcluded,
-		Document: string(capture.ItemListDocument), Count: intp(total), Organizations: counts})
+		Count: intp(total), Organizations: counts})
+}
+
+// archiveFilter reports that the CLI did not apply --archived when both
+// lists show at least one item ID (design D4 of archived-item-list). The
+// warning names no item and leaves the verdict unchanged.
+func (v *verifier) archiveFilter() {
+	if len(v.shared) == 0 {
+		return
+	}
+	v.add(Finding{Severity: SeverityWarning, Reason: ArchiveFilterNotApplied, Count: intp(len(v.shared))})
 }
 
 // reference compares the capture with a reference inventory (design D9).

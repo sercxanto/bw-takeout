@@ -28,8 +28,16 @@ documents/export.encrypted.json
     It is kept as evidence of what the server returned.
 
 documents/items.json
-    The item list from "bw list items". It is the only document that names
-    the attachments of each item.
+    The default item list from "bw list items". It leaves archived items
+    out. Together with documents/items.archived.json it is the only source
+    that names the attachments of each item.
+
+documents/items.archived.json
+    The list of archived items from "bw list items --archived", byte for
+    byte as bw wrote it. The two lists together name the attachments of
+    every item. An item can appear in both lists when bw did not apply the
+    archive filter; both entries then describe the same item. The list is
+    "[]" when the vault holds no archived item.
 
 attachments/<item-id>/<attachment-id>
     The content of one attachment, unchanged. The directory is the ID of

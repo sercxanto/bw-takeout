@@ -60,7 +60,7 @@ var typeObjectKeys = map[int]string{
 	8: "passport",
 }
 
-// Parse parses the three documents of a capture. It never fails: a rejected
+// Parse parses the four documents of a capture. It never fails: a rejected
 // document is recorded in Capture.Errors and left nil.
 func Parse(in Input) *Capture {
 	c := &Capture{Downloads: in.Downloads}
@@ -78,6 +78,8 @@ func Parse(in Input) *Capture {
 	c.Encrypted, err = ParseEncryptedExport(in.EncryptedExport)
 	record(err)
 	c.List, err = ParseItemList(in.ItemList)
+	record(err)
+	c.ArchivedList, err = ParseArchivedItemList(in.ArchivedItemList)
 	record(err)
 
 	refs := make([]AttachmentRef, 0, len(in.Downloads))
@@ -179,7 +181,18 @@ func ParseEncryptedExport(raw []byte) (*EncryptedExport, error) {
 // ParseItemList parses the bare JSON array of "bw list items". The error is
 // always a *DocumentError.
 func ParseItemList(raw []byte) (*ItemList, error) {
-	const doc = ItemListDocument
+	return parseItemList(ItemListDocument, raw)
+}
+
+// ParseArchivedItemList parses the bare JSON array of
+// "bw list items --archived" with the same rules as ParseItemList. A
+// rejection names the archived item list. The error is always a
+// *DocumentError.
+func ParseArchivedItemList(raw []byte) (*ItemList, error) {
+	return parseItemList(ArchivedItemListDocument, raw)
+}
+
+func parseItemList(doc Document, raw []byte) (*ItemList, error) {
 	root, ok := decode(raw)
 	if !ok {
 		return nil, &DocumentError{Document: doc, Problem: ProblemInvalidJSON}

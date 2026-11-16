@@ -37,9 +37,10 @@ func backup(t *testing.T, target string, f *capturetest.Fixture, recipients []st
 	// the bytes the manifest embeds.
 	return (&publish.Publisher{}).Publish(target, func(dst io.Writer, created time.Time) ([]byte, error) {
 		w, err := archive.NewWriter(dst, recipients, created, archive.Documents{
-			PlaintextExport: in.PlaintextExport,
-			EncryptedExport: in.EncryptedExport,
-			ItemList:        in.ItemList,
+			PlaintextExport:  in.PlaintextExport,
+			EncryptedExport:  in.EncryptedExport,
+			ItemList:         in.ItemList,
+			ArchivedItemList: in.ArchivedItemList,
 		})
 		if err != nil {
 			return nil, err

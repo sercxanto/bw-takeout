@@ -109,10 +109,11 @@ func TestRoundTripIntactFixture(t *testing.T) {
 	}
 	docs := archivetest.Documents(t, f)
 	want := map[string][]byte{
-		archive.RecoveryPath:        []byte(archive.RecoveryText),
-		archive.PlaintextExportPath: docs.PlaintextExport,
-		archive.EncryptedExportPath: docs.EncryptedExport,
-		archive.ItemListPath:        docs.ItemList,
+		archive.RecoveryPath:         []byte(archive.RecoveryText),
+		archive.PlaintextExportPath:  docs.PlaintextExport,
+		archive.EncryptedExportPath:  docs.EncryptedExport,
+		archive.ItemListPath:         docs.ItemList,
+		archive.ArchivedItemListPath: docs.ArchivedItemList,
 	}
 	for _, a := range f.Attachments {
 		want[archive.AttachmentPath(a.ItemID, a.AttachmentID)] = a.Content
@@ -131,7 +132,7 @@ func TestRoundTripIntactFixture(t *testing.T) {
 	if !bytes.Equal(m.Verification, v) {
 		t.Error("embedded verification result differs from the supplied bytes")
 	}
-	if m.Counts.Items != 3 || m.Counts.Attachments != 2 || m.Source != archivetest.Source || !m.Created.Equal(archivetest.Created) {
+	if m.Counts.Items != 4 || m.Counts.Attachments != 3 || m.Source != archivetest.Source || !m.Created.Equal(archivetest.Created) {
 		t.Errorf("manifest metadata: %+v %+v %v", m.Counts, m.Source, m.Created)
 	}
 	if len(m.Entries) != len(want) {
@@ -166,7 +167,8 @@ func TestEntryOrderAndAttributes(t *testing.T) {
 			t.Errorf("entry %s: attributes %+v", h.Name, h)
 		}
 	}
-	want := []string{archive.RecoveryPath, archive.PlaintextExportPath, archive.EncryptedExportPath, archive.ItemListPath}
+	want := []string{archive.RecoveryPath, archive.PlaintextExportPath, archive.EncryptedExportPath,
+		archive.ItemListPath, archive.ArchivedItemListPath}
 	for _, a := range f.Attachments {
 		want = append(want, archive.AttachmentPath(a.ItemID, a.AttachmentID))
 	}
@@ -616,7 +618,10 @@ func TestRecoveryInstructions(t *testing.T) {
 			t.Errorf("recovery text contains sentinel value %q", s)
 		}
 	}
-	for _, name := range []string{"RECOVERY.txt", "documents/export.json", "documents/export.encrypted.json", "documents/items.json", "attachments/", "manifest.json"} {
+	for _, name := range []string{
+		archive.RecoveryPath, archive.PlaintextExportPath, archive.EncryptedExportPath,
+		archive.ItemListPath, archive.ArchivedItemListPath, "attachments/", archive.ManifestPath,
+	} {
 		if !strings.Contains(text, name) {
 			t.Errorf("recovery text does not name %s", name)
 		}

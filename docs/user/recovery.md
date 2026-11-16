@@ -48,7 +48,8 @@ The directory `recovered` then holds:
 - `RECOVERY.txt`: the layout and these instructions.
 - `documents/export.json`: the plaintext JSON export of the vault, as `bw` wrote it. Bitwarden, Vaultwarden and several other password managers can import it.
 - `documents/export.encrypted.json`: the account-bound encrypted export. Only the account that made it can read it.
-- `documents/items.json`: the item list, the only document that names the attachments.
+- `documents/items.json`: the default item list from `bw list items`. It leaves archived items out.
+- `documents/items.archived.json`: the list of archived items from `bw list items --archived`. Together with `documents/items.json` it is the only source that names the attachments. It is `[]` when the vault holds no archived item.
 - `attachments/<item-id>/<attachment-id>`: the attachments. Their original file names are in `manifest.json`.
 - `manifest.json`: source, versions, the verification result and the size and SHA-256 of every other file.
 

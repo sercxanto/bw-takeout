@@ -6,6 +6,12 @@
 
 *       bw-takeout/internal/publish        TestKillHelper                          # helper process of TestProcessKilledWhileWriting, reports a skip when run on its own
 *       bw-takeout/cmd/bw-takeout    TestLeaveGenerationForOfflineExercise   # opt-in for the manual offline exercise, needs its environment variables
+*       bw-takeout/internal/bwcli          TestRealBWVersionAndHash                # opt-in, needs BW_TAKEOUT_REAL_BW and contacts Bitwarden Cloud, run by hand in the dev container
+*       bw-takeout/internal/bwcli          TestRealBWStatusWithoutLogin            # opt-in, needs BW_TAKEOUT_REAL_BW and contacts Bitwarden Cloud, run by hand in the dev container
+*       bw-takeout/internal/bwcli          TestRealBWNotLoggedIn                   # opt-in, needs BW_TAKEOUT_REAL_BW and contacts Bitwarden Cloud, run by hand in the dev container
+*       bw-takeout/internal/bwcli          TestRealBWCleanExitInCallingEnvironment # opt-in, needs BW_TAKEOUT_REAL_BW and contacts Bitwarden Cloud, run by hand in the dev container
+*       bw-takeout/internal/bwcli          TestRealBWLoginWithoutTerminal          # opt-in, needs BW_TAKEOUT_REAL_BW and contacts Bitwarden Cloud, run by hand in the dev container
 windows bw-takeout/internal/publish        TestPermissionsOnLinux                  # Windows has no POSIX permissions, access control lists are a non-goal
+windows bw-takeout/internal/profile        TestPermissionsOnLinuxAndMacOS          # Windows has no POSIX permissions, access control lists are a non-goal
 windows bw-takeout/cmd/bw-takeout    TestSystemWithoutBW                     # the empty search path is tested on Unix only
 windows bw-takeout/cmd/bw-takeout    TestPartialGenerationByAnotherPath      # needs symbolic links, which an unprivileged Windows user may not create

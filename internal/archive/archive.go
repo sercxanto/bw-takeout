@@ -19,6 +19,7 @@ import (
 	"filippo.io/age"
 
 	"bw-takeout/internal/manifest"
+	"bw-takeout/internal/vaultid"
 )
 
 // Fixed entry names of the layout (design D2).
@@ -27,8 +28,11 @@ const (
 	PlaintextExportPath = "documents/export.json"
 	EncryptedExportPath = "documents/export.encrypted.json"
 	ItemListPath        = "documents/items.json"
-	ManifestPath        = "manifest.json"
-	attachmentsDir      = "attachments/"
+	// ArchivedItemListPath holds the output of "bw list items --archived"
+	// (design D5 of archived-item-list).
+	ArchivedItemListPath = "documents/items.archived.json"
+	ManifestPath         = "manifest.json"
+	attachmentsDir       = "attachments/"
 )
 
 // AttachmentPath returns the entry name of one attachment. It does not
@@ -38,45 +42,12 @@ func AttachmentPath(itemID, attachmentID string) string {
 }
 
 // ValidItemID reports whether id has the UUID form of 8-4-4-4-12
-// hexadecimal digits (design D3).
-func ValidItemID(id string) bool {
-	if len(id) != 36 {
-		return false
-	}
-	for i := 0; i < len(id); i++ {
-		c := id[i]
-		switch i {
-		case 8, 13, 18, 23:
-			if c != '-' {
-				return false
-			}
-		default:
-			if !isHex(c) {
-				return false
-			}
-		}
-	}
-	return true
-}
+// hexadecimal digits (design D3). The rule lives in package vaultid.
+func ValidItemID(id string) bool { return vaultid.ValidItemID(id) }
 
 // ValidAttachmentID reports whether id consists of 1 to 64 ASCII letters
-// and digits (design D3).
-func ValidAttachmentID(id string) bool {
-	if len(id) == 0 || len(id) > 64 {
-		return false
-	}
-	for i := 0; i < len(id); i++ {
-		c := id[i]
-		if (c < '0' || c > '9') && (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') {
-			return false
-		}
-	}
-	return true
-}
-
-func isHex(c byte) bool {
-	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
-}
+// and digits (design D3). The rule lives in package vaultid.
+func ValidAttachmentID(id string) bool { return vaultid.ValidAttachmentID(id) }
 
 // kindOf returns the kind an entry name stands for, and for an attachment
 // its IDs. ok is false for a name the format does not define.
@@ -84,7 +55,7 @@ func kindOf(name string) (kind manifest.Kind, itemID, attachmentID string, ok bo
 	switch name {
 	case RecoveryPath:
 		return manifest.KindRecovery, "", "", true
-	case PlaintextExportPath, EncryptedExportPath, ItemListPath:
+	case PlaintextExportPath, EncryptedExportPath, ItemListPath, ArchivedItemListPath:
 		return manifest.KindDocument, "", "", true
 	}
 	rest, found := strings.CutPrefix(name, attachmentsDir)

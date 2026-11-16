@@ -427,8 +427,9 @@ func TestKeyValueWithPadding(t *testing.T) {
 func TestTwoAttachmentsWithTheSameName(t *testing.T) {
 	f := ct.Intact(t)
 	in := f.Input(t)
-	if len(in.Downloads) != 2 || in.Downloads[0].SHA256 == in.Downloads[1].SHA256 {
-		t.Fatalf("downloads = %+v, want two with different content hashes", in.Downloads)
+	first, second := in.Downloads[downloadIndex(t, in, ct.AttachmentFirst)], in.Downloads[downloadIndex(t, in, ct.AttachmentSecond)]
+	if first.ItemID != second.ItemID || first.SHA256 == second.SHA256 {
+		t.Fatalf("downloads = %+v, want two of one item with different content hashes", in.Downloads)
 	}
 	r := runInput(t, f, in, true)
 	wantVerdict(t, r, verify.Verified)
@@ -735,7 +736,13 @@ func TestReferenceItemsAndAttachments(t *testing.T) {
 	})
 	t.Run("item unknown to reference", func(t *testing.T) {
 		f := ct.Intact(t)
-		f.Reference.Items = f.Reference.Items[:2]
+		var kept []capture.ReferenceItem
+		for _, item := range f.Reference.Items {
+			if item.ItemID != ct.ItemNote {
+				kept = append(kept, item)
+			}
+		}
+		f.Reference.Items = kept
 		r := run(t, f, true)
 		wantVerdict(t, r, verify.Failed)
 		if got := only(t, r, verify.ReferenceItemNotExpected); got.ItemID != ct.ItemNote {
@@ -750,7 +757,8 @@ func TestReferenceItemsAndAttachments(t *testing.T) {
 			}
 		}
 		in := f.Input(t)
-		in.Downloads = in.Downloads[:1]
+		i := downloadIndex(t, in, ct.AttachmentSecond)
+		in.Downloads = append(in.Downloads[:i], in.Downloads[i+1:]...)
 		// Without a reference the single attachment source hides the loss.
 		wantVerdict(t, runInput(t, f, in, false), verify.Verified)
 		r := runInput(t, f, in, true)

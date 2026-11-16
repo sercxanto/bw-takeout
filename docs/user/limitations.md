@@ -6,20 +6,25 @@ A successful CLI export can deliver decryptable partial inventories while items 
 
 Every capture is judged failed, unverified or verified ([ADR 0004](../decisions/0004-completeness-verdict.md)). The verification is planned and not yet part of a usable tool. Its rules are tested with synthetic data only. No live capture backs them yet.
 
+The verification reads two item lists: the default list of `bw list items` and the list of archived items from `bw list items --archived`. It treats them as one listing. An item that both lists show is accepted when both entries name the same attachments and the same organization.
+
 It detects:
 
 - an item that is in the encrypted export but missing from the plaintext export, and the reverse,
 - a passkey missing from an item whose passkey count the encrypted export shows,
 - a passkey with a missing field, an empty or unparsable key, or a counter that is not a non-negative number,
-- an attachment that failed to download, has no download result, or has a result that the item list does not explain,
-- a personal item that the item list shows and the plaintext export lacks.
+- an attachment that failed to download, has no download result, or has a result that the item lists do not explain,
+- a personal item that one of the item lists shows and the plaintext export lacks,
+- an item that both item lists show with different attachments or a different organization.
 
 It cannot detect:
 
 - **Missing passkeys in blob-format items.** The encrypted export seals the content of such items, so their passkey count is not visible. A blob login item is reported as unverified, never as "no passkeys".
 - **A swapped passkey or a wrong key without a reference.** If a passkey is replaced by another valid passkey, or a key is well-formed but wrong, the counts and the structure still match. Every result without a reference inventory lists credential identity and attachment content as not checked.
-- **A missing attachment entry.** The decrypted item list is the only source of attachment metadata. An attachment that is missing from an otherwise intact list entry stays undetected. Every result without a reference inventory lists this limit.
-- **Items the item list does not show.** Such items are reported as unverified, because their attachments are unknown. A default listing leaves out archived items, so the listing of archived items has to be included.
+- **A missing attachment entry.** The decrypted item lists are the only source of attachment metadata. An attachment that is missing from an otherwise intact list entry stays undetected. Every result without a reference inventory lists this limit.
+- **Items that neither item list shows.** Such items are reported as unverified, because their attachments are unknown.
+- **Archived items of an account that may not archive.** According to the code of `bw` 2026.10.1, `bw` ignores `--archived` without an error when the account has no premium, personal or through an organization, and returns the default list again. Archived items of such an account are in neither list and stay unverified. The result then carries a warning that the archive filter did not apply. This case was not observed with a real account, see the [code notes of 16 November 2026](../research/bw-cli-code-notes-2026-11-16.md).
+- **The trash.** Items in the trash are in no captured document: both item lists and both exports leave them out. They are not backed up, and the verification does not see them. Backing up the trash is a [non-goal](../product/non-goals.md). This also comes from reading the code of `bw` 2026.10.1 and was not observed at run time.
 - **Completeness against the server.** "Verified" covers the personal items in the local snapshot that the CLI exported during the capture. An omission in a step that both exports share, and items that the CLI leaves out of every document, stay invisible. Every result states this scope and lists it as a limit.
 
 Organization items are not checked. They are counted per organization and reported as a warning.
@@ -39,6 +44,15 @@ It does not show:
 - **Origin.** Anyone who knows a recipient key can create an archive that passes. See [security](security.md).
 - **That the documents import elsewhere.** The plaintext export is stored as `bw` wrote it. Whether another program imports it is not tested.
 - **The state of other generations.** Each generation is checked on its own.
+
+## Using bw
+
+The program starts the official `bw` program. The handling of it is tested against a stand-in for `bw`, and without a login against `bw` 2026.10.1 on Linux. The points below come from reading the code of `bw` 2026.10.1 and from runs without a login, see the [code notes](../research/bw-cli-code-notes-2026-11-15.md).
+
+- **One device entry per run.** Each run uses a fresh CLI profile, and each fresh profile registers as a new device. The server keeps one device entry per run with a successful login. In a manual exercise against Vaultwarden, runs whose login failed left no visible entry. `bw` offers no command that removes it, and the logout does not remove it. Whether Bitwarden Cloud limits device entries, throttles repeated logins or sends a message for each new device is unknown.
+- **Contact with Bitwarden Cloud also for a self-hosted server.** The first start of a fresh profile requests configuration from `https://api.bitwarden.com`, before the server address of your own server is set. This request carries no account data. It cannot be avoided with the public commands of `bw`.
+- **Attachments of personal items may need premium.** According to the code of `bw` 2026.10.1, downloading an attachment of a personal item requires a premium account. This was not observed at run time. Such a download is reported as failed, and the capture is never judged more favorably because of it.
+- **No proxy support yet.** Proxy variables of your environment are not passed to `bw`, so `bw` connects without a proxy. `bw` itself reads only the lowercase `http_proxy` and `https_proxy`. How a proxy is configured is decided together with the configuration format.
 
 ## Storage Guarantees
 

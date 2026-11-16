@@ -56,6 +56,14 @@ const (
 	// ItemOrganizationMismatch: both exports hold the item as a personal
 	// item, but the item list shows it as an organization item.
 	ItemOrganizationMismatch Reason = "item_organization_mismatch"
+	// ListedItemDiffersBetweenLists: the default and the archived item list
+	// show the same item ID with a different organization ID or a
+	// different set of attachment IDs.
+	ListedItemDiffersBetweenLists Reason = "listed_item_differs_between_lists"
+	// ArchiveFilterNotApplied: at least one item ID is in both item lists,
+	// so the CLI did not apply --archived. A warning with the number of
+	// shared item IDs.
+	ArchiveFilterNotApplied Reason = "archive_filter_not_applied"
 )
 
 // Reason codes for passkeys.
@@ -106,7 +114,7 @@ const (
 	// with an authoritative server inventory. An omission in a step that
 	// all documents share stays invisible.
 	LimitServerCompleteness Limit = "server_completeness_not_checked"
-	// LimitAttachmentInventory: the item list is the only source of
+	// LimitAttachmentInventory: the two item lists are the only source of
 	// attachment metadata. An attachment missing from an otherwise intact
 	// list entry stays undetected.
 	LimitAttachmentInventory Limit = "attachment_inventory_single_source"
@@ -184,6 +192,7 @@ func Reasons() []Reason {
 		ItemMissingFromEncryptedExport, ItemFormatUnrecognized,
 		ListedItemMissingFromExport, ExportedItemNotListed,
 		OrganizationItemsExcluded, ItemOrganizationMismatch,
+		ListedItemDiffersBetweenLists, ArchiveFilterNotApplied,
 		PasskeyCountMismatch, PasskeyCountUnverifiable, PasskeyFieldMissing,
 		PasskeyFieldInvalid, PasskeyKeyInvalid, PasskeyKeyFormUnknown,
 		PasskeyCounterInvalid,

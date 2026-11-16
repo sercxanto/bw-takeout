@@ -66,7 +66,7 @@ The verify command SHALL refuse a generation that carries the partial marker or 
 - **THEN** it fails and reports the generation as incomplete
 
 ### Requirement: Unsafe or unknown archive structure is rejected
-The verify command SHALL accept only regular file entries with the names the format defines. Any other entry type, an unexpected name, a duplicate entry, recovery instructions that are not the first entry, a manifest that is not the last entry and an unknown format version SHALL each make the verification fail.
+The verify command SHALL accept only regular file entries with the names the format defines. Any other entry type, an unexpected name, a duplicate entry, recovery instructions that are not the first entry, a manifest that is not the last entry, a missing required entry and an unknown format version SHALL each make the verification fail. Required are the recovery instructions, both exports and both item lists.
 
 #### Scenario: Symbolic link entry
 - **WHEN** an archive contains a symbolic link entry
@@ -79,6 +79,10 @@ The verify command SHALL accept only regular file entries with the names the for
 #### Scenario: Newer format version
 - **WHEN** the manifest states a format version the command does not know
 - **THEN** the verification fails and states that the version is not supported
+
+#### Scenario: Archive without the archived item list
+- **WHEN** an otherwise consistent archive holds no archived item list and its manifest lists none
+- **THEN** the verification fails and names the missing entry
 
 ### Requirement: The stored verdict is reported
 The verify command SHALL print the creation time, the source server and account, the number of items and attachments, and the stored verdict with the number of findings and warnings. Its exit status SHALL distinguish an intact generation with a verified capture, an intact generation with an unverified capture, and a failed verification.

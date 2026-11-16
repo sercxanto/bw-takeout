@@ -235,7 +235,7 @@ func compare(m *manifest.Manifest, seen map[string]seenEntry, order []string) er
 	if _, present := seen[RecoveryPath]; present && order[0] != RecoveryPath {
 		problems = append(problems, &EntryError{Path: RecoveryPath, Problem: ProblemNotFirst})
 	}
-	for _, name := range []string{RecoveryPath, PlaintextExportPath, EncryptedExportPath, ItemListPath} {
+	for _, name := range []string{RecoveryPath, PlaintextExportPath, EncryptedExportPath, ItemListPath, ArchivedItemListPath} {
 		if _, present := seen[name]; !listed[name] && !present {
 			problems = append(problems, &EntryError{Path: name, Problem: ProblemRequired})
 		}

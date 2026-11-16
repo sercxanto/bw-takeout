@@ -16,18 +16,25 @@ import (
 //	- path   path exists only in a
 //	+ path   path exists only in b
 //
-// A path starts with "plaintext", "encrypted" or "list". Object keys follow
+// A path starts with "plaintext", "encrypted", "list" or "archived" (the
+// archived item list). Object keys follow
 // after a slash. Array elements that all carry a distinct "id" are addressed
 // as [id], all other array elements by index. A subtree that exists on one
 // side only is reported once, at its root. Changed attachment contents and a
 // changed reference inventory are reported as "~ attachments" and
-// "~ reference".
+// "~ reference", a changed byte override of the archived item list as
+// "~ archived-bytes".
 func Diff(t testing.TB, a, b *Fixture) []string {
 	t.Helper()
 	var out []string
 	diffTree("plaintext", normalize(t, a.PlaintextExport), normalize(t, b.PlaintextExport), &out)
 	diffTree("encrypted", normalize(t, a.EncryptedExport), normalize(t, b.EncryptedExport), &out)
 	diffTree("list", normalize(t, a.ItemList), normalize(t, b.ItemList), &out)
+	diffTree("archived", normalize(t, a.ArchivedItemList), normalize(t, b.ArchivedItemList), &out)
+	if (a.ArchivedItemListBytes == nil) != (b.ArchivedItemListBytes == nil) ||
+		!bytes.Equal(a.ArchivedItemListBytes, b.ArchivedItemListBytes) {
+		out = append(out, "~ archived-bytes")
+	}
 	if !reflect.DeepEqual(a.Attachments, b.Attachments) {
 		out = append(out, "~ attachments")
 	}

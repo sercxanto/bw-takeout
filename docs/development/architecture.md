@@ -2,11 +2,11 @@
 
 The fixed integration boundary is the unmodified official bw CLI. Decisions and their status are in the [decision index](../decisions/README.md).
 
-**Everything on this page is planned, except where a status says otherwise.** The code that exists is the Go module with the packages `internal/capture` and `internal/verify` from the archived change `capture-verification`, and the packages `internal/manifest`, `internal/archive` and `internal/publish` and the command `cmd/bw-takeout` with its single subcommand `verify` from the change `archive-generation`. The component model and the roadmap come from the explore session of 13 November 2026 and may change with each later change.
+**Everything on this page is planned, except where a status says otherwise.** The code that exists is the Go module with the packages `internal/capture` and `internal/verify` from the archived change `capture-verification`, the packages `internal/manifest`, `internal/archive` and `internal/publish` and the command `cmd/bw-takeout` with its single subcommand `verify` from the change `archive-generation`, and the packages `internal/bwcli`, `internal/profile` and `internal/vaultid` with the development tool `internal/tools/loginprobe` from the change `bw-process-adapter`. The change `archived-item-list` extended `internal/capture`, `internal/verify` and `internal/archive` to a second item list. The component model and the roadmap come from the explore session of 13 November 2026 and may change with each later change.
 
 ## Planned flow
 
-Interactive profile → sync and inventory → JSON exports and individual attachment downloads → verification result → encrypted archive → published generation. The last two steps exist and are tested with synthetic captures. Personal and organization views are handled separately.
+Interactive profile → sync and inventory → JSON exports and individual attachment downloads → verification result → encrypted archive → published generation. The last two steps exist and are tested with synthetic captures. Starting `bw`, the interactive login, the single commands of the second and third steps and the profile exist and are tested against a fake `bw`. Collecting a capture from them does not exist yet. Personal and organization views are handled separately.
 
 ## Rules
 
@@ -19,12 +19,12 @@ Interactive profile → sync and inventory → JSON exports and individual attac
 
 | Component | Responsibility | Status |
 |---|---|---|
-| `bwcli` | Start `bw`, clean the environment, check version and hash, pass the session to child processes only, collect stdout, classify errors | planned |
-| `profile` | Own CLI data directory per run, detect leftovers of earlier runs, teardown | planned |
-| `capture` | Capture model and parsers. Later: collect the documents and attachments and compare before and after | model and parsers implemented, collection planned |
-| `verify` | Turn a capture into a verdict with reasons per ID | implemented |
+| `bwcli` | Start `bw`, build the child environment from an allowlist, report the version and the SHA-256 of the executable without judging them ([ADR 0007](../decisions/0007-bw-versions.md)), pass the session key to child processes only, collect stdout in memory, count decryption error lines, classify failures without CLI text, run the interactive login | implemented, tested against a fake `bw` in the dev container and in CI on Linux, macOS and Windows, login exercised by hand against Vaultwarden on Linux and macOS |
+| `profile` | Own CLI data directory per run, list leftovers of earlier runs without removing them, teardown also when the logout fails | implemented, tested in the dev container and in CI on Linux, macOS and Windows. A fresh profile per run is a maintainer decision for the prototype (15 November 2026) |
+| `capture` | Capture model and parsers for four documents, with the default and the archived item list as separate documents. Later: collect the documents and attachments (change B) | model and parsers implemented, collection planned |
+| `verify` | Turn a capture into a verdict with reasons per ID, over the combined listing of both item lists | implemented |
 | `manifest` | Format version, creation time, source, versions, entry sizes and hashes, embedded verification result | implemented |
-| `archive` | Write and read the age-encrypted tar stream, recovery instructions, recipient and identity parsing | implemented |
+| `archive` | Write and read the age-encrypted tar stream with four captured documents, recovery instructions, recipient and identity parsing | implemented |
 | `publish` | Create a new partial generation directory exclusively, flush, publish by verdict without replacing, list leftovers | implemented, tested on Linux only |
 | `report` | User output with redaction, exit codes | planned. The `verify` command prints its own redacted output and exit codes |
 | `run` | Order of phases and teardown, also on abort | planned |
@@ -32,17 +32,32 @@ Interactive profile → sync and inventory → JSON exports and individual attac
 ## Roadmap
 
 1. `capture-verification`: verdict rules over a captured inventory. Done, archived on 14 November 2026. The agreed behavior is in `openspec/specs/capture-verification/`.
-2. `archive-generation`: container, encryption, manifest, exclusive publishing and an offline verify command. Implemented, review and archiving pending.
-3. `bw-process-adapter`: `bwcli` and `profile` against a fake `bw`, plus unauthenticated tests with the real binary. Findings of the [Vaultwarden live probe](../research/vaultwarden-live-probe-2026-11-14.md) to account for:
-   - bw refuses servers without HTTPS. A self-signed server certificate needs `NODE_EXTRA_CA_CERTS` passed through to the child process (report, method "TLS").
-   - `bw login --raw` without any terminal exited with code 0 and empty stdout. The adapter must validate the form of the session key instead of trusting the exit code (report, result 1).
-   - On a decryption failure bw wrote error lines to stderr while exiting with 0. They name neither item nor field. They are usable as an additional warning signal, not as a classification (report, result 6).
-   - The capture must merge `list items` with `list items --archived`, because the default list leaves archived items out while both exports keep them (report, added case "archived item").
-4. `interactive-backup-run`: login, sync freshness, capture, teardown and user documentation. This completes the first prototype.
-5. Later: platform hardening, configuration and multiple accounts, organizations, release, then batch operation and a KDBX derivative.
+2. `archive-generation`: container, encryption, manifest, exclusive publishing and an offline verify command. Done, archived on 14 November 2026. The agreed behavior is in `openspec/specs/backup-archive/`, `openspec/specs/generation-publishing/` and `openspec/specs/offline-verification/`.
+3. `bw-process-adapter`: `bwcli` and `profile` against a fake `bw`, unauthenticated tests with the real binary and a manual login exercise against Vaultwarden on Linux and macOS. Done, archived on 15 November 2026. The agreed behavior is in `openspec/specs/bw-invocation/` and `openspec/specs/bw-profile/`. Results are in the [code notes](../research/bw-cli-code-notes-2026-11-15.md) and the [login exercise](../research/login-exercise-2026-11-15.md).
+4. The former item `interactive-backup-run` was split into four changes in the explore session of 16 November 2026. Together they complete the first prototype. B builds on the model of A. B, C and D are not created yet, because their open questions are not settled.
+   - **A. `archived-item-list`**: the capture holds the default and the archived item list as two documents, the verification treats them as one listing and reports an archive filter that did not apply, and the archive stores the fourth document `documents/items.archived.json`. Done, archived on 16 November 2026. The agreed behavior is in `openspec/specs/capture-verification/`, `openspec/specs/backup-archive/` and `openspec/specs/offline-verification/`. This takes the obligation that the capture must include `list items --archived`, because the default list leaves archived items out while both exports keep them ([live probe](../research/vaultwarden-live-probe-2026-11-14.md), added case "archived item"; [code notes of 16 November 2026](../research/bw-cli-code-notes-2026-11-16.md)).
+   - **B. `capture-collection`**: collect a capture through `bwcli`: sync, freshness rule, documents, attachments streamed one at a time into the archive writer, mapping of failure classes to download results, source for the manifest. Tested against the fake `bw`. It must account for:
+     - The freshness rule: `lastSync` must be later than the start of the run before the capture. The login ignores a failed sync, so a session key alone does not show that the local state is current.
+     - What a premium failure of an attachment download means for the verdict. It must never be more lenient than any other failed download. A premium failure stays a failed download.
+     - Plaintext in memory: keep the number of plaintext copies small and their lifetime short, one attachment at a time and nothing held longer than the step that needs it. `capture.Download` carries only hash and size, and the archive writer takes attachments one at a time, so no design change is needed for this.
+     - Before and after: question the planned comparison of the inventory before and after the capture. The profile belongs to the run, and after the one sync every command reads local state. If `export` and `list` start no sync, the freshness rule is enough. This has to be checked against the code of `bw`.
+     - Open questions: whether a stale `lastSync` aborts the run or lowers the verdict, what happens with the count of decryption error lines that `bwcli` reports and `verify` cannot receive, and how the `bwcli` failure classes map to the three download error classes.
+   - **C. `interactive-backup-run`**: the `backup` command, order of phases, the login, teardown and logout on abort, report and exit codes, user documentation. Tested against the fake `bw` and by hand against Vaultwarden. It must account for:
+     - Teardown on abort of the whole run, with a logout after every login attempt, also a failed one, because `bw` can be logged in although the client refused its session key (review of 15 November 2026).
+     - Memory hardening: disable core dumps for the run. On Unix the limit is inherited by the `bw` processes. The way on Windows is open. Document swap, hibernation and core dumps as residual risk in `docs/user/security.md`, with the advice to use encrypted swap or an encrypted disk, and correct rule 3 above, which says that plaintext never exists as a file.
+     - The next live run should include an archived item with an attachment, which was not observed yet.
+   - **D. FAT and exFAT run**: the run of `publish` on a FAT or exFAT target that was deferred from `archive-generation`, see [testing](testing.md). Independent of `bw`.
+5. Follow-ups recorded by `bw-process-adapter`, not yet ordered:
+   - A separate explore session on an automated Vaultwarden test setup, including account creation without a person.
+   - A small change that reports export fields unknown to this project at run time.
+   - Reusing one profile across runs in a logged-out state, so that the server keeps one device entry. To be looked at before a first release.
+   - Comparing passkey counters with an earlier generation. Reading an earlier generation needs an identity, which ADR 0003 keeps off the backing-up system, so this fits an offline comparison of two generations.
+6. Later: platform hardening, configuration and multiple accounts, organizations, release, then batch operation and a KDBX derivative. Platform hardening starts with locking memory: it does not reach the `bw` processes, common limits are smaller than a vault with attachments, and Go gives little control over copies on the heap, so an experiment per platform comes first.
+
+Not planned at all: capturing the trash, which is a [non-goal](../product/non-goals.md) of the product. Both personal exports and both item lists leave deleted items out, so items in the trash are not backed up (maintainer decision, 16 November 2026, see [limitations](../user/limitations.md)).
 
 The live probe against a disposable Vaultwarden instance ran outside this sequence on 13 and 14 November 2026. Its results are in the [live probe report](../research/vaultwarden-live-probe-2026-11-14.md).
 
 ## Expected decisions
 
-The change `capture-verification` added the proposed [ADR 0004](../decisions/0004-completeness-verdict.md) on the completeness verdict and its scope claim, and the change `archive-generation` the proposed [ADR 0005](../decisions/0005-archive-format.md) on archive format and generation layout. Further ADRs are expected along the roadmap: the plaintext and secret boundary, and how `bw` versions are qualified. The ADRs on Go and age stay proposed until their open points are tested. The [decision index](../decisions/README.md) lists what exists.
+The change `capture-verification` added the proposed [ADR 0004](../decisions/0004-completeness-verdict.md) on the completeness verdict and its scope claim, and the change `archive-generation` the proposed [ADR 0005](../decisions/0005-archive-format.md) on archive format and generation layout. The change `bw-process-adapter` added the proposed [ADR 0006](../decisions/0006-secret-boundary.md) on the secret boundary around the `bw` process and the proposed [ADR 0007](../decisions/0007-bw-versions.md) on the handling of `bw` versions. The ADRs on Go and age stay proposed until their open points are tested. ADR 0002 on Go now has evidence for Linux and macOS, and Windows is open. The [decision index](../decisions/README.md) lists what exists.
