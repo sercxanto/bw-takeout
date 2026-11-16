@@ -42,7 +42,7 @@
 - [x] 6.1 Run `gofmt -l .`, `go vet ./...`, `go test ./...` and the key-material search from `docs/development/testing.md` in the dev container; verify all pass, the search prints nothing, and record the run with date, platform, Go version, skipped tests and the evidence level mock in `docs/development/testing.md`
 - [x] 6.2 Compare each requirement and scenario of the three delta specs with the behavior of the code; verify by listing every deviation in the task result, or stating that there is none
 - [x] 6.3 Run `openspec validate archived-item-list --strict`; verify it passes
-- [ ] 6.4 Record the CI run on Linux, macOS and Windows with its skip report as the test strategy describes; verify the run is linked in `docs/development/testing.md` and `.github/expected-skips.txt` matches
+- [x] 6.4 Record the CI run on Linux, macOS and Windows with its skip report as the test strategy describes; verify the run is linked in `docs/development/testing.md` and `.github/expected-skips.txt` matches
 
 ## Workflow follow-up
 

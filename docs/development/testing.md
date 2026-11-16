@@ -384,7 +384,7 @@ Not run in the dev container: the tests on macOS, Windows and Linux amd64, which
 
 In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3 and OpenSpec 2.0.0: `gofmt -l .` printed nothing, `go vet ./...` passed, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed in all packages with only expected skips, and `go test -race ./...` passed. The skips were `TestLeaveGenerationForOfflineExercise`, `TestKillHelper` and the five `TestRealBW…` tests, each with its reason. `TestRecoveryWithStandardTools` ran with the `age` and `tar` commands and unpacked the four documents byte for byte. `GOOS=darwin` and `GOOS=windows` `go vet ./...` passed. The key-material search printed nothing. Evidence level: mock.
 
-Not run in the dev container: the tests on macOS, Windows and Linux amd64; any test with a real capture, an account that may not archive, the trash, or an archived item with an attachment.
+Not run in the dev container: the tests on macOS, Windows and Linux amd64, which ran in CI afterwards, see [CI run of archived-item-list](#ci-run-of-16-november-2026-archived-item-list); any test with a real capture, an account that may not archive, the trash, or an archived item with an attachment.
 
 ## Skip Report
 
@@ -422,6 +422,12 @@ The run before it, on the commit `2ff6abb`, passed on Linux and failed in two te
 Both failures were reproduced in the dev container with `TMPDIR` on a symbolic link into the case-insensitive bind mount of the macOS host. The fixed tests and the whole suite with the skip report passed there.
 
 Evidence level: mock, on three platforms, against the fake `bw`. Runner image versions and durations were not recorded. The interactive login is not covered by CI. It was exercised by hand on Linux and macOS, see the [login exercise](#login-exercise-of-15-november-2026).
+
+## CI Run of 16 November 2026, archived-item-list
+
+The workflow ran on the branch `archived-item-list` after the commit `0c78002`. The maintainer reports that it passed on all three platforms, `ubuntu-24.04`, `macos-26` and `windows-2025`. The skip report passed on each runner, so every skip was one that `.github/expected-skips.txt` allows. The change added no skip, and the file was not changed. `TestRecoveryWithStandardTools` is not on the list, so it ran on every runner with the four documents of the new layout.
+
+Evidence level: mock, on three platforms. Runner image versions and durations were not recorded. No test ran against a real capture, an account that may not archive, the trash or an archived item with an attachment.
 
 ## Offline Exercise of 15 November 2026
 
