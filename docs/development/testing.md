@@ -429,6 +429,8 @@ The workflow ran on the branch `archived-item-list` after the commit `0c78002`. 
 
 Evidence level: mock, on three platforms. Runner image versions and durations were not recorded. No test ran against a real capture, an account that may not archive, the trash or an archived item with an attachment.
 
+After this run the workflow was split to save runner minutes: `ci.yml` keeps the test matrix and runs only on changes to Go code, the module files, the list of expected skips or itself, and on pushes to `main` only; the new `checks.yml` runs formatting, module tidiness and the key-material search on every change. The first run after the split failed in `TestWorkflowStructure`, which still expected the checks in `ci.yml`. The test now covers both workflows and the path filters. After the commit `005b30f` the maintainer started both workflows by hand on the branch, and both passed.
+
 ## Offline Exercise of 15 November 2026
 
 The maintainer opened a synthetic generation on macOS 26.7.3 on Apple Silicon, following a checklist that repeats the steps of the [recovery page](../user/recovery.md). The generation was left by `TestLeaveGenerationForOfflineExercise` in the dev container, encrypted to a key pair made only for this exercise. `bw-takeout` was built for darwin/arm64 from commit `8b353f4`, and age v1.2.1 for darwin/arm64 from the pinned module. Both were copied with the generation into a folder outside the project. The identity was kept in a separate folder outside the project and outside that folder.
