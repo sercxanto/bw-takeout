@@ -22,13 +22,13 @@ Bitwarden Cloud with an account is untested for every version.
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on GitHub Actions. Every input is pinned, and the pins are reviewed together with the pins above when they are updated:
+`.github/workflows/ci.yml` and `.github/workflows/checks.yml` run on GitHub Actions. `ci.yml` holds the test matrix and runs only on changes to Go code, the module files, the list of expected skips or itself, to save runner minutes. `checks.yml` holds the checks that cover every file and runs on every change. Every input is pinned, and the pins are reviewed together with the pins above when they are updated:
 
 | Input | Pin | Where |
 |---|---|---|
 | `actions/checkout` | `v7.0.1`, commit `3d3c42e5aac5ba805825da76410c181273ba90b1` | `uses:` with the tag as comment |
 | `actions/setup-go` | `v7.0.0`, commit `b7ad1dad31e06c5925ef5d2fc7ad053ef454303e` | `uses:` with the tag as comment |
-| Runner images | `ubuntu-24.04`, `macos-26`, `windows-2025` | matrix of the job `test`, and `runs-on` of the job `checks` |
+| Runner images | `ubuntu-24.04`, `macos-26`, `windows-2025` | matrix of the job `test` in `ci.yml`, and `runs-on` of the job `checks` in `checks.yml` |
 | Go | the version in `go.mod`, through `go-version-file` | `setup-go` with `check-latest: false` |
 | age CLI | `filippo.io/age/cmd/age@v1.2.1` | `go install`, the same version as the Dockerfile and `go.mod` |
 

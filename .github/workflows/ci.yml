@@ -3,9 +3,28 @@ name: CI
 # Every input is pinned: actions by commit SHA, runner images by versioned
 # label, Go by go.mod, age by module version. See docs/development/integrations.md.
 
+# The test matrix runs only when Go code, the module files, the list of
+# expected skips or this workflow change. Pushes trigger it on main only, so
+# a branch with an open pull request runs once. workflow_dispatch runs it on
+# any branch and ignores the path filter. The checks that cover every file,
+# such as the key-material search, are in checks.yml.
 on:
   push:
+    branches: [main]
+    paths:
+      - "**.go"
+      - go.mod
+      - go.sum
+      - .github/workflows/ci.yml
+      - .github/expected-skips.txt
   pull_request:
+    # Keep this list equal to the one under push.
+    paths:
+      - "**.go"
+      - go.mod
+      - go.sum
+      - .github/workflows/ci.yml
+      - .github/expected-skips.txt
   workflow_dispatch:
 
 permissions:
@@ -62,38 +81,3 @@ jobs:
           CGO_ENABLED: "1"
         run: go test -count=1 -race ./...
 
-  checks:
-    name: checks (ubuntu-24.04)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          check-latest: false
-          cache: false
-
-      - name: Format
-        run: |
-          files="$(gofmt -l .)"
-          if [ -n "$files" ]; then
-            echo "These files are not formatted:"
-            echo "$files"
-            exit 1
-          fi
-
-      - name: Module tidiness
-        run: go mod tidy -diff
-
-      - name: Key material
-        run: |
-          if git grep --untracked -I -E 'BEGIN [A-Z ]*PRIVATE KEY|MIGHAgEAMBMGByqGSM49|MC4CAQAwBQYDK2Vw|AGE-SECRET-KEY-1' -- . ':!docs/development/testing.md' ':!.github/workflows/ci.yml'; then
-            echo "Key material found in the repository."
-            exit 1
-          fi

@@ -30,7 +30,7 @@ Each of them contacts Bitwarden Cloud once with an anonymous configuration reque
 
 ## CI results
 
-Once the repository is on GitHub, every push and pull request runs the workflow `CI` on Linux amd64, macOS arm64 and Windows amd64. Open the run under the **Actions** tab. The job `test` has one run per platform. Its summary lists every skipped test with its reason, and the run fails on a skip that is not expected for that platform, see the [skip report](testing.md#skip-report) and the [test strategy](testing.md). The pins of the workflow are in [integrations](integrations.md#continuous-integration).
+Once the repository is on GitHub, the workflow `CI` runs the tests on Linux amd64, macOS arm64 and Windows amd64 for a pull request and a push to `main`, but only when Go code, `go.mod`, `go.sum`, `.github/expected-skips.txt` or the workflow itself changed. The workflow `Checks` runs formatting, module tidiness and the key-material search on one Linux runner for every pull request and push to `main`, whatever changed. To test a branch without a pull request, start `CI` by hand with **Run workflow**, which ignores the path filter. Open the run under the **Actions** tab. The job `test` has one run per platform. Its summary lists every skipped test with its reason, and the run fails on a skip that is not expected for that platform, see the [skip report](testing.md#skip-report) and the [test strategy](testing.md). The pins of the workflow are in [integrations](integrations.md#continuous-integration).
 
 ## Building and running the command
 
