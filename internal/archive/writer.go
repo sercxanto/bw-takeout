@@ -17,12 +17,19 @@ import (
 	"bw-takeout/internal/manifest"
 )
 
-// Documents are the three captured documents, byte for byte as captured.
+// Documents are the four captured documents, byte for byte as captured.
+// Each is required. An empty archived item list is the two bytes "[]".
 type Documents struct {
-	PlaintextExport []byte
-	EncryptedExport []byte
-	ItemList        []byte
+	PlaintextExport  []byte
+	EncryptedExport  []byte
+	ItemList         []byte
+	ArchivedItemList []byte
 }
+
+// ErrDocumentAbsent is wrapped by the refusal of a captured document that
+// has no bytes. The error names the entry the document would have, never
+// content.
+var ErrDocumentAbsent = errors.New("captured document is absent")
 
 // Attachment is one downloaded attachment.
 type Attachment struct {
@@ -64,13 +71,28 @@ type Writer struct {
 	done    bool
 }
 
-// NewWriter checks the recipients, starts the encryption, and writes the
-// recovery instructions and the three documents. Without a valid recipient
-// it fails before writing anything to dst.
+// NewWriter checks the recipients and the documents, starts the
+// encryption, and writes the recovery instructions and the four documents.
+// Without a valid recipient, or with a zero-length document, it fails
+// before writing anything to dst.
 func NewWriter(dst io.Writer, recipients []string, created time.Time, docs Documents) (*Writer, error) {
 	rs, err := ParseRecipients(recipients)
 	if err != nil {
 		return nil, err
+	}
+	documents := []struct {
+		path    string
+		content []byte
+	}{
+		{PlaintextExportPath, docs.PlaintextExport},
+		{EncryptedExportPath, docs.EncryptedExport},
+		{ItemListPath, docs.ItemList},
+		{ArchivedItemListPath, docs.ArchivedItemList},
+	}
+	for _, d := range documents {
+		if len(d.content) == 0 {
+			return nil, fmt.Errorf("%w: %s", ErrDocumentAbsent, d.path)
+		}
 	}
 	plain, err := capture.ParsePlaintextExport(docs.PlaintextExport)
 	if err != nil {
@@ -87,17 +109,11 @@ func NewWriter(dst io.Writer, recipients []string, created time.Time, docs Docum
 		items:   len(plain.Items),
 		seen:    map[string]bool{},
 	}
-	for _, e := range []struct {
-		path    string
-		kind    manifest.Kind
-		content []byte
-	}{
-		{RecoveryPath, manifest.KindRecovery, []byte(RecoveryText)},
-		{PlaintextExportPath, manifest.KindDocument, docs.PlaintextExport},
-		{EncryptedExportPath, manifest.KindDocument, docs.EncryptedExport},
-		{ItemListPath, manifest.KindDocument, docs.ItemList},
-	} {
-		if err := w.entry(manifest.Entry{Path: e.path, Kind: e.kind}, e.content); err != nil {
+	if err := w.entry(manifest.Entry{Path: RecoveryPath, Kind: manifest.KindRecovery}, []byte(RecoveryText)); err != nil {
+		return nil, err
+	}
+	for _, d := range documents {
+		if err := w.entry(manifest.Entry{Path: d.path, Kind: manifest.KindDocument}, d.content); err != nil {
 			return nil, err
 		}
 	}

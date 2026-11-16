@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"sort"
 	"strings"
 	"testing"
@@ -36,18 +37,24 @@ func TestVariantsDifferOnlyInTheIntendedPlace(t *testing.T) {
 			changed.PlaintextExportJSON(t)
 			changed.EncryptedExportJSON(t)
 			changed.ItemListJSON(t)
+			changed.ArchivedItemListJSON(t)
 		})
 	}
 }
 
 // The variants cover every failure case that task 2.3 of the change
-// capture-verification names.
+// capture-verification and design D7 of the change archived-item-list
+// name.
 func TestVariantsCoverTheNamedCases(t *testing.T) {
 	want := []string{
 		MissingItem, DuplicateID, OnePasskeyMissing, AllPasskeysDropped,
 		BlobLoginItem, UnrecognizedItemForm, EmptyKey, UnparsableKey,
 		NonNumericCounter, UnknownKeyAlgorithm, SwappedCredential,
 		OrganizationItems, ListedItemNotExported, ExportedItemNotListed,
+		ArchiveFilterIgnored, ArchiveFilterIgnoredNoArchivedItem,
+		ListsDisagreeOnAttachments, ListsDisagreeOnOrganization,
+		ArchivedListDuplicateID, ArchivedListInvalidJSON, ArchivedListAbsent,
+		ArchivedAttachmentDownloadMissing,
 	}
 	seen := map[string]bool{}
 	for _, v := range Variants() {
@@ -224,6 +231,85 @@ func TestVariantContent(t *testing.T) {
 		}
 		if org, ok := item["organizationId"].(string); ok {
 			t.Errorf("extra item belongs to organization %s, want a personal item", org)
+		}
+	})
+}
+
+// The variants of the change archived-item-list hold what they claim.
+func TestArchivedVariantContent(t *testing.T) {
+	build := func(name string) *Fixture { return VariantByName(t, name).Build(t) }
+	ids := func(items []any) []string {
+		var out []string
+		for _, raw := range items {
+			out = append(out, raw.(map[string]any)["id"].(string))
+		}
+		return out
+	}
+	hasAttachmentOf := func(f *Fixture, itemID string) bool {
+		for _, a := range f.Attachments {
+			if a.ItemID == itemID {
+				return true
+			}
+		}
+		return false
+	}
+
+	for _, name := range []string{ArchiveFilterIgnored, ArchiveFilterIgnoredNoArchivedItem} {
+		t.Run(name, func(t *testing.T) {
+			f := build(name)
+			if got, want := strings.Join(ids(f.ArchivedItemList), ","), strings.Join(ids(f.ItemList), ","); got != want {
+				t.Errorf("archived list %s, want the default list %s", got, want)
+			}
+			if hasAttachmentOf(f, ItemArchivedLogin) {
+				t.Error("a download exists for the attachment of the archived item")
+			}
+			inExport := itemByID(f.PlaintextItems(), ItemArchivedLogin) != nil
+			if inExport != (name == ArchiveFilterIgnored) {
+				t.Errorf("archived item in the plaintext export: %v", inExport)
+			}
+		})
+	}
+
+	t.Run(ListsDisagreeOnAttachments, func(t *testing.T) {
+		f := build(ListsDisagreeOnAttachments)
+		def := itemByID(f.ItemList, ItemPasskeyLogin)["attachments"].([]any)
+		arc := itemByID(f.ArchivedItemList, ItemPasskeyLogin)["attachments"].([]any)
+		if len(def) != 2 || len(arc) != 1 {
+			t.Errorf("attachments %d in the default and %d in the archived list, want 2 and 1", len(def), len(arc))
+		}
+	})
+
+	t.Run(ListsDisagreeOnOrganization, func(t *testing.T) {
+		f := build(ListsDisagreeOnOrganization)
+		if org := itemByID(f.ItemList, ItemNote)["organizationId"]; org != nil {
+			t.Errorf("default list shows the note in organization %v", org)
+		}
+		if org := itemByID(f.ArchivedItemList, ItemNote)["organizationId"]; org != OrganizationFirst {
+			t.Errorf("archived list shows the note in organization %v", org)
+		}
+	})
+
+	t.Run(ArchivedListInvalidJSON, func(t *testing.T) {
+		raw := build(ArchivedListInvalidJSON).ArchivedItemListJSON(t)
+		var v any
+		if len(raw) == 0 || json.Unmarshal(raw, &v) == nil {
+			t.Errorf("archived list %q, want non-empty invalid JSON", raw)
+		}
+	})
+
+	t.Run(ArchivedListAbsent, func(t *testing.T) {
+		if raw := build(ArchivedListAbsent).ArchivedItemListJSON(t); len(raw) != 0 {
+			t.Errorf("archived list %q, want zero bytes", raw)
+		}
+	})
+
+	t.Run(ArchivedAttachmentDownloadMissing, func(t *testing.T) {
+		f := build(ArchivedAttachmentDownloadMissing)
+		if hasAttachmentOf(f, ItemArchivedLogin) {
+			t.Error("a download exists for the attachment of the archived item")
+		}
+		if itemByID(f.ArchivedItemList, ItemArchivedLogin) == nil {
+			t.Error("archived list lost the archived item")
 		}
 	})
 }

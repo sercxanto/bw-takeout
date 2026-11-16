@@ -6,32 +6,35 @@ Further cases: stale local state, a restricted organization role, interrupted en
 
 ## Synthetic Capture Fixtures
 
-The package `internal/capture/capturetest` builds one capture of a personal vault in memory: the plaintext export, the account-bound encrypted export, the item list and the content of each attachment. The tests read no file and start no process.
+The package `internal/capture/capturetest` builds one capture of a personal vault in memory: the plaintext export, the account-bound encrypted export, the default item list, the archived item list and the content of each attachment. The tests read no file and start no process.
 
 **Evidence level: mock.** The document shapes were derived from the source of `bitwarden/clients` at commit `91214c3b978edb5496a32a946451960fe7d44531` (CLI 2026.10.1) and compared with the installed 2026.10.1 bundle. The fixtures are not taken from a live capture, and no test runs against one. The package documentation of `internal/capture` lists every recognized field with a link to its source, and it names what the code does not settle, for example whether an empty key is left out or written as null. The legacy shapes of the account-bound encrypted export, the plaintext export and the item list match the [Vaultwarden live probe of 14 November 2026](../research/vaultwarden-live-probe-2026-11-14.md), by comparison of the report with the parser; blob items, Bitwarden Cloud and partial items remain unconfirmed.
 
-The intact fixture holds three personal items:
+The intact fixture holds four personal items:
 
 - a login with two passkeys (counters 0 and 6) and two attachments that share one file name and differ in ID and content,
 - a login without passkeys, in a folder, with its empty optional keys written as null,
-- a secure note.
+- a secure note,
+- an archived login with one attachment. Both exports hold it with an archive date, and only the archived item list shows it. Its attachment is in the reference inventory.
+
+The first three items are in the default item list. Every test therefore runs with two non-empty lists.
 
 Rules the fixtures follow:
 
-- Passkey keys are generated with the Go standard library on every test run. The repository contains no key material. Search for it with `git grep --untracked -I -E 'BEGIN [A-Z ]*PRIVATE KEY|MIGHAgEAMBMGByqGSM49|MC4CAQAwBQYDK2Vw|AGE-SECRET-KEY-1' -- . ':!docs/development/testing.md'`. The two base64 patterns are the fixed first bytes of a P-256 and an Ed25519 key in PKCS#8. This page is excluded because it names the patterns. The search printed nothing on 13 November 2026.
+- Passkey keys are generated with the Go standard library on every test run. The repository contains no key material. Search for it with `git grep --untracked -I -E 'BEGIN [A-Z ]*PRIVATE KEY|MIGHAgEAMBMGByqGSM49|MC4CAQAwBQYDK2Vw|AGE-SECRET-KEY-1' -- . ':!docs/development/testing.md' ':!.github/workflows/ci.yml'`. The two base64 patterns are the fixed first bytes of a P-256 and an Ed25519 key in PKCS#8. This page and the CI workflow are excluded because they name the patterns; the CI workflow runs the same search. The search printed nothing on 13 November 2026.
 - Every sensitive field of the decrypted documents carries a value that contains the word `sentinel`. Key value, credential ID and user handle have a fixed format and are tracked by value instead. `Fixture.Sensitive` returns all of them, the encrypted placeholder strings and the attachment contents, so that a test can search a result for leaks.
 - Encrypted fields are opaque placeholders in the CLI's encrypted-string notation. They are not ciphertext.
 - The fixture records a reference inventory outside the documents: credential ID, key fingerprint and counter per passkey, and a content hash per attachment. A variant that changes a document leaves the reference untouched.
 
-Fourteen variants each break the intact fixture in one place: missing item, duplicate ID, one passkey missing, all passkeys dropped, blob login item, unrecognized item form, empty key, unparsable key, non-numeric counter, unknown key algorithm, swapped credential with equal count, organization items, listed item not exported, exported item not listed. Every variant declares the places it changes, and a test compares that list with the actual difference to the intact fixture. The plaintext export and the item list render the same decrypted view, so a variant that changes decrypted content changes both.
+Twenty-two variants each break the intact fixture in one place: missing item, duplicate ID, one passkey missing, all passkeys dropped, blob login item, unrecognized item form, empty key, unparsable key, non-numeric counter, unknown key algorithm, swapped credential with equal count, organization items, listed item not exported, exported item not listed (removed from both lists), and the eight variants of the change archived-item-list: archive filter ignored with the archived item in neither list, archive filter ignored in a vault without archived items, an item in both lists with different attachment IDs, an item in both lists with a different organization, a duplicate ID within the archived list, an archived list that is not valid JSON, an absent archived list, and a missing download for the attachment of the archived item. The last two document variants replace the rendered archived list with a byte override. Every variant declares the places it changes, and a test compares that list with the actual difference to the intact fixture. The plaintext export and the item lists render the same decrypted view, so a variant that changes decrypted content changes both.
 
 ## Verification Tests
 
-`internal/capture` tests the parsers: format recognition, rejected document forms and duplicate detection. `internal/verify` tests the verdict rules. Each test of a spec scenario carries the scenario's name, for example `TestOneDownloadFails`. The cross-cutting tests run every fixture variant and every additional failure case, with and without the reference inventory, and check that the serialized result contains no sensitive value, that every finding carries a severity, a known reason code and the IDs it refers to, and that two runs produce byte-identical output.
+`internal/capture` tests the parsers: format recognition, rejected document forms, duplicate detection, and the archived item list as a document of its own. `internal/verify` tests the verdict rules. Each test of a spec scenario carries the scenario's name, for example `TestOneDownloadFails`. The cross-cutting tests run every fixture variant and every additional failure case, with and without the reference inventory, and check that the serialized result contains no sensitive value, that every finding carries a severity, a known reason code and the IDs it refers to, and that two runs produce byte-identical output.
 
 ### Spec Scenario Coverage
 
-Every scenario of the capture-verification spec has one test of the same name in `internal/verify`. The mapping was checked on 14 November 2026, again after the review decisions of the same day, and is complete. Parser cases are tested in addition in `internal/capture/parse_test.go`.
+Every scenario of the capture-verification spec has one test of the same name in `internal/verify`. The mapping was checked on 14 November 2026, again after the review decisions of the same day, and is complete. The rows of the three requirements of the change archived-item-list were added and checked with `go test -list` on 16 November 2026. `TestArchiveFilterWarningLeavesTheVerdict` checks in addition that the filter warning leaves a failed, an unverified and a verified verdict unchanged. Parser cases are tested in addition in `internal/capture/parse_test.go`.
 
 | Requirement | Scenario | Test |
 |---|---|---|
@@ -68,6 +71,18 @@ Every scenario of the capture-verification spec has one test of the same name in
 | | Download result for an organization attachment | `TestDownloadResultForAnOrganizationAttachment` |
 | Attributable findings | Finding for a missing passkey | `TestFindingForAMissingPasskey` |
 | No secrets in results | Failing capture with sensitive content | `TestFailingCaptureWithSensitiveContent` |
+| Default and archived item lists form one listing | Archived item with an attachment | `TestArchivedItemWithAnAttachment` |
+| | Archived item in neither list | `TestArchivedItemInNeitherList` |
+| | Download missing for an archived item | `TestDownloadMissingForAnArchivedItem` |
+| | Duplicate ID within the archived item list | `TestDuplicateIDWithinTheArchivedItemList` |
+| | Archived item list cannot be parsed | `TestArchivedItemListCannotBeParsed` (invalid and absent) |
+| | Organization item in both lists | `TestOrganizationItemInBothLists` |
+| Item shown by both lists must agree | Same item with the same attachments | `TestSameItemWithTheSameAttachments`, order in `TestSameAttachmentsInADifferentOrder` |
+| | Same item with different attachments | `TestSameItemWithDifferentAttachments` |
+| | Same item with a different organization | `TestSameItemWithADifferentOrganization` |
+| Archive filter that did not apply is reported | Archived list repeats the default list | `TestArchivedListRepeatsTheDefaultList` |
+| | Disjoint lists | `TestDisjointLists` |
+| | Both lists empty | `TestBothListsEmpty` |
 
 ## Test Run of 14 November 2026
 
@@ -97,7 +112,7 @@ Copy the generation and the identity to the second system separately and follow 
 
 ### Spec Scenario Coverage of archive-generation
 
-Every scenario of the three specs of the change archive-generation has at least one test. The mapping was checked on 14 November 2026 and is complete.
+Every scenario of the three specs of the change archive-generation has at least one test. The mapping was checked on 14 November 2026 and is complete. The change archived-item-list added the rows for `documents/items.archived.json` and checked them with `go test -list` on 16 November 2026.
 
 | Spec | Scenario | Test |
 |---|---|---|
@@ -107,6 +122,9 @@ Every scenario of the three specs of the change archive-generation has at least 
 | | No recipient | `archive.TestRecipients`, `main.TestEndToEnd/no_recipient` |
 | | Unsupported recipient | `archive.TestRecipients` |
 | | Plaintext export round trip | `archive.TestRoundTripIntactFixture` |
+| | Both item lists round trip | `archive.TestBothItemListsRoundTrip` |
+| | Empty archived item list | `archive.TestEmptyArchivedItemList` |
+| | Archived item list absent | `archive.TestArchivedItemListAbsent` (also each of the other three documents) |
 | | Two attachments with the same file name | `archive.TestTwoAttachmentsWithTheSameFileName` |
 | | ID with a path separator | `archive.TestIDValidation`, `main.TestEndToEnd/attachment_ID_with_a_path_separator` |
 | | Attachment ID that is not a UUID | `archive.TestRoundTripIntactFixture`, `archive.TestIDValidation` |
@@ -130,9 +148,9 @@ Every scenario of the three specs of the change archive-generation has at least 
 | | Permissions on Linux | `publish.TestPermissionsOnLinux` |
 | offline-verification | System without bw | `main.TestSystemWithoutBW`, `main.TestNoNetworkOrProcessPackage` |
 | | Intact generation | `main.TestVerifiedCapture`, `main.TestEndToEnd` |
-| | Entry differs from the manifest | `archive.TestReaderScenarios/entry_differs_from_the_manifest`, `main.TestFailedVerification/damaged_entry` |
-| | Entry not listed | `archive.TestReaderScenarios/entry_not_listed` |
-| | Listed entry missing | `archive.TestReaderScenarios/listed_entry_missing` |
+| | Entry differs from the manifest | `archive.TestReaderScenarios/entry_differs_from_the_manifest`, `archive.TestReaderScenariosForTheArchivedItemList`, `main.TestFailedVerification/damaged_entry` |
+| | Entry not listed | `archive.TestReaderScenarios/entry_not_listed`, `archive.TestReaderScenariosForTheArchivedItemList` |
+| | Listed entry missing | `archive.TestReaderScenarios/listed_entry_missing`, `archive.TestReaderScenariosForTheArchivedItemList` |
 | | Item count differs from the export | `archive.TestReaderScenarios/item_count_differs_from_the_export` |
 | | Truncated archive file | `archive.TestTruncatedArchive`, `main.TestFailedVerification/truncated_archive` |
 | | Altered byte | `archive.TestAlteredByte`, `main.TestFailedVerification/altered_byte` |
@@ -142,6 +160,7 @@ Every scenario of the three specs of the change archive-generation has at least 
 | | Symbolic link entry | `archive.TestReaderScenarios/symbolic_link_entry` |
 | | Recovery instructions not first | `archive.TestReaderScenarios/recovery_instructions_not_first` |
 | | Newer format version | `archive.TestReaderScenarios/newer_format_version`, `main.TestFailedVerification/newer_format_version` |
+| | Archive without the archived item list | `archive.TestArchiveWithoutTheArchivedItemList` |
 | | Verified capture | `main.TestVerifiedCapture` |
 | | Unverified capture | `main.TestUnverifiedCapture` |
 | | Failed verification | `main.TestFailedVerification` |
@@ -360,6 +379,12 @@ Every scenario of the two specs of the change bw-process-adapter has one test of
 In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3 and OpenSpec 2.0.0: `gofmt -l .` printed nothing, `go vet ./...` passed, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed in all packages with only expected skips, and `go test -race ./...` passed. The skips were `TestLeaveGenerationForOfflineExercise`, `TestKillHelper` and the five `TestRealBW…` tests, each with its reason. `GOOS=darwin` and `GOOS=windows` builds and `go vet` passed for `./...`. Evidence level: mock, against the fake `bw`.
 
 Not run in the dev container: the tests on macOS, Windows and Linux amd64, which ran in CI afterwards, see [CI run of bw-process-adapter](#ci-run-of-15-november-2026-bw-process-adapter); the `TestRealBW…` tests in this run, which ran separately on the same day (see above); any automated test with a login; Bitwarden Cloud.
+
+### Test Run of 16 November 2026, archived-item-list
+
+In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3 and OpenSpec 2.0.0: `gofmt -l .` printed nothing, `go vet ./...` passed, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed in all packages with only expected skips, and `go test -race ./...` passed. The skips were `TestLeaveGenerationForOfflineExercise`, `TestKillHelper` and the five `TestRealBW…` tests, each with its reason. `TestRecoveryWithStandardTools` ran with the `age` and `tar` commands and unpacked the four documents byte for byte. `GOOS=darwin` and `GOOS=windows` `go vet ./...` passed. The key-material search printed nothing. Evidence level: mock.
+
+Not run in the dev container: the tests on macOS, Windows and Linux amd64; any test with a real capture, an account that may not archive, the trash, or an archived item with an attachment.
 
 ## Skip Report
 

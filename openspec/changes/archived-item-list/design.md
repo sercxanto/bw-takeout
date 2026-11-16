@@ -55,6 +55,7 @@ An absent archived list is a zero-length input. The parser rejects it as it reje
 - Duplicates within one list stay a failed finding with the reason `duplicate_item_id` or `duplicate_attachment_id`, with the document set to that list.
 - An ID in both lists is not a duplicate. It enters the index once, from the default list.
 - The warning `organization_items_excluded` counts an organization item of both lists once.
+- A finding that refers to the combined listing names no document, because it refers to two: `exported_item_not_listed` (the item is in neither list) and `organization_items_excluded` (the count spans both lists). Until this change both named `item_list`. A finding about one entry names the list the entry came from, for example `item_organization_mismatch` (maintainer decision, 16 November 2026).
 - When either list was rejected, the checks that need the listing are skipped as they are today for a rejected item list. The document finding already makes the verdict failed.
 
 *Alternative: run every rule once per list.* Rejected. An archived item would be reported as "exported item not listed" by the pass over the default list, and each such finding would then need an exception.

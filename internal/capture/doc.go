@@ -31,7 +31,8 @@
 //   - the item list with the attachment keys id, fileName, size, sizeName
 //     and url, where size is the encrypted size (results 2 and 3),
 //   - that the default item list leaves archived items out while both
-//     exports keep them (added case "archived item").
+//     exports keep them, and that the archived item list shows them (added
+//     case "archived item").
 //
 // Still unconfirmed: the blob form, any capture from Bitwarden Cloud,
 // partial items, and whether a JSON key is absent or null in a real
@@ -191,14 +192,35 @@
 // ([getAllDecrypted]). Without options the list leaves out deleted and
 // archived items and items of a restricted item type, and it includes
 // organization items. With --archived it shows only archived items
-// ([matchesStateOptions]). When the account cannot archive, the CLI ignores
-// --archived, so archived items of such an account appear in no listing. The
-// exports do not filter archived items, so a default listing is not
-// comparable to the exports when the vault holds archived items. The live
-// run observed this difference. An account that cannot archive was not
-// tested. The caller supplies one list that merges the default and the
-// --archived listing (design D8). The verification reports every exported
-// item that this list lacks as unverified.
+// ([matchesStateOptions]). The exports do not filter archived items, so a
+// default listing alone is not comparable to the exports when the vault
+// holds archived items.
+//
+// # Archived item list
+//
+// Produced by "bw list items --archived". It has the same form as the item
+// list and is parsed by the same rules. It is a document of its own, named
+// archived_item_list, and is never merged with the default list, so that a
+// rejection or a duplicate names the list it occurred in (design D1 of the
+// change archived-item-list). An absent archived list is a zero-length input
+// and is rejected as invalid JSON. An empty list is the two bytes "[]".
+//
+// Observed live (report above, added case "archived item"): the default list
+// left one archived login out, both exports kept it, and the --archived list
+// showed only that login. The login had no attachments.
+//
+// From code reading of the bundle only, recorded in
+// docs/research/bw-cli-code-notes-2026-11-16.md:
+//
+//   - For an account without premium from any source, the CLI drops
+//     --archived before filtering and returns the default list again,
+//     without an error. Archived items of such an account appear in neither
+//     list, while both exports still hold them.
+//   - Items in the trash are in no captured document: both lists leave them
+//     out, and both personal exports filter deleted items.
+//
+// Not observed live: an account that may not archive, the trash, and an
+// archived item with an attachment.
 //
 // # Attachment download
 //

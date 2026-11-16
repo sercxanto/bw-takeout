@@ -28,8 +28,11 @@ const (
 	PlaintextExportPath = "documents/export.json"
 	EncryptedExportPath = "documents/export.encrypted.json"
 	ItemListPath        = "documents/items.json"
-	ManifestPath        = "manifest.json"
-	attachmentsDir      = "attachments/"
+	// ArchivedItemListPath holds the output of "bw list items --archived"
+	// (design D5 of archived-item-list).
+	ArchivedItemListPath = "documents/items.archived.json"
+	ManifestPath         = "manifest.json"
+	attachmentsDir       = "attachments/"
 )
 
 // AttachmentPath returns the entry name of one attachment. It does not
@@ -52,7 +55,7 @@ func kindOf(name string) (kind manifest.Kind, itemID, attachmentID string, ok bo
 	switch name {
 	case RecoveryPath:
 		return manifest.KindRecovery, "", "", true
-	case PlaintextExportPath, EncryptedExportPath, ItemListPath:
+	case PlaintextExportPath, EncryptedExportPath, ItemListPath, ArchivedItemListPath:
 		return manifest.KindDocument, "", "", true
 	}
 	rest, found := strings.CutPrefix(name, attachmentsDir)

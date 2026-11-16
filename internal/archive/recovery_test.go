@@ -59,10 +59,11 @@ func TestRecoveryWithStandardTools(t *testing.T) {
 
 	docs := archivetest.Documents(t, f)
 	want := map[string][]byte{
-		archive.RecoveryPath:        []byte(archive.RecoveryText),
-		archive.PlaintextExportPath: docs.PlaintextExport,
-		archive.EncryptedExportPath: docs.EncryptedExport,
-		archive.ItemListPath:        docs.ItemList,
+		archive.RecoveryPath:         []byte(archive.RecoveryText),
+		archive.PlaintextExportPath:  docs.PlaintextExport,
+		archive.EncryptedExportPath:  docs.EncryptedExport,
+		archive.ItemListPath:         docs.ItemList,
+		archive.ArchivedItemListPath: docs.ArchivedItemList,
 	}
 	for _, a := range f.Attachments {
 		want[archive.AttachmentPath(a.ItemID, a.AttachmentID)] = a.Content

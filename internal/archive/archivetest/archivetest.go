@@ -43,9 +43,10 @@ func Documents(t testing.TB, f *capturetest.Fixture) archive.Documents {
 	t.Helper()
 	in := f.Input(t)
 	return archive.Documents{
-		PlaintextExport: in.PlaintextExport,
-		EncryptedExport: in.EncryptedExport,
-		ItemList:        in.ItemList,
+		PlaintextExport:  in.PlaintextExport,
+		EncryptedExport:  in.EncryptedExport,
+		ItemList:         in.ItemList,
+		ArchivedItemList: in.ArchivedItemList,
 	}
 }
 

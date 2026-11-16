@@ -6,20 +6,25 @@ A successful CLI export can deliver decryptable partial inventories while items 
 
 Every capture is judged failed, unverified or verified ([ADR 0004](../decisions/0004-completeness-verdict.md)). The verification is planned and not yet part of a usable tool. Its rules are tested with synthetic data only. No live capture backs them yet.
 
+The verification reads two item lists: the default list of `bw list items` and the list of archived items from `bw list items --archived`. It treats them as one listing. An item that both lists show is accepted when both entries name the same attachments and the same organization.
+
 It detects:
 
 - an item that is in the encrypted export but missing from the plaintext export, and the reverse,
 - a passkey missing from an item whose passkey count the encrypted export shows,
 - a passkey with a missing field, an empty or unparsable key, or a counter that is not a non-negative number,
-- an attachment that failed to download, has no download result, or has a result that the item list does not explain,
-- a personal item that the item list shows and the plaintext export lacks.
+- an attachment that failed to download, has no download result, or has a result that the item lists do not explain,
+- a personal item that one of the item lists shows and the plaintext export lacks,
+- an item that both item lists show with different attachments or a different organization.
 
 It cannot detect:
 
 - **Missing passkeys in blob-format items.** The encrypted export seals the content of such items, so their passkey count is not visible. A blob login item is reported as unverified, never as "no passkeys".
 - **A swapped passkey or a wrong key without a reference.** If a passkey is replaced by another valid passkey, or a key is well-formed but wrong, the counts and the structure still match. Every result without a reference inventory lists credential identity and attachment content as not checked.
-- **A missing attachment entry.** The decrypted item list is the only source of attachment metadata. An attachment that is missing from an otherwise intact list entry stays undetected. Every result without a reference inventory lists this limit.
-- **Items the item list does not show.** Such items are reported as unverified, because their attachments are unknown. A default listing leaves out archived items, so the listing of archived items has to be included.
+- **A missing attachment entry.** The decrypted item lists are the only source of attachment metadata. An attachment that is missing from an otherwise intact list entry stays undetected. Every result without a reference inventory lists this limit.
+- **Items that neither item list shows.** Such items are reported as unverified, because their attachments are unknown.
+- **Archived items of an account that may not archive.** According to the code of `bw` 2026.10.1, `bw` ignores `--archived` without an error when the account has no premium, personal or through an organization, and returns the default list again. Archived items of such an account are in neither list and stay unverified. The result then carries a warning that the archive filter did not apply. This case was not observed with a real account, see the [code notes of 16 November 2026](../research/bw-cli-code-notes-2026-11-16.md).
+- **The trash.** Items in the trash are in no captured document: both item lists and both exports leave them out. They are not backed up, and the verification does not see them. Backing up the trash is a [non-goal](../product/non-goals.md). This also comes from reading the code of `bw` 2026.10.1 and was not observed at run time.
 - **Completeness against the server.** "Verified" covers the personal items in the local snapshot that the CLI exported during the capture. An omission in a step that both exports share, and items that the CLI leaves out of every document, stay invisible. Every result states this scope and lists it as a limit.
 
 Organization items are not checked. They are counted per organization and reported as a warning.

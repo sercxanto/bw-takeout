@@ -48,8 +48,8 @@ func TestIntactDocumentForms(t *testing.T) {
 	if plaintext["encrypted"] != false {
 		t.Errorf("plaintext export: encrypted = %v, want false", plaintext["encrypted"])
 	}
-	if got := len(plaintext["items"].([]any)); got != 3 {
-		t.Errorf("plaintext export: %d items, want 3", got)
+	if got := len(plaintext["items"].([]any)); got != 4 {
+		t.Errorf("plaintext export: %d items, want 4", got)
 	}
 
 	encrypted := decode(t, f.EncryptedExportJSON(t)).(map[string]any)
@@ -64,8 +64,8 @@ func TestIntactDocumentForms(t *testing.T) {
 			t.Errorf("encrypted export: has %q, which only the password-protected form has", key)
 		}
 	}
-	if got := len(encrypted["items"].([]any)); got != 3 {
-		t.Errorf("encrypted export: %d items, want 3", got)
+	if got := len(encrypted["items"].([]any)); got != 4 {
+		t.Errorf("encrypted export: %d items, want 4", got)
 	}
 
 	list, ok := decode(t, f.ItemListJSON(t)).([]any)
@@ -79,6 +79,66 @@ func TestIntactDocumentForms(t *testing.T) {
 		if raw.(map[string]any)["object"] != "item" {
 			t.Errorf("item list: element without object \"item\"")
 		}
+	}
+
+	archived, ok := decode(t, f.ArchivedItemListJSON(t)).([]any)
+	if !ok {
+		t.Fatal("archived item list is not a bare array")
+	}
+	if len(archived) != 1 || archived[0].(map[string]any)["id"] != ItemArchivedLogin {
+		t.Errorf("archived item list: %v, want only the archived login", archived)
+	}
+}
+
+// The archived login is in both exports with an archive date, only in the
+// archived item list, and its attachment is in the reference inventory.
+func TestIntactArchivedItem(t *testing.T) {
+	f := Intact(t)
+	for name, items := range map[string][]any{
+		"plaintext export": f.PlaintextItems(), "encrypted export": f.EncryptedItems(), "archived list": f.ArchivedItemList,
+	} {
+		item := itemByID(items, ItemArchivedLogin)
+		if item == nil {
+			t.Errorf("%s lacks the archived item", name)
+			continue
+		}
+		if date, _ := item["archivedDate"].(string); date == "" {
+			t.Errorf("%s: archived item has no archive date", name)
+		}
+	}
+	for _, raw := range f.PlaintextItems() {
+		if item := raw.(map[string]any); item["id"] != ItemArchivedLogin && item["archivedDate"] != nil {
+			t.Errorf("item %s carries an archive date", item["id"])
+		}
+	}
+	if itemByID(f.ItemList, ItemArchivedLogin) != nil {
+		t.Error("default item list shows the archived item")
+	}
+	attachments := itemByID(f.ArchivedItemList, ItemArchivedLogin)["attachments"].([]any)
+	if len(attachments) != 1 || attachments[0].(map[string]any)["id"] != AttachmentArchived {
+		t.Errorf("archived item attachments = %v", attachments)
+	}
+	var ref *ReferenceItem
+	for i := range f.Reference.Items {
+		if f.Reference.Items[i].ItemID == ItemArchivedLogin {
+			ref = &f.Reference.Items[i]
+		}
+	}
+	if ref == nil || len(ref.Attachments) != 1 || ref.Attachments[0].AttachmentID != AttachmentArchived {
+		t.Fatalf("reference of the archived item = %+v", ref)
+	}
+	found := false
+	for _, a := range f.Attachments {
+		if a.ItemID == ItemArchivedLogin && a.AttachmentID == AttachmentArchived {
+			found = true
+			sum := sha256.Sum256(a.Content)
+			if ref.Attachments[0].SHA256 != hex.EncodeToString(sum[:]) {
+				t.Error("reference does not match the content of the archived attachment")
+			}
+		}
+	}
+	if !found {
+		t.Error("no content for the archived attachment")
 	}
 }
 
@@ -173,14 +233,14 @@ func TestIntactAttachments(t *testing.T) {
 		t.Error("attachment size is not a string")
 	}
 
-	if len(f.Attachments) != 2 {
-		t.Fatalf("%d attachment contents, want 2", len(f.Attachments))
+	if len(f.Attachments) != 3 {
+		t.Fatalf("%d attachment contents, want 3", len(f.Attachments))
 	}
 	if string(f.Attachments[0].Content) == string(f.Attachments[1].Content) {
 		t.Error("both attachments hold the same content")
 	}
 	ref := f.Reference.Items[0].Attachments
-	for i, a := range f.Attachments {
+	for i, a := range f.Attachments[:2] {
 		if a.ItemID != ItemPasskeyLogin {
 			t.Errorf("attachment %d belongs to %s", i, a.ItemID)
 		}
@@ -234,6 +294,9 @@ func TestSentinelInEverySensitiveField(t *testing.T) {
 		sentinel("passkey-login-password"),
 		sentinel("note-notes"),
 		string(f.Attachments[0].Content),
+		sentinel("archived-login-password"),
+		sentinel("archived-login-notes"),
+		string(f.Attachments[2].Content),
 		passkeysOf(t, f.PlaintextItems(), ItemPasskeyLogin)[1]["keyValue"].(string),
 		credentialID(2),
 	}
@@ -250,7 +313,8 @@ func TestSentinelInEverySensitiveField(t *testing.T) {
 	}
 	// IDs identify findings and must stay out of the list.
 	for _, s := range sensitive {
-		for _, id := range []string{ItemPasskeyLogin, ItemPlainLogin, ItemNote, AttachmentFirst, AttachmentSecond, FolderID} {
+		for _, id := range []string{ItemPasskeyLogin, ItemPlainLogin, ItemNote, ItemArchivedLogin,
+			AttachmentFirst, AttachmentSecond, AttachmentArchived, FolderID} {
 			if s == id {
 				t.Errorf("Sensitive() contains the ID %s", id)
 			}
@@ -293,5 +357,23 @@ func TestFixturesDifferOnlyInKeys(t *testing.T) {
 	sort.Strings(want)
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("diff between two fresh fixtures:\n got %v\nwant %v", got, want)
+	}
+}
+
+// A byte override survives a clone, and an absent list stays absent
+// instead of turning into a rendered empty array.
+func TestCloneKeepsArchivedListBytes(t *testing.T) {
+	f := Intact(t)
+	base := f.Clone()
+	f.ArchivedItemListBytes = []byte{}
+	c := f.Clone()
+	if c.ArchivedItemListBytes == nil || len(c.ArchivedItemListJSON(t)) != 0 {
+		t.Errorf("clone renders %q, want an absent list", c.ArchivedItemListJSON(t))
+	}
+	if d := Diff(t, f, c); len(d) != 0 {
+		t.Errorf("clone differs from its source: %v", d)
+	}
+	if d := Diff(t, base, f); strings.Join(d, "\n") != "~ archived-bytes" {
+		t.Errorf("diff = %v, want the byte override", d)
 	}
 }

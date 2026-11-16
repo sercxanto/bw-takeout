@@ -33,6 +33,24 @@ func TestSerializationIsDeterministic(t *testing.T) {
 	}
 }
 
+// Every fixture run, with and without the reference inventory, serializes
+// byte-identically on a second run.
+func TestEveryRunSerializesDeterministically(t *testing.T) {
+	for _, fr := range fixtureRuns() {
+		t.Run(fr.name, func(t *testing.T) {
+			f, in := fr.build(t)
+			for _, withReference := range []bool{false, true} {
+				first := dump(t, runInput(t, f, in, withReference))
+				for i := 0; i < 5; i++ {
+					if again := dump(t, runInput(t, f, in, withReference)); again != first {
+						t.Fatalf("reference %v, run %d differs:\n%s\n---\n%s", withReference, i, first, again)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestSerializationSortsFindings(t *testing.T) {
 	two := 2
 	r := &verify.Result{
@@ -161,9 +179,11 @@ var reasonNeeds = map[verify.Reason]needs{
 	verify.ItemMissingFromEncryptedExport:  {document: true, item: true},
 	verify.ItemFormatUnrecognized:          {document: true, item: true},
 	verify.ListedItemMissingFromExport:     {document: true, item: true},
-	verify.ExportedItemNotListed:           {document: true, item: true},
-	verify.OrganizationItemsExcluded:       {document: true, counts: true},
+	verify.ExportedItemNotListed:           {item: true},
+	verify.OrganizationItemsExcluded:       {counts: true},
 	verify.ItemOrganizationMismatch:        {document: true, item: true},
+	verify.ListedItemDiffersBetweenLists:   {item: true},
+	verify.ArchiveFilterNotApplied:         {counts: true},
 	verify.AttachmentDownloadOutOfScope:    {document: true, item: true, attachment: true},
 	verify.PasskeyCountMismatch:            {item: true, counts: true},
 	verify.PasskeyCountUnverifiable:        {item: true},

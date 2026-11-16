@@ -13,7 +13,7 @@
 - An exported item that neither list shows stays unverified, as today.
 - **BREAKING** The archive holds a fourth document, `documents/items.archived.json`, stored byte for byte. It is mandatory. The format version stays 1 and is redefined, because no `backup` command exists and no generation was ever written outside the tests. Archives written by earlier test code are refused.
 - The recovery instructions inside the archive describe the fourth document.
-- The trash is recorded as a limitation. Both personal exports and the default list leave out deleted items. Capturing the trash is not planned for the prototype (maintainer decision, 16 November 2026).
+- The trash is recorded as a limitation. Both personal exports and the default list leave out deleted items. Capturing the trash is not planned at all, in line with the [non-goals](../../../docs/product/non-goals.md) (maintainer decision, 16 November 2026).
 
 Not part of this change: starting `bw`, collecting a capture, the `backup` command, and any check against `archivedDate` of the exports.
 

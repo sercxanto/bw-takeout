@@ -17,11 +17,12 @@ RECOVERY.txt
 documents/export.json
 documents/export.encrypted.json
 documents/items.json
+documents/items.archived.json
 attachments/<item-id>/<attachment-id>
 manifest.json
 ```
 
-The recovery instructions come first and hold no vault data. The three captured documents are stored byte for byte. Attachments are stored by item ID and attachment ID. Their file names appear only in the manifest, inside the encryption.
+The recovery instructions come first and hold no vault data. The four captured documents are stored byte for byte: the plaintext export, the account-bound encrypted export, the default item list and the archived item list. Each of them is required. The two item lists stay separate documents, because a merged list is a document `bw` never wrote. Attachments are stored by item ID and attachment ID. Their file names appear only in the manifest, inside the encryption.
 
 **Manifest last.** `manifest.json` is the last entry. It holds the format name `bw-takeout-generation` and version 1, the creation time, the source server and account, the tool and `bw` versions, the item and attachment counts, the verification result embedded byte for byte, and size and SHA-256 of every other entry. A reader refuses an unknown format version and ignores unknown additional keys.
 
@@ -43,6 +44,7 @@ The recovery instructions come first and hold no vault data. The three captured 
 - Attachment file names, item names and vault content are never visible outside the encryption. The directory name reveals the creation time.
 - A crash leaves a `.partial` directory with ciphertext only. It is reported and never removed automatically, because without a lock a dead run cannot be told from a running one.
 - The format version and the directory names become a promise. A new format version needs a reader that still opens version 1, and changing the names or markers needs a superseding ADR.
+- Format version 1 was redefined once, before any release: the change archived-item-list added `documents/items.archived.json` as a required entry without a new version, because no command wrote a generation yet and the only archives were built inside tests. Archives of the earlier three-document layout are refused. From the first release on, every layout change needs a new format version.
 - Directory flushing is not available on Windows, and FAT or exFAT give weak guarantees after a power loss. Offline verification detects the resulting damage but cannot prevent it.
 
 The rules in detail are in the design of the change archive-generation.

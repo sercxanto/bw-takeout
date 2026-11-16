@@ -21,6 +21,16 @@ const (
 	OrganizationItems     = "organization-items"
 	ListedItemNotExported = "listed-item-not-exported"
 	ExportedItemNotListed = "exported-item-not-listed"
+
+	// Variants of the change archived-item-list (design D7).
+	ArchiveFilterIgnored               = "archive-filter-ignored"
+	ArchiveFilterIgnoredNoArchivedItem = "archive-filter-ignored-no-archived-item"
+	ListsDisagreeOnAttachments         = "lists-disagree-on-attachments"
+	ListsDisagreeOnOrganization        = "lists-disagree-on-organization"
+	ArchivedListDuplicateID            = "archived-list-duplicate-id"
+	ArchivedListInvalidJSON            = "archived-list-invalid-json"
+	ArchivedListAbsent                 = "archived-list-absent"
+	ArchivedAttachmentDownloadMissing  = "archived-attachment-download-missing"
 )
 
 // IDs that only variants use.
@@ -117,7 +127,7 @@ func Variants() []Variant {
 		{
 			Name:    DuplicateID,
 			Models:  "The plaintext export contains the same item ID twice.",
-			Changes: []string{"+ plaintext/items/3"},
+			Changes: []string{"+ plaintext/items/4"},
 			apply: func(t testing.TB, f *Fixture) {
 				note := itemByID(f.PlaintextItems(), ItemNote)
 				f.PlaintextExport["items"] = append(f.PlaintextItems(), cloneTree(note))
@@ -247,13 +257,122 @@ func Variants() []Variant {
 		},
 		{
 			Name:    ExportedItemNotListed,
-			Models:  "Both exports contain an item that the item list does not show, as an archived item would be in a default listing.",
+			Models:  "Both exports contain an item that neither item list shows.",
 			Changes: []string{"- list[" + ItemPlainLogin + "]"},
 			apply: func(t testing.TB, f *Fixture) {
 				f.ItemList = withoutItem(f.ItemList, ItemPlainLogin)
+				f.ArchivedItemList = withoutItem(f.ArchivedItemList, ItemPlainLogin)
+			},
+		},
+		{
+			Name: ArchiveFilterIgnored,
+			Models: "The CLI ignored --archived and returned the default list again, so the archived item is in " +
+				"neither list and its attachment was never downloaded.",
+			Changes: append(repeatedDefaultList(), "- archived["+ItemArchivedLogin+"]", "~ attachments"),
+			apply: func(t testing.TB, f *Fixture) {
+				f.ArchivedItemList = cloneTree(f.ItemList).([]any)
+				f.Attachments = withoutAttachmentsOf(f.Attachments, ItemArchivedLogin)
+			},
+		},
+		{
+			Name:   ArchiveFilterIgnoredNoArchivedItem,
+			Models: "The CLI ignored --archived and returned the default list again, in a vault without archived items.",
+			Changes: append(repeatedDefaultList(),
+				"- archived["+ItemArchivedLogin+"]",
+				"- plaintext/items["+ItemArchivedLogin+"]",
+				"- encrypted/items["+ItemArchivedLogin+"]",
+				"~ attachments", "~ reference"),
+			apply: func(t testing.TB, f *Fixture) {
+				f.PlaintextExport["items"] = withoutItem(f.PlaintextItems(), ItemArchivedLogin)
+				f.EncryptedExport["items"] = withoutItem(f.EncryptedItems(), ItemArchivedLogin)
+				f.Attachments = withoutAttachmentsOf(f.Attachments, ItemArchivedLogin)
+				var kept []ReferenceItem
+				for _, item := range f.Reference.Items {
+					if item.ItemID != ItemArchivedLogin {
+						kept = append(kept, item)
+					}
+				}
+				f.Reference.Items = kept
+				f.ArchivedItemList = cloneTree(f.ItemList).([]any)
+			},
+		},
+		{
+			Name:    ListsDisagreeOnAttachments,
+			Models:  "Both lists show the passkey login, and the archived list names only one of its two attachments.",
+			Changes: []string{"+ archived[" + ItemPasskeyLogin + "]"},
+			apply: func(t testing.TB, f *Fixture) {
+				item := cloneTree(itemByID(f.ItemList, ItemPasskeyLogin)).(map[string]any)
+				item["attachments"] = item["attachments"].([]any)[:1]
+				f.ArchivedItemList = append(f.ArchivedItemList, item)
+			},
+		},
+		{
+			Name:    ListsDisagreeOnOrganization,
+			Models:  "Both lists show the secure note, the default list as a personal item and the archived list as an organization item.",
+			Changes: []string{"+ archived[" + ItemNote + "]"},
+			apply: func(t testing.TB, f *Fixture) {
+				item := cloneTree(itemByID(f.ItemList, ItemNote)).(map[string]any)
+				item["organizationId"] = OrganizationFirst
+				f.ArchivedItemList = append(f.ArchivedItemList, item)
+			},
+		},
+		{
+			Name:    ArchivedListDuplicateID,
+			Models:  "The archived item list contains the same item ID twice.",
+			Changes: []string{"+ archived/1"},
+			apply: func(t testing.TB, f *Fixture) {
+				item := itemByID(f.ArchivedItemList, ItemArchivedLogin)
+				f.ArchivedItemList = append(f.ArchivedItemList, cloneTree(item))
+			},
+		},
+		{
+			Name:    ArchivedListInvalidJSON,
+			Models:  "The archived item list was cut off and is not valid JSON.",
+			Changes: []string{"~ archived-bytes"},
+			apply: func(t testing.TB, f *Fixture) {
+				raw := render(t, f.ArchivedItemList, false)
+				f.ArchivedItemListBytes = raw[:len(raw)/2]
+			},
+		},
+		{
+			Name:    ArchivedListAbsent,
+			Models:  "The capture holds no archived item list.",
+			Changes: []string{"~ archived-bytes"},
+			apply: func(t testing.TB, f *Fixture) {
+				f.ArchivedItemListBytes = []byte{}
+			},
+		},
+		{
+			Name:    ArchivedAttachmentDownloadMissing,
+			Models:  "No download result exists for the attachment of the archived item.",
+			Changes: []string{"~ attachments"},
+			apply: func(t testing.TB, f *Fixture) {
+				f.Attachments = withoutAttachmentsOf(f.Attachments, ItemArchivedLogin)
 			},
 		},
 	}
+}
+
+// repeatedDefaultList lists the items of the default list that appear in
+// the archived list when the CLI returns the default list for --archived.
+func repeatedDefaultList() []string {
+	return []string{
+		"+ archived[" + ItemPasskeyLogin + "]",
+		"+ archived[" + ItemPlainLogin + "]",
+		"+ archived[" + ItemNote + "]",
+	}
+}
+
+// withoutAttachmentsOf returns the attachments that do not belong to the
+// item.
+func withoutAttachmentsOf(attachments []Attachment, itemID string) []Attachment {
+	var out []Attachment
+	for _, a := range attachments {
+		if a.ItemID != itemID {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // eachDecryptedLogin calls fn with the login object of the item in the

@@ -8,7 +8,9 @@ const (
 	PlaintextExportDocument Document = "plaintext_export"
 	EncryptedExportDocument Document = "encrypted_export"
 	ItemListDocument        Document = "item_list"
-	DownloadsDocument       Document = "downloads"
+	// ArchivedItemListDocument is the output of "bw list items --archived".
+	ArchivedItemListDocument Document = "archived_item_list"
+	DownloadsDocument        Document = "downloads"
 )
 
 // Format is the form in which the encrypted export shows an item (design
@@ -37,7 +39,11 @@ type Input struct {
 	PlaintextExport []byte
 	EncryptedExport []byte
 	ItemList        []byte
-	Downloads       []Download
+	// ArchivedItemList is the output of "bw list items --archived". An
+	// absent list is a zero-length input and is rejected like any other
+	// document that does not parse (design D1 of archived-item-list).
+	ArchivedItemList []byte
+	Downloads        []Download
 }
 
 // Capture is the parsed form of one capture. A document that was rejected
@@ -47,7 +53,9 @@ type Capture struct {
 	Plaintext *PlaintextExport
 	Encrypted *EncryptedExport
 	List      *ItemList
-	Downloads []Download
+	// ArchivedList is the parsed archived item list.
+	ArchivedList *ItemList
+	Downloads    []Download
 	// DuplicateDownloads lists every ID pair that has more than one
 	// download result, sorted.
 	DuplicateDownloads []AttachmentRef

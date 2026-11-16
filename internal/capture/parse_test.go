@@ -52,13 +52,14 @@ func TestParseIntact(t *testing.T) {
 		{ID: ct.ItemPasskeyLogin, Type: capture.TypeLogin, Format: capture.FormatLegacy, PasskeyCount: 2},
 		{ID: ct.ItemPlainLogin, Type: capture.TypeLogin, Format: capture.FormatLegacy, PasskeyCount: 0},
 		{ID: ct.ItemNote, Type: 2, Format: capture.FormatLegacy, PasskeyCount: 0},
+		{ID: ct.ItemArchivedLogin, Type: capture.TypeLogin, Format: capture.FormatLegacy, PasskeyCount: 0},
 	}
 	if !reflect.DeepEqual(c.Encrypted.Items, wantEncrypted) {
 		t.Errorf("encrypted items:\n got %+v\nwant %+v", c.Encrypted.Items, wantEncrypted)
 	}
 
-	if len(c.Plaintext.Items) != 3 {
-		t.Fatalf("plaintext export: %d items, want 3", len(c.Plaintext.Items))
+	if len(c.Plaintext.Items) != 4 {
+		t.Fatalf("plaintext export: %d items, want 4", len(c.Plaintext.Items))
 	}
 	passkeys := c.Plaintext.Items[0].Passkeys
 	if c.Plaintext.Items[0].ID != ct.ItemPasskeyLogin || len(passkeys) != 2 {
@@ -88,10 +89,16 @@ func TestParseIntact(t *testing.T) {
 	if !reflect.DeepEqual(c.List.Items, wantList) {
 		t.Errorf("listed items:\n got %+v\nwant %+v", c.List.Items, wantList)
 	}
-	if len(c.Downloads) != 2 || c.DuplicateDownloads != nil {
+	wantArchived := []capture.ListedItem{
+		{ID: ct.ItemArchivedLogin, AttachmentIDs: []string{ct.AttachmentArchived}},
+	}
+	if !reflect.DeepEqual(c.ArchivedList.Items, wantArchived) {
+		t.Errorf("archived listed items:\n got %+v\nwant %+v", c.ArchivedList.Items, wantArchived)
+	}
+	if len(c.Downloads) != 3 || c.DuplicateDownloads != nil {
 		t.Errorf("downloads %d, duplicates %v", len(c.Downloads), c.DuplicateDownloads)
 	}
-	for _, dup := range [][]string{c.Plaintext.DuplicateIDs, c.Encrypted.DuplicateIDs, c.List.DuplicateIDs} {
+	for _, dup := range [][]string{c.Plaintext.DuplicateIDs, c.Encrypted.DuplicateIDs, c.List.DuplicateIDs, c.ArchivedList.DuplicateIDs} {
 		if dup != nil {
 			t.Errorf("duplicates in the intact fixture: %v", dup)
 		}
@@ -289,7 +296,7 @@ func TestParseOptionalKeysAsNull(t *testing.T) {
 	base := mustParse(t, ct.Intact(t))
 
 	f := ct.Intact(t)
-	for _, items := range [][]any{f.PlaintextItems(), f.EncryptedItems(), f.ItemList} {
+	for _, items := range [][]any{f.PlaintextItems(), f.EncryptedItems(), f.ItemList, f.ArchivedItemList} {
 		for _, raw := range items {
 			item := raw.(map[string]any)
 			for _, key := range []string{"organizationId", "folderId", "deletedDate", "archivedDate", "data"} {
@@ -314,8 +321,9 @@ func TestParseOptionalKeysAsNull(t *testing.T) {
 	plainLogin["fido2Credentials"] = nil
 
 	got := mustParse(t, f)
-	if !reflect.DeepEqual(got.Encrypted, base.Encrypted) || !reflect.DeepEqual(got.List, base.List) {
-		t.Errorf("null keys changed the parsed encrypted export or item list")
+	if !reflect.DeepEqual(got.Encrypted, base.Encrypted) || !reflect.DeepEqual(got.List, base.List) ||
+		!reflect.DeepEqual(got.ArchivedList, base.ArchivedList) {
+		t.Errorf("null keys changed the parsed encrypted export or an item list")
 	}
 	if len(got.Plaintext.Items) != len(base.Plaintext.Items) {
 		t.Fatal("null keys changed the number of plaintext items")
@@ -380,6 +388,30 @@ func TestRejectWrongDocumentForms(t *testing.T) {
 			name:   "item list is not valid JSON",
 			change: func(t *testing.T, f *ct.Fixture, in *capture.Input) { in.ItemList = []byte(`[{"id":`) },
 			doc:    capture.ItemListDocument, problem: capture.ProblemInvalidJSON,
+		},
+		{
+			name:   "archived item list is not valid JSON",
+			change: func(t *testing.T, f *ct.Fixture, in *capture.Input) { in.ArchivedItemList = []byte(`[{"id":`) },
+			doc:    capture.ArchivedItemListDocument, problem: capture.ProblemInvalidJSON,
+		},
+		{
+			name:   "archived item list is absent",
+			change: func(t *testing.T, f *ct.Fixture, in *capture.Input) { in.ArchivedItemList = nil },
+			doc:    capture.ArchivedItemListDocument, problem: capture.ProblemInvalidJSON,
+		},
+		{
+			name: "archived item list wrapped in the BW_RESPONSE envelope",
+			change: func(t *testing.T, f *ct.Fixture, in *capture.Input) {
+				in.ArchivedItemList = []byte(`{"success":true,"data":{"object":"list","data":[]}}`)
+			},
+			doc: capture.ArchivedItemListDocument, problem: capture.ProblemResponseEnvelope,
+		},
+		{
+			name: "archived item without ID",
+			change: func(t *testing.T, f *ct.Fixture, in *capture.Input) {
+				in.ArchivedItemList = []byte(`[{"name":"x"}]`)
+			},
+			doc: capture.ArchivedItemListDocument, problem: capture.ProblemMalformedItem,
 		},
 		{
 			name: "plaintext export with trailing data",
@@ -505,6 +537,10 @@ func TestRejectWrongDocumentForms(t *testing.T) {
 				if c.List != nil {
 					t.Error("rejected item list is not nil")
 				}
+			case capture.ArchivedItemListDocument:
+				if c.ArchivedList != nil {
+					t.Error("rejected archived item list is not nil")
+				}
 			}
 		})
 	}
@@ -527,7 +563,7 @@ func TestDuplicateItemIDs(t *testing.T) {
 		if !reflect.DeepEqual(c.Plaintext.DuplicateIDs, []string{ct.ItemNote}) {
 			t.Errorf("duplicates = %v", c.Plaintext.DuplicateIDs)
 		}
-		if len(c.Plaintext.Items) != 4 {
+		if len(c.Plaintext.Items) != 5 {
 			t.Errorf("%d items, want the duplicate kept", len(c.Plaintext.Items))
 		}
 	})
@@ -574,6 +610,56 @@ func TestDuplicateAttachmentPairs(t *testing.T) {
 		want := []capture.AttachmentRef{{ItemID: ct.ItemPasskeyLogin, AttachmentID: ct.AttachmentFirst}}
 		if !reflect.DeepEqual(c.DuplicateDownloads, want) {
 			t.Errorf("duplicate downloads = %v", c.DuplicateDownloads)
+		}
+	})
+}
+
+// The archived item list is parsed by the same rules as the default list,
+// and every rejection names the archived list (design D1 of
+// archived-item-list).
+func TestParseArchivedItemList(t *testing.T) {
+	t.Run("valid archived list", func(t *testing.T) {
+		c := mustParse(t, ct.Intact(t))
+		if c.ArchivedList == nil || len(c.ArchivedList.Items) != 1 || c.ArchivedList.Items[0].ID != ct.ItemArchivedLogin {
+			t.Errorf("archived list = %+v", c.ArchivedList)
+		}
+		for _, item := range c.List.Items {
+			if item.ID == ct.ItemArchivedLogin {
+				t.Error("default list holds the archived item")
+			}
+		}
+	})
+	t.Run("empty list", func(t *testing.T) {
+		list, err := capture.ParseArchivedItemList([]byte(`[]`))
+		if err != nil || list == nil || len(list.Items) != 0 {
+			t.Errorf("list = %+v, err = %v", list, err)
+		}
+	})
+	for name, raw := range map[string][]byte{
+		"invalid JSON":      []byte(`[{"id":`),
+		"zero-length input": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := capture.ParseArchivedItemList(raw)
+			var de *capture.DocumentError
+			if !errors.As(err, &de) || de.Document != capture.ArchivedItemListDocument || de.Problem != capture.ProblemInvalidJSON {
+				t.Errorf("error = %v, want archived_item_list: invalid_json", err)
+			}
+			in := ct.Intact(t).Input(t)
+			in.ArchivedItemList = raw
+			c := capture.Parse(in)
+			if len(c.Errors) != 1 || c.Errors[0].Document != capture.ArchivedItemListDocument || c.ArchivedList != nil {
+				t.Errorf("errors = %v, archived list = %v", c.Errors, c.ArchivedList)
+			}
+		})
+	}
+	t.Run("duplicate ID", func(t *testing.T) {
+		c := mustParse(t, ct.VariantByName(t, ct.ArchivedListDuplicateID).Build(t))
+		if !reflect.DeepEqual(c.ArchivedList.DuplicateIDs, []string{ct.ItemArchivedLogin}) {
+			t.Errorf("archived duplicates = %v", c.ArchivedList.DuplicateIDs)
+		}
+		if c.List.DuplicateIDs != nil {
+			t.Errorf("default list duplicates = %v", c.List.DuplicateIDs)
 		}
 	})
 }

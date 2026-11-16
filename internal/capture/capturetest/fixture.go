@@ -44,11 +44,16 @@ const (
 	ItemPlainLogin = "22222222-2222-4222-8222-222222222222"
 	// ItemNote is a secure note without attachments.
 	ItemNote = "33333333-3333-4333-8333-333333333333"
+	// ItemArchivedLogin is an archived login item with one attachment. Both
+	// exports hold it, and only the archived item list shows it.
+	ItemArchivedLogin = "66666666-6666-4666-8666-666666666666"
 
 	// AttachmentFirst and AttachmentSecond belong to ItemPasskeyLogin and
 	// share one file name.
 	AttachmentFirst  = "att00000000000000000000000000001"
 	AttachmentSecond = "att00000000000000000000000000002"
+	// AttachmentArchived belongs to ItemArchivedLogin.
+	AttachmentArchived = "att00000000000000000000000000003"
 
 	// FolderID is the folder that holds ItemPlainLogin.
 	FolderID = "f0000000-0000-4000-8000-000000000001"
@@ -66,17 +71,24 @@ const (
 const (
 	creationDate = "2026-01-02T03:04:05.000Z"
 	revisionDate = "2026-02-03T04:05:06.000Z"
+	archivedDate = "2026-03-04T05:06:07.000Z"
 )
 
-// Fixture is one synthetic capture: the three documents, the bytes a
+// Fixture is one synthetic capture: the four documents, the bytes a
 // successful download of each attachment returns, and the reference
 // inventory the builder knows to be true.
 type Fixture struct {
-	PlaintextExport map[string]any
-	EncryptedExport map[string]any
-	ItemList        []any
-	Attachments     []Attachment
-	Reference       Reference
+	PlaintextExport  map[string]any
+	EncryptedExport  map[string]any
+	ItemList         []any
+	ArchivedItemList []any
+	// ArchivedItemListBytes, when not nil, replaces the rendering of
+	// ArchivedItemList in [Fixture.Input]. A variant uses it for an
+	// archived list that is not valid JSON, and a non-nil empty slice for
+	// an absent one.
+	ArchivedItemListBytes []byte
+	Attachments           []Attachment
+	Reference             Reference
 }
 
 // Attachment is the content of one attachment, identified by ID pair.
@@ -96,14 +108,15 @@ type (
 	ReferenceAttachment = capture.ReferenceAttachment
 )
 
-// Input renders the three documents and records one successful download
+// Input renders the four documents and records one successful download
 // result per attachment.
 func (f *Fixture) Input(t testing.TB) capture.Input {
 	t.Helper()
 	in := capture.Input{
-		PlaintextExport: f.PlaintextExportJSON(t),
-		EncryptedExport: f.EncryptedExportJSON(t),
-		ItemList:        f.ItemListJSON(t),
+		PlaintextExport:  f.PlaintextExportJSON(t),
+		EncryptedExport:  f.EncryptedExportJSON(t),
+		ItemList:         f.ItemListJSON(t),
+		ArchivedItemList: f.ArchivedItemListJSON(t),
 	}
 	for _, a := range f.Attachments {
 		sum := sha256.Sum256(a.Content)
@@ -121,9 +134,10 @@ func (f *Fixture) Capture(t testing.TB) *capture.Capture {
 	return capture.Parse(f.Input(t))
 }
 
-// Intact returns a capture that is complete and consistent: three personal
-// items, one of them a login with two passkeys (counters 0 and 6) and two
-// attachments with the same file name.
+// Intact returns a capture that is complete and consistent: four personal
+// items. One of them is a login with two passkeys (counters 0 and 6) and two
+// attachments with the same file name. Another is an archived login with one
+// attachment, which both exports hold and only the archived item list shows.
 func Intact(t testing.TB) *Fixture {
 	t.Helper()
 
@@ -143,6 +157,12 @@ func Intact(t testing.TB) *Fixture {
 		// leave them out. Both spellings are possible at code level.
 		{id: ItemPlainLogin, label: "plain-login", typ: typeLogin, folderID: FolderID, explicitNulls: true},
 		{id: ItemNote, label: "note", typ: typeSecureNote},
+		{
+			id: ItemArchivedLogin, label: "archived-login", typ: typeLogin, archived: true,
+			attachments: []attachmentSpec{
+				{id: AttachmentArchived, n: 3, content: []byte(Marker + " attachment content of the archived item")},
+			},
+		},
 	}
 
 	f := &Fixture{
@@ -157,12 +177,17 @@ func Intact(t testing.TB) *Fixture {
 			"folders":                      []any{map[string]any{"id": FolderID, "name": enc("folder-name")}},
 			"items":                        []any{},
 		},
-		ItemList: []any{},
+		ItemList:         []any{},
+		ArchivedItemList: []any{},
 	}
 	for _, s := range specs {
 		f.PlaintextExport["items"] = append(f.PlaintextItems(), plainItem(s))
 		f.EncryptedExport["items"] = append(f.EncryptedItems(), encryptedItem(s))
-		f.ItemList = append(f.ItemList, listItem(s))
+		if s.archived {
+			f.ArchivedItemList = append(f.ArchivedItemList, listItem(s))
+		} else {
+			f.ItemList = append(f.ItemList, listItem(s))
+		}
 
 		ref := ReferenceItem{ItemID: s.id}
 		for _, p := range s.passkeys {
@@ -212,12 +237,26 @@ func (f *Fixture) ItemListJSON(t testing.TB) []byte {
 	return render(t, f.ItemList, false)
 }
 
+// ArchivedItemListJSON renders the archived item list as the bare array
+// that "bw list items --archived" prints, or returns the byte override.
+func (f *Fixture) ArchivedItemListJSON(t testing.TB) []byte {
+	t.Helper()
+	if f.ArchivedItemListBytes != nil {
+		return append([]byte{}, f.ArchivedItemListBytes...)
+	}
+	return render(t, f.ArchivedItemList, false)
+}
+
 // Clone returns a deep copy.
 func (f *Fixture) Clone() *Fixture {
 	c := &Fixture{
-		PlaintextExport: cloneTree(f.PlaintextExport).(map[string]any),
-		EncryptedExport: cloneTree(f.EncryptedExport).(map[string]any),
-		ItemList:        cloneTree(f.ItemList).([]any),
+		PlaintextExport:  cloneTree(f.PlaintextExport).(map[string]any),
+		EncryptedExport:  cloneTree(f.EncryptedExport).(map[string]any),
+		ItemList:         cloneTree(f.ItemList).([]any),
+		ArchivedItemList: cloneTree(f.ArchivedItemList).([]any),
+	}
+	if f.ArchivedItemListBytes != nil {
+		c.ArchivedItemListBytes = append([]byte{}, f.ArchivedItemListBytes...)
 	}
 	for _, a := range f.Attachments {
 		a.Content = append([]byte(nil), a.Content...)
@@ -253,7 +292,7 @@ var (
 var formatBoundKeys = keySet("keyValue", "credentialId", "userHandle")
 
 // Sensitive returns every value that must never show up in a verification
-// result: all strings of the three documents that are not identifiers, dates
+// result: all strings of the four documents that are not identifiers, dates
 // or fixed vocabulary, and the attachment contents. The list is sorted and
 // free of duplicates and empty strings.
 func (f *Fixture) Sensitive() []string {
@@ -285,6 +324,7 @@ func (f *Fixture) sensitiveLeaves() []leaf {
 	var out []leaf
 	collectLeaves("plaintext", "", f.PlaintextExport, safeDecryptedKeys, &out)
 	collectLeaves("list", "", f.ItemList, safeDecryptedKeys, &out)
+	collectLeaves("archived", "", f.ArchivedItemList, safeDecryptedKeys, &out)
 	collectLeaves("encrypted", "", f.EncryptedExport, safeEncryptedKeys, &out)
 	return out
 }
@@ -306,7 +346,7 @@ func collectLeaves(document, key string, node any, safe map[string]bool, out *[]
 	}
 }
 
-// itemSpec describes one item. The three documents are rendered from it.
+// itemSpec describes one item. The documents are rendered from it.
 type itemSpec struct {
 	id, label      string
 	typ            int
@@ -317,6 +357,9 @@ type itemSpec struct {
 	// explicitNulls writes empty optional keys as null instead of leaving
 	// them out.
 	explicitNulls bool
+	// archived sets an archive date. The item is then shown by the
+	// archived item list instead of the default one.
+	archived bool
 }
 
 type attachmentSpec struct {
@@ -572,6 +615,9 @@ func setOptional(m map[string]any, s itemSpec) {
 		m["folderId"] = nil
 		m["deletedDate"] = nil
 		m["archivedDate"] = nil
+	}
+	if s.archived {
+		m["archivedDate"] = archivedDate
 	}
 	if s.organizationID != "" {
 		m["organizationId"] = s.organizationID
