@@ -4,6 +4,7 @@ context: |
   Use docs/research/research-summary.md and the originals with their evidence limits.
   Review existing ADRs under docs/decisions/ and distinguish proposed from accepted.
   Write all artifacts in English, even if the conversation is in another language.
+  Before applying a change, state the model and effort recommended in its tasks.md and ask for confirmation before the first task.
 rules:
   proposal:
     - Name affected requirements, documentation, existing ADRs and open evidence.
@@ -12,3 +13,4 @@ rules:
   tasks:
     - Plan affected user and developer documentation as well as concrete failure-case tests.
     - Plan an ADR only if the ADR criteria are met.
+    - Start tasks.md with a section "Recommended apply setup" without checkboxes that names a model and an effort level for the apply session, with a one-sentence reason based on the size and risk of the tasks. Repeat the recommendation when presenting the finished artifacts.
