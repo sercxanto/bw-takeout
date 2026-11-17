@@ -8,6 +8,6 @@
 | Evidence | [Research overview and original reports](research/research-summary.md) |
 | Decisions | [ADRs and their status](decisions/README.md) |
 | Specification | openspec/specs/ for agreed behavior, openspec/changes/ for changes in progress |
-| Contributing | [CONTRIBUTING](../CONTRIBUTING.md) |
+| Contributing | [CONTRIBUTING](../CONTRIBUTING.md), and [SECURITY](../SECURITY.md) for reporting vulnerabilities |
 
 Maintain new findings, decisions and instructions in the place responsible for them and link to them from other documents.
