@@ -6,6 +6,16 @@ The unmodified bw version is deliberately pinned to the version used in the rese
 
 The age library `filippo.io/age` in `go.mod` and the age CLI installed by the Dockerfile are pinned to the same version, v1.2.1. Update both together, because the recovery test checks archives written by the library against the CLI. `go.sum` holds the checksums of the library and its dependencies.
 
+## Dependency updates
+
+Dependabot proposes version updates once a month as pull requests, one per ecosystem, configured in `.github/dependabot.yml`. A new release is proposed only after a cooldown of seven days. Review such a pull request like any other change of a pin, rebuild the dev container when it changes the Dockerfile, and update the pin table under [continuous integration](#continuous-integration) when it changes an action:
+
+- **Go modules** in `go.mod`, except `filippo.io/age`, which moves together with the age CLI as described above.
+- **GitHub Actions** in both workflows, by commit SHA with the tag as comment, which `TestWorkflowStructure` checks.
+- **Container images** of the Dockerfile: new digests of the same tag, and new minor and patch versions of Node. The Go version is not proposed, because it follows `go.mod`; update both by hand.
+
+Not covered by version updates, and updated by hand: the Go version, the age library and CLI, the npm packages `@bitwarden/cli`, pinned to the researched version ([ADR 0007](../decisions/0007-bw-versions.md)), and `@fission-ai/openspec`, whose update also regenerates the skills with `openspec update`, and the runner labels. Dependabot alerts and security updates, enabled in the repository settings, still cover every dependency in `go.mod` and the npm lockfile. They do not cover the Go standard library.
+
 Adding or updating a module needs a module cache that the container user can write to. The Dockerfile makes the content of `/go` belong to that user after the tools are installed. A container built before that change has a cache owned by root, so `go mod download` fails there until the image is rebuilt.
 
 ## Tested bw versions

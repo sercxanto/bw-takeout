@@ -1,0 +1,49 @@
+# Version updates as pull requests, see docs/development/integrations.md.
+# Pins that must move together with other files are ignored here and
+# updated by hand. Security alerts cover every dependency regardless.
+# A cooldown leaves a new release a week before it is proposed.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    ignore:
+      # Same version as the age CLI in the Dockerfile and ci.yml.
+      - dependency-name: filippo.io/age
+    groups:
+      go-modules:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /.devcontainer
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    ignore:
+      # The Go version follows go.mod and is updated by hand; new digests
+      # of the same tag are still proposed.
+      - dependency-name: golang
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
+    groups:
+      images:
+        patterns: ["*"]
