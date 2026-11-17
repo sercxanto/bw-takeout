@@ -64,7 +64,7 @@ jobs:
 
       - name: Install age
         run: |
-          go install filippo.io/age/cmd/age@v1.2.1
+          go install filippo.io/age/cmd/age@v1.3.2
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Show versions

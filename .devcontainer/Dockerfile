@@ -6,7 +6,7 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 WORKDIR /opt/bootstrap
 COPY package*.json ./
 RUN npm ci --no-audit --no-fund && ln -s /opt/bootstrap/node_modules/.bin/openspec /usr/local/bin/openspec && ln -s /opt/bootstrap/node_modules/.bin/bw /usr/local/bin/bw
-RUN GOBIN=/usr/local/bin go install filippo.io/age/cmd/age@v1.2.1 && GOBIN=/usr/local/bin go install filippo.io/age/cmd/age-keygen@v1.2.1
+RUN GOBIN=/usr/local/bin go install filippo.io/age/cmd/age@v1.3.2 && GOBIN=/usr/local/bin go install filippo.io/age/cmd/age-keygen@v1.3.2
 RUN useradd -m -s /bin/bash vscode && chown -R vscode:vscode /go
 USER vscode
 ENV OPENSPEC_TELEMETRY=0

@@ -7,7 +7,7 @@ A directory name ending in `.partial` belongs to a run that has not finished or 
 ## What to Keep Outside the Archive
 
 - **The age identity** (secret key) that belongs to one of the recipient keys the backup was encrypted to. Without it the archive cannot be opened. Keep it separately from the archive, and keep more than one identity in different places if you encrypt to several recipients.
-- **An age program.** The [reference implementation](https://github.com/FiloSottile/age) and other implementations read the format. This project was tested with age 1.2.1.
+- **An age program.** The [reference implementation](https://github.com/FiloSottile/age) and other implementations read the format. This project was tested with age 1.3.2 and, before 17 November 2026, with age 1.2.1. Both read the archives of this project.
 - **These steps**, for example printed, in case the documentation is not reachable.
 
 A key pair can be created with `age-keygen -o identity.txt`. The command `age-keygen -y identity.txt` prints the recipient key, which is the only part the backing-up system needs.

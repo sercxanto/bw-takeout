@@ -10,9 +10,6 @@ updates:
       interval: monthly
     cooldown:
       default-days: 7
-    ignore:
-      # Same version as the age CLI in the Dockerfile and ci.yml.
-      - dependency-name: filippo.io/age
     groups:
       go-modules:
         patterns: ["*"]
