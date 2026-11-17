@@ -113,6 +113,11 @@ func TestWorkflowStructure(t *testing.T) {
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("matrix runners %v, want %v", got, want)
 	}
+
+	// The race tests run on the Linux runner only, see the test strategy.
+	if !regexp.MustCompile(`(?m)^      - name: Test with race detector\n        if: runner\.os == 'Linux'$`).MatchString(ci) {
+		t.Error("race step in ci.yml is not limited to Linux")
+	}
 }
 
 // The test matrix runs on changes to Go code and its inputs. Both triggers

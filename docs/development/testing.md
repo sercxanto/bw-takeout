@@ -431,6 +431,12 @@ Evidence level: mock, on three platforms. Runner image versions and durations we
 
 After this run the workflow was split to save runner minutes: `ci.yml` keeps the test matrix and runs only on changes to Go code, the module files, the list of expected skips or itself, and on pushes to `main` only; the new `checks.yml` runs formatting, module tidiness and the key-material search on every change. The first run after the split failed in `TestWorkflowStructure`, which still expected the checks in `ci.yml`. The test now covers both workflows and the path filters. After the commit `005b30f` the maintainer started both workflows by hand on the branch, and both passed.
 
+## Race Tests on Linux Only, 17 November 2026
+
+From 17 November 2026 the step with the race detector in `ci.yml` runs on `ubuntu-24.04` only; vet and the tests with the skip report still run on all three runners. A passing `test` job on macOS or Windows therefore no longer includes race tests. `TestWorkflowStructure` checks the condition.
+
+Reason: the platform-specific code holds no concurrency of its own. It is the process group and the interrupt signals in `internal/bwcli`, the directory flush and the rename retry in `internal/publish`, and the name comparison of environment variables in the fake `bw`. All of it runs sequentially. The goroutines and the shared state are in code that is the same on every platform, and the race detector judges happens-before relations, not the memory model of the hardware. Running it on macOS and Windows as well would repeat the Linux check at a higher cost. The remaining gap: a race that only a platform-specific timing makes visible is no longer looked for there. Before a review, `go test -race ./...` in the dev container stays the rule, see [getting started](getting-started.md).
+
 ## Offline Exercise of 15 November 2026
 
 The maintainer opened a synthetic generation on macOS 26.7.3 on Apple Silicon, following a checklist that repeats the steps of the [recovery page](../user/recovery.md). The generation was left by `TestLeaveGenerationForOfflineExercise` in the dev container, encrypted to a key pair made only for this exercise. `bw-takeout` was built for darwin/arm64 from commit `8b353f4`, and age v1.2.1 for darwin/arm64 from the pinned module. Both were copied with the generation into a folder outside the project. The identity was kept in a separate folder outside the project and outside that folder.
