@@ -654,6 +654,14 @@ The workflows ran on the pull request of the branch `capture-collection` at the 
 
 Evidence level: mock, on three platforms. No test ran against the real `bw`, a live vault, a premium failure from a real server, or an archived item with an attachment.
 
+## CI Run of 18 November 2026, interactive-backup-run
+
+The workflows ran on the pull request of the branch `interactive-backup-run`. At the commit `740b936` [Checks](https://github.com/sercxanto/bw-takeout/actions/runs/44390779214) passed, and in [CI](https://github.com/sercxanto/bw-takeout/actions/runs/44390779163) the test matrix passed on `ubuntu-24.04` and failed on `windows-2025`. The run was cancelled before `macos-26` had finished. The skip report named `TestUsagePageMatchesBackupFlags` and `TestUsagePageRecipientsExample` in `cmd/bw-takeout`: Git on the Windows runner checks text files out with CRLF line endings, and the tests did not find the section "Making a Backup" of the usage page. The commit `4bf19fa` normalizes the line endings when the tests read the page, as the workflow tests already do. A check in the dev container with the page converted to CRLF failed before the fix and passed after it.
+
+At `4bf19fa` [CI](https://github.com/sercxanto/bw-takeout/actions/runs/44391305498) and [Checks](https://github.com/sercxanto/bw-takeout/actions/runs/44391305582) passed. The test matrix passed on `ubuntu-24.04`, `macos-26` and `windows-2025`, and the race tests ran on Linux only, as intended. The skip report passed on each runner. The change added no skip and moved the Windows skip of `TestPartialGenerationByAnotherPath` to `internal/offline`. The run tests of `internal/run`, including the interrupt tests and the profile that cannot be removed because a file in it is held open, ran against the fake `bw` on all three platforms for the first time.
+
+Evidence level: mock, on three platforms. On Windows no test ran against the real `bw`, and no interrupt came from a console.
+
 ## Race Tests on Linux Only, 17 November 2026
 
 From 17 November 2026 the step with the race detector in `ci.yml` runs on `ubuntu-24.04` only; vet and the tests with the skip report still run on all three runners. A passing `test` job on macOS or Windows therefore no longer includes race tests. `TestWorkflowStructure` checks the condition.

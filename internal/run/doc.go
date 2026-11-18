@@ -4,7 +4,8 @@
 // path. It returns an Outcome, from which package report renders the final
 // report and the exit status. See the design of the change
 // interactive-backup-run, decisions D3 to D7
-// (openspec/changes/interactive-backup-run/design.md until it is archived).
+// (openspec/changes/archive/2026-11-18-interactive-backup-run/design.md),
+// and the specification backup-run.
 //
 // # Order
 //
