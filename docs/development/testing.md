@@ -484,6 +484,12 @@ Evidence level: mock, on three platforms. Runner image versions and durations we
 
 After this run the workflow was split to save runner minutes: `ci.yml` keeps the test matrix and runs only on changes to Go code, the module files, the list of expected skips or itself, and on pushes to `main` only; the new `checks.yml` runs formatting, module tidiness and the key-material search on every change. The first run after the split failed in `TestWorkflowStructure`, which still expected the checks in `ci.yml`. The test now covers both workflows and the path filters. After the commit `005b30f` the maintainer started both workflows by hand on the branch, and both passed.
 
+## CI Run of 18 November 2026, capture-collection
+
+The workflows ran on the pull request of the branch `capture-collection` at the commit `d9c9dca`: [CI](https://github.com/sercxanto/bw-takeout/actions/runs/44276489342) and [Checks](https://github.com/sercxanto/bw-takeout/actions/runs/44276489264). Both passed. The test matrix passed on `ubuntu-24.04`, `macos-26` and `windows-2025`, and the race tests ran on Linux only, as intended. The skip report passed on each runner, so every skip was one that `.github/expected-skips.txt` allows. The change added no skip, and the file was not changed. The integration tests of `internal/collect` built and ran the fake `bw` on all three platforms.
+
+Evidence level: mock, on three platforms. No test ran against the real `bw`, a live vault, a premium failure from a real server, or an archived item with an attachment.
+
 ## Race Tests on Linux Only, 17 November 2026
 
 From 17 November 2026 the step with the race detector in `ci.yml` runs on `ubuntu-24.04` only; vet and the tests with the skip report still run on all three runners. A passing `test` job on macOS or Windows therefore no longer includes race tests. `TestWorkflowStructure` checks the condition.

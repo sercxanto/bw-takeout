@@ -60,7 +60,7 @@ Model Opus, effort high: the change spans five packages and has a code-reading t
 - [x] 7.1 Run `gofmt -l .`, `go vet ./...`, `go test ./...` and the key-material search from `docs/development/testing.md` in the dev container. Verify all pass and the search prints nothing. Record the run in `docs/development/testing.md` with date, platform, Go version, skipped tests and the evidence level mock.
 - [x] 7.2 Compare each requirement and scenario of the two delta specs with the behavior of the code. Verify by listing every deviation in the task result, or by stating that there is none.
 - [x] 7.3 Run `openspec validate capture-collection --strict`. Verify it passes.
-- [ ] 7.4 Record the CI run on Linux, macOS and Windows with its skip report, as the test strategy describes. Verify the run is linked in `docs/development/testing.md` and that `.github/expected-skips.txt` matches.
+- [x] 7.4 Record the CI run on Linux, macOS and Windows with its skip report, as the test strategy describes. Verify the run is linked in `docs/development/testing.md` and that `.github/expected-skips.txt` matches.
 
 ## 8. Review findings of 18 November 2026
 
