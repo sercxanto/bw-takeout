@@ -16,6 +16,8 @@ Every capture gets exactly one of three verdicts:
 
 Failed outranks unverified, which outranks verified. Warnings carry information and never change the verdict.
 
+Decryption error lines that the CLI writes with a captured document show that a decrypt step reported an error without naming the item, so the check that every item decrypted did not pass and the verdict is at least unverified (decided on 17 November 2026 in the change capture-collection).
+
 The second inventory is the account-bound encrypted JSON export ([ADR 0001](0001-official-cli.md) limits the sources to the unmodified CLI). It is the only public CLI output produced before the decrypt step where the omission happens. Item IDs and, where the item format shows them, passkey counts are compared with the plaintext export. Attachments are accounted for by item ID and attachment ID.
 
 Every result states its scope: the personal items in the local snapshot the CLI exported during this capture. Every result lists the checks that were not possible, among them that completeness against the server is never checked.

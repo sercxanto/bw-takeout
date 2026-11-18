@@ -185,7 +185,15 @@
 //
 // The list holds the same decrypted content as the plaintext export,
 // including passkey private keys. This package reads only the item ID, the
-// organization ID and the attachment IDs from it.
+// organization ID, the attachment IDs and the attachment file names from it.
+//
+// The file name is vault content. [ItemList.FileNames] keeps it so that the
+// caller can write it into the encrypted manifest, and for no other use: no
+// check reads it, and it never identifies an attachment. The first
+// occurrence of an ID pair wins, and a name that is absent or not a string
+// is empty without rejecting the list (design D5 of capture-collection).
+// [PersonalAttachments] decides which attachments are expected, for the
+// download plan and for the verification alike (design D6).
 //
 // Filters ([listCiphers]): the list reads the same decrypted views as the
 // plaintext export, so partial items are missing from it
@@ -228,6 +236,28 @@
 // decrypted bytes and reports a status other than 200 as an error
 // ([saveAttachmentToFile]). It emits no document. The caller records one
 // download result per ID pair.
+//
+// # Snapshot
+//
+// The four documents and the attachment metadata come from one local
+// snapshot. From code reading of the bundle, recorded in
+// docs/research/bw-cli-code-notes-2026-11-17.md: list, export and
+// get attachment read the local state and start no sync, so the forced
+// sync before the first document fixes the snapshot for all of them. The
+// attachment content is fetched from the server at the time of the
+// download. No network trace confirms this at run time.
+//
+// # Decryption error counts
+//
+// The CLI can write decryption error lines to standard error and still exit
+// with code 0. The lines name neither item nor field. The caller passes
+// their number for each document in [Input.DecryptionErrors] and for each
+// successful download in [Download.DecryptionErrors]. [Parse] copies the
+// document counts into [Capture.DecryptionErrors] unchanged. The zero value
+// means no lines, so an input without counts parses as before (design D9 of
+// capture-collection). The live probe observed such lines on the plaintext
+// export, the item list and attachment downloads, and none on the encrypted
+// export (docs/research/vaultwarden-live-probe-2026-11-14.md, result 6).
 //
 // [types]: https://github.com/bitwarden/clients/blob/91214c3b978edb5496a32a946451960fe7d44531/libs/tools/export-vault-core/src/types/bitwarden-json-export-types.ts#L14-L55
 // [buildJsonExport]: https://github.com/bitwarden/clients/blob/91214c3b978edb5496a32a946451960fe7d44531/libs/tools/export-vault-core/src/services/individual-vault-export.service.ts#L333-L361

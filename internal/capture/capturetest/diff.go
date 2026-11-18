@@ -23,7 +23,8 @@ import (
 // side only is reported once, at its root. Changed attachment contents and a
 // changed reference inventory are reported as "~ attachments" and
 // "~ reference", a changed byte override of the archived item list as
-// "~ archived-bytes".
+// "~ archived-bytes", and changed decryption error counts of the documents
+// as "~ decryption-errors".
 func Diff(t testing.TB, a, b *Fixture) []string {
 	t.Helper()
 	var out []string
@@ -40,6 +41,9 @@ func Diff(t testing.TB, a, b *Fixture) []string {
 	}
 	if !reflect.DeepEqual(a.Reference, b.Reference) {
 		out = append(out, "~ reference")
+	}
+	if a.DecryptionErrors != b.DecryptionErrors {
+		out = append(out, "~ decryption-errors")
 	}
 	sort.Strings(out)
 	return out

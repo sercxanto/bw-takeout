@@ -63,7 +63,7 @@ var typeObjectKeys = map[int]string{
 // Parse parses the four documents of a capture. It never fails: a rejected
 // document is recorded in Capture.Errors and left nil.
 func Parse(in Input) *Capture {
-	c := &Capture{Downloads: in.Downloads}
+	c := &Capture{Downloads: in.Downloads, DecryptionErrors: in.DecryptionErrors}
 	record := func(err error) {
 		var de *DocumentError
 		if errors.As(err, &de) {
@@ -205,7 +205,7 @@ func parseItemList(doc Document, raw []byte) (*ItemList, error) {
 		return nil, &DocumentError{Document: doc, Problem: ProblemWrongForm}
 	}
 
-	out := &ItemList{Items: make([]ListedItem, 0, len(elements))}
+	out := &ItemList{Items: make([]ListedItem, 0, len(elements)), FileNames: map[AttachmentRef]string{}}
 	ids := make([]string, 0, len(elements))
 	for _, raw := range elements {
 		obj, id, err := itemObject(doc, raw)
@@ -230,6 +230,13 @@ func parseItemList(doc Document, raw []byte) (*ItemList, error) {
 				return nil, malformed(doc, id)
 			}
 			item.AttachmentIDs = append(item.AttachmentIDs, attachmentID)
+			ref := AttachmentRef{ItemID: id, AttachmentID: attachmentID}
+			if _, seen := out.FileNames[ref]; !seen {
+				// No check relies on the name, so a name of another type
+				// is kept as empty and does not reject the list.
+				name, _ := m["fileName"].(string)
+				out.FileNames[ref] = name
+			}
 		}
 		out.Items = append(out.Items, item)
 		ids = append(ids, id)
@@ -481,6 +488,40 @@ func dedupePerItem(items []ListedItem) []AttachmentRef {
 		seen[item.ID] = true
 		for _, a := range item.AttachmentIDs {
 			out = append(out, AttachmentRef{ItemID: item.ID, AttachmentID: a})
+		}
+	}
+	return out
+}
+
+// PersonalAttachments returns the ID pairs of the attachments on personal
+// items, in the order the lists are given, items in document order and
+// attachments in item order. Each pair is kept once, also when both lists
+// or one list repeat it. Every entry of an item counts on its own, so an
+// item listed once as personal and once as an organization item contributes
+// the attachments of its personal entry. Such a capture fails verification
+// anyway, because the entries differ. A nil list contributes nothing.
+//
+// The collection plans its downloads with this function and the
+// verification builds its expected set with it, so the two always agree
+// (design D6 of capture-collection).
+func PersonalAttachments(lists ...*ItemList) []AttachmentRef {
+	seen := map[AttachmentRef]bool{}
+	var out []AttachmentRef
+	for _, list := range lists {
+		if list == nil {
+			continue
+		}
+		for _, item := range list.Items {
+			if item.OrganizationID != "" {
+				continue
+			}
+			for _, attachmentID := range item.AttachmentIDs {
+				ref := AttachmentRef{ItemID: item.ID, AttachmentID: attachmentID}
+				if !seen[ref] {
+					seen[ref] = true
+					out = append(out, ref)
+				}
+			}
 		}
 	}
 	return out

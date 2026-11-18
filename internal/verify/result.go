@@ -64,6 +64,11 @@ const (
 	// so the CLI did not apply --archived. A warning with the number of
 	// shared item IDs.
 	ArchiveFilterNotApplied Reason = "archive_filter_not_applied"
+	// DocumentDecryptionErrors: the CLI wrote decryption error lines with
+	// the document. The lines name no item, so the check that every item
+	// decrypted did not pass. Unverified, with the document and the number
+	// of lines (design D9 of capture-collection).
+	DocumentDecryptionErrors Reason = "document_decryption_errors"
 )
 
 // Reason codes for passkeys.
@@ -89,6 +94,11 @@ const (
 	// AttachmentDownloadOutOfScope: a download result for an attachment
 	// that the item list shows on an organization item. A warning.
 	AttachmentDownloadOutOfScope Reason = "attachment_download_out_of_scope"
+	// AttachmentDecryptionErrors: the CLI wrote decryption error lines
+	// with a successful download. A warning with the number of lines,
+	// because size and SHA-256 cover the content (design D9 of
+	// capture-collection).
+	AttachmentDecryptionErrors Reason = "attachment_decryption_errors"
 )
 
 // Reason codes for the comparison with a reference inventory.
@@ -170,7 +180,8 @@ type Finding struct {
 	Field    string `json:"field,omitempty"`
 	Expected *int   `json:"expected,omitempty"`
 	Found    *int   `json:"found,omitempty"`
-	// Count is the number of items a warning summarizes.
+	// Count is the number of items a warning summarizes, or the number of
+	// decryption error lines a finding reports.
 	Count *int `json:"count,omitempty"`
 	// Organizations breaks Count down per organization ID.
 	Organizations []OrganizationCount `json:"organizations,omitempty"`
@@ -193,12 +204,14 @@ func Reasons() []Reason {
 		ListedItemMissingFromExport, ExportedItemNotListed,
 		OrganizationItemsExcluded, ItemOrganizationMismatch,
 		ListedItemDiffersBetweenLists, ArchiveFilterNotApplied,
+		DocumentDecryptionErrors,
 		PasskeyCountMismatch, PasskeyCountUnverifiable, PasskeyFieldMissing,
 		PasskeyFieldInvalid, PasskeyKeyInvalid, PasskeyKeyFormUnknown,
 		PasskeyCounterInvalid,
 		DuplicateAttachmentID, DuplicateDownloadResult, AttachmentDownloadFailed,
 		AttachmentDownloadMissing, AttachmentDownloadInvalid,
 		AttachmentDownloadNotExpected, AttachmentEmpty, AttachmentDownloadOutOfScope,
+		AttachmentDecryptionErrors,
 		ReferenceItemMissing, ReferenceItemNotExpected, ReferencePasskeyMissing,
 		ReferencePasskeyNotExpected, ReferencePasskeyKeyMismatch,
 		ReferencePasskeyCounterMismatch, ReferenceAttachmentMissing,

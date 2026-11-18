@@ -29,9 +29,15 @@ import (
 
 // Defaults of design D4 and D8.
 const (
-	DefaultShortTimeout      = 60 * time.Second
-	DefaultLongTimeout       = 10 * time.Minute
-	DefaultAttachmentTimeout = 30 * time.Minute
+	DefaultShortTimeout = 60 * time.Second
+	DefaultLongTimeout  = 10 * time.Minute
+	// DefaultAttachmentTimeout covers the whole transfer of one attachment,
+	// because bw downloads and decrypts before it writes. Five minutes
+	// carry 100 MB at about 3 Mbit/s and 500 MB at about 14 Mbit/s. With
+	// the three attempts of the collection, a hanging download costs at
+	// most 15 minutes (design D12 of the change capture-collection, which
+	// replaced the 30 minutes of design D4).
+	DefaultAttachmentTimeout = 5 * time.Minute
 	DefaultOutputLimit       = 1 << 30
 )
 
