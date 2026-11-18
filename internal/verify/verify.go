@@ -30,6 +30,9 @@ var documentReasons = map[capture.Problem]Reason{
 // reads nothing but its arguments and changes neither of them.
 func Verify(c *capture.Capture, ref *capture.Reference) *Result {
 	v := &verifier{c: c}
+	// The lines are reported whatever else the capture shows, also when a
+	// document was rejected.
+	v.decryptionErrors()
 	if len(c.Errors) > 0 {
 		// Without all four documents no comparison is meaningful.
 		for _, e := range c.Errors {
@@ -71,7 +74,12 @@ type verifier struct {
 	listed    map[string]capture.ListedItem
 	listedDoc map[string]capture.Document
 	// shared lists, in order, the item IDs that both lists show.
-	shared    []string
+	shared []string
+	// personal holds, per item ID, the attachment IDs of every personal
+	// entry of the item in both lists, in the order of
+	// capture.PersonalAttachments. Every per-item view of attachments reads
+	// it (design D6 of capture-collection).
+	personal  map[string][]string
 	downloads map[capture.AttachmentRef]capture.Download
 
 	encryptedOrder []string
@@ -145,6 +153,10 @@ func (v *verifier) index() {
 				v.add(Finding{Severity: SeverityFailed, Reason: ListedItemDiffersBetweenLists, ItemID: item.ID})
 			}
 		}
+	}
+	v.personal = map[string][]string{}
+	for _, ref := range capture.PersonalAttachments(v.c.List, v.c.ArchivedList) {
+		v.personal[ref.ItemID] = append(v.personal[ref.ItemID], ref.AttachmentID)
 	}
 	v.downloads = map[capture.AttachmentRef]capture.Download{}
 	for _, d := range v.c.Downloads {
@@ -371,33 +383,25 @@ func (v *verifier) coverage() {
 }
 
 // attachments accounts for every attachment of a personal item by ID pair
-// (design D7).
+// (design D7). The expected set comes from capture.PersonalAttachments, the
+// function the collection plans its downloads with (design D6 of
+// capture-collection).
 func (v *verifier) attachments() {
 	expected := map[capture.AttachmentRef]bool{}
-	for _, id := range v.listedOrder {
-		item := v.listed[id]
-		if item.OrganizationID != "" {
+	for _, ref := range capture.PersonalAttachments(v.c.List, v.c.ArchivedList) {
+		expected[ref] = true
+		d, ok := v.downloads[ref]
+		if !ok {
+			v.add(attachmentFinding(SeverityFailed, AttachmentDownloadMissing, ref))
 			continue
 		}
-		for _, attachmentID := range item.AttachmentIDs {
-			ref := capture.AttachmentRef{ItemID: id, AttachmentID: attachmentID}
-			if expected[ref] {
-				continue
-			}
-			expected[ref] = true
-			d, ok := v.downloads[ref]
-			if !ok {
-				v.add(attachmentFinding(SeverityFailed, AttachmentDownloadMissing, ref))
-				continue
-			}
-			switch {
-			case d.Error != "" && d.SHA256 == "":
-				v.add(attachmentFinding(SeverityFailed, AttachmentDownloadFailed, ref))
-			case !validDownload(d):
-				v.add(attachmentFinding(SeverityFailed, AttachmentDownloadInvalid, ref))
-			case d.Size == 0:
-				v.add(attachmentFinding(SeverityWarning, AttachmentEmpty, ref))
-			}
+		switch {
+		case d.Error != "" && d.SHA256 == "":
+			v.add(attachmentFinding(SeverityFailed, AttachmentDownloadFailed, ref))
+		case !validDownload(d):
+			v.add(attachmentFinding(SeverityFailed, AttachmentDownloadInvalid, ref))
+		case d.Size == 0:
+			v.add(attachmentFinding(SeverityWarning, AttachmentEmpty, ref))
 		}
 	}
 	for _, ref := range v.downloadOrder {
@@ -413,16 +417,55 @@ func (v *verifier) attachments() {
 	}
 }
 
-// organizationAttachment reports whether the item list shows the
-// attachment on an organization item.
-func (v *verifier) organizationAttachment(ref capture.AttachmentRef) bool {
-	item, ok := v.listed[ref.ItemID]
-	if !ok || item.OrganizationID == "" {
-		return false
+// decryptionErrors reports the decryption error lines of every document as
+// unverified and those of every successful download as a warning (design
+// D9 of capture-collection). A count of zero or less reports nothing. A
+// repeated download result counts once, from its first occurrence, like
+// every other check of the downloads.
+func (v *verifier) decryptionErrors() {
+	counts := v.c.DecryptionErrors
+	for _, doc := range []struct {
+		document capture.Document
+		count    int
+	}{
+		{capture.PlaintextExportDocument, counts.PlaintextExport},
+		{capture.EncryptedExportDocument, counts.EncryptedExport},
+		{capture.ItemListDocument, counts.ItemList},
+		{capture.ArchivedItemListDocument, counts.ArchivedItemList},
+	} {
+		if doc.count > 0 {
+			v.add(Finding{Severity: SeverityUnverified, Reason: DocumentDecryptionErrors,
+				Document: string(doc.document), Count: intp(doc.count)})
+		}
 	}
-	for _, id := range item.AttachmentIDs {
-		if id == ref.AttachmentID {
-			return true
+	seen := map[capture.AttachmentRef]bool{}
+	for _, d := range v.c.Downloads {
+		if seen[d.Ref()] {
+			continue
+		}
+		seen[d.Ref()] = true
+		if d.DecryptionErrors > 0 && validDownload(d) {
+			f := attachmentFinding(SeverityWarning, AttachmentDecryptionErrors, d.Ref())
+			f.Count = intp(d.DecryptionErrors)
+			v.add(f)
+		}
+	}
+}
+
+// organizationAttachment reports whether an entry of either item list shows
+// the attachment on an organization item. Every entry counts, as in
+// capture.PersonalAttachments.
+func (v *verifier) organizationAttachment(ref capture.AttachmentRef) bool {
+	for _, list := range []*capture.ItemList{v.c.List, v.c.ArchivedList} {
+		for _, item := range list.Items {
+			if item.ID != ref.ItemID || item.OrganizationID == "" {
+				continue
+			}
+			for _, id := range item.AttachmentIDs {
+				if id == ref.AttachmentID {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -547,10 +590,8 @@ func keyFingerprint(keyValue string) string {
 // missing download is already reported by the attachment accounting.
 func (v *verifier) referenceAttachments(item capture.ReferenceItem) {
 	listed := map[string]bool{}
-	if l, ok := v.listed[item.ItemID]; ok && l.OrganizationID == "" {
-		for _, id := range l.AttachmentIDs {
-			listed[id] = true
-		}
+	for _, id := range v.personal[item.ItemID] {
+		listed[id] = true
 	}
 	expected := map[string]bool{}
 	for _, want := range item.Attachments {
@@ -568,14 +609,10 @@ func (v *verifier) referenceAttachments(item capture.ReferenceItem) {
 			v.add(attachmentFinding(SeverityFailed, ReferenceAttachmentMismatch, ref))
 		}
 	}
-	if l, ok := v.listed[item.ItemID]; ok && l.OrganizationID == "" {
-		seen := map[string]bool{}
-		for _, id := range l.AttachmentIDs {
-			if !expected[id] && !seen[id] {
-				seen[id] = true
-				v.add(attachmentFinding(SeverityFailed, ReferenceAttachmentNotExpected,
-					capture.AttachmentRef{ItemID: item.ItemID, AttachmentID: id}))
-			}
+	for _, id := range v.personal[item.ItemID] {
+		if !expected[id] {
+			v.add(attachmentFinding(SeverityFailed, ReferenceAttachmentNotExpected,
+				capture.AttachmentRef{ItemID: item.ItemID, AttachmentID: id}))
 		}
 	}
 }

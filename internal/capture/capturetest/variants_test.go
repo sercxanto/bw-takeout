@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"bw-takeout/internal/capture"
 )
 
 // Every variant differs from the intact fixture in the places it declares
@@ -43,8 +45,8 @@ func TestVariantsDifferOnlyInTheIntendedPlace(t *testing.T) {
 }
 
 // The variants cover every failure case that task 2.3 of the change
-// capture-verification and design D7 of the change archived-item-list
-// name.
+// capture-verification, design D7 of the change archived-item-list and
+// design D9 of the change capture-collection name.
 func TestVariantsCoverTheNamedCases(t *testing.T) {
 	want := []string{
 		MissingItem, DuplicateID, OnePasskeyMissing, AllPasskeysDropped,
@@ -54,7 +56,7 @@ func TestVariantsCoverTheNamedCases(t *testing.T) {
 		ArchiveFilterIgnored, ArchiveFilterIgnoredNoArchivedItem,
 		ListsDisagreeOnAttachments, ListsDisagreeOnOrganization,
 		ArchivedListDuplicateID, ArchivedListInvalidJSON, ArchivedListAbsent,
-		ArchivedAttachmentDownloadMissing,
+		ArchivedAttachmentDownloadMissing, DecryptionErrorLines,
 	}
 	seen := map[string]bool{}
 	for _, v := range Variants() {
@@ -300,6 +302,19 @@ func TestArchivedVariantContent(t *testing.T) {
 	t.Run(ArchivedListAbsent, func(t *testing.T) {
 		if raw := build(ArchivedListAbsent).ArchivedItemListJSON(t); len(raw) != 0 {
 			t.Errorf("archived list %q, want zero bytes", raw)
+		}
+	})
+
+	t.Run(DecryptionErrorLines, func(t *testing.T) {
+		in := build(DecryptionErrorLines).Input(t)
+		want := capture.DecryptionErrors{PlaintextExport: 3}
+		if in.DecryptionErrors != want {
+			t.Errorf("document counts = %+v, want %+v", in.DecryptionErrors, want)
+		}
+		for _, d := range in.Downloads {
+			if got, want := d.DecryptionErrors, map[bool]int{true: 3}[d.AttachmentID == AttachmentFirst]; got != want {
+				t.Errorf("download %s: count %d, want %d", d.AttachmentID, got, want)
+			}
 		}
 	})
 

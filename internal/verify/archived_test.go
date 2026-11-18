@@ -302,3 +302,43 @@ func TestArchiveFilterWarningLeavesTheVerdict(t *testing.T) {
 	}
 	wantReasons(t, r, verify.ExportedItemNotListed)
 }
+
+// An item that the default list shows as an organization item and the
+// archived list as a personal item with its attachments. The attachment
+// checks read every entry, as capture.PersonalAttachments does, so the
+// personal attachments count as listed for the reference and an attachment
+// of the organization entry stays out of scope (design D6 of
+// capture-collection).
+func TestItemListedAsOrganizationAndPersonalItem(t *testing.T) {
+	f := ct.Intact(t)
+	personal := listEntry(t, f.ItemList, ct.ItemPasskeyLogin)
+	for _, raw := range f.ItemList {
+		if m := raw.(map[string]any); m["id"] == ct.ItemPasskeyLogin {
+			m["organizationId"] = ct.OrganizationFirst
+			m["attachments"] = []any{map[string]any{"id": ct.AttachmentOrg, "fileName": "org.txt"}}
+		}
+	}
+	f.ArchivedItemList = append(f.ArchivedItemList, personal)
+	in := f.Input(t)
+	in.Downloads = append(in.Downloads, capture.Download{
+		ItemID: ct.ItemPasskeyLogin, AttachmentID: ct.AttachmentOrg, SHA256: hashOf([]byte("x")), Size: 1,
+	})
+
+	r := runInput(t, f, in, true)
+	wantVerdict(t, r, verify.Failed)
+	if got := only(t, r, verify.ListedItemDiffersBetweenLists); got.ItemID != ct.ItemPasskeyLogin {
+		t.Errorf("finding = %+v", got)
+	}
+	for _, reason := range []verify.Reason{
+		verify.ReferenceAttachmentMissing, verify.ReferenceAttachmentNotExpected,
+		verify.AttachmentDownloadMissing, verify.AttachmentDownloadNotExpected,
+	} {
+		if got := find(r, reason); len(got) != 0 {
+			t.Errorf("findings with reason %s contradict the expected set: %+v", reason, got)
+		}
+	}
+	got := only(t, r, verify.AttachmentDownloadOutOfScope)
+	if got.AttachmentID != ct.AttachmentOrg || got.Severity != verify.SeverityWarning {
+		t.Errorf("warning = %+v", got)
+	}
+}

@@ -113,8 +113,12 @@ func TestModelHoldsNoOtherDecryptedField(t *testing.T) {
 			"HasRPID", "HasDiscoverable", "HasCreationDate", "InvalidFields"},
 		"ListedItem":    {"ID", "OrganizationID", "AttachmentIDs"},
 		"EncryptedItem": {"ID", "Type", "OrganizationID", "Format", "PasskeyCount"},
+		// FileNames is the one decrypted value kept outside the passkey
+		// checks, for the manifest only (design D5 of capture-collection).
+		"ItemList": {"Items", "DuplicateIDs", "DuplicateAttachments", "FileNames"},
 	}
 	for name, typ := range map[string]reflect.Type{
+		"ItemList":      reflect.TypeOf(capture.ItemList{}),
 		"PlaintextItem": reflect.TypeOf(capture.PlaintextItem{}),
 		"Passkey":       reflect.TypeOf(capture.Passkey{}),
 		"ListedItem":    reflect.TypeOf(capture.ListedItem{}),
@@ -660,6 +664,161 @@ func TestParseArchivedItemList(t *testing.T) {
 		}
 		if c.List.DuplicateIDs != nil {
 			t.Errorf("default list duplicates = %v", c.List.DuplicateIDs)
+		}
+	})
+}
+
+// The decryption error counts reach the capture unchanged (design D9 of
+// capture-collection).
+func TestParseCopiesDecryptionErrors(t *testing.T) {
+	t.Run("counts given", func(t *testing.T) {
+		in := ct.Intact(t).Input(t)
+		in.DecryptionErrors = capture.DecryptionErrors{PlaintextExport: 3, EncryptedExport: 1, ItemList: 4, ArchivedItemList: 2}
+		in.Downloads[0].DecryptionErrors = 5
+		c := capture.Parse(in)
+		if c.DecryptionErrors != in.DecryptionErrors {
+			t.Errorf("counts = %+v, want %+v", c.DecryptionErrors, in.DecryptionErrors)
+		}
+		if c.Downloads[0].DecryptionErrors != 5 || c.Downloads[1].DecryptionErrors != 0 {
+			t.Errorf("download counts = %d and %d, want 5 and 0", c.Downloads[0].DecryptionErrors, c.Downloads[1].DecryptionErrors)
+		}
+	})
+	t.Run("no counts", func(t *testing.T) {
+		f := ct.Intact(t)
+		withCounts := f.Input(t)
+		withCounts.DecryptionErrors = capture.DecryptionErrors{}
+		got, want := capture.Parse(withCounts), capture.Parse(f.Input(t))
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("capture with zero counts differs:\n got %+v\nwant %+v", got, want)
+		}
+		if got.DecryptionErrors != (capture.DecryptionErrors{}) || len(got.Errors) != 0 {
+			t.Errorf("counts = %+v, errors = %v", got.DecryptionErrors, got.Errors)
+		}
+	})
+}
+
+// The item list keeps the file name of every attachment for the manifest
+// (design D5 of capture-collection).
+func TestParseAttachmentFileNames(t *testing.T) {
+	first := capture.AttachmentRef{ItemID: ct.ItemPasskeyLogin, AttachmentID: ct.AttachmentFirst}
+	second := capture.AttachmentRef{ItemID: ct.ItemPasskeyLogin, AttachmentID: ct.AttachmentSecond}
+	attachmentsOf := func(t *testing.T, f *ct.Fixture) []any {
+		return itemIn(t, f.ItemList, ct.ItemPasskeyLogin)["attachments"].([]any)
+	}
+
+	t.Run("two attachments with the same name", func(t *testing.T) {
+		c := mustParse(t, ct.Intact(t))
+		want := map[capture.AttachmentRef]string{first: ct.AttachmentFileName, second: ct.AttachmentFileName}
+		if !reflect.DeepEqual(c.List.FileNames, want) {
+			t.Errorf("file names = %v, want %v", c.List.FileNames, want)
+		}
+		archived := capture.AttachmentRef{ItemID: ct.ItemArchivedLogin, AttachmentID: ct.AttachmentArchived}
+		if got, ok := c.ArchivedList.FileNames[archived]; !ok || got != ct.AttachmentFileName {
+			t.Errorf("archived file name = %q, %v", got, ok)
+		}
+	})
+	t.Run("missing file name", func(t *testing.T) {
+		f := ct.Intact(t)
+		delete(attachmentsOf(t, f)[0].(map[string]any), "fileName")
+		c := mustParse(t, f)
+		if got, ok := c.List.FileNames[first]; !ok || got != "" {
+			t.Errorf("file name = %q, %v, want an empty name", got, ok)
+		}
+	})
+	t.Run("numeric file name", func(t *testing.T) {
+		f := ct.Intact(t)
+		attachmentsOf(t, f)[0].(map[string]any)["fileName"] = 7
+		c := mustParse(t, f)
+		if got, ok := c.List.FileNames[first]; !ok || got != "" {
+			t.Errorf("file name = %q, %v, want an empty name", got, ok)
+		}
+		if len(c.List.Items) != 3 {
+			t.Errorf("listed items = %d, want 3", len(c.List.Items))
+		}
+	})
+	t.Run("duplicate ID pair", func(t *testing.T) {
+		f := ct.Intact(t)
+		item := itemIn(t, f.ItemList, ct.ItemPasskeyLogin)
+		repeated := map[string]any{"id": ct.AttachmentSecond, "fileName": "other-name.txt"}
+		item["attachments"] = append(attachmentsOf(t, f), repeated)
+		c := mustParse(t, f)
+		if got := c.List.FileNames[second]; got != ct.AttachmentFileName {
+			t.Errorf("file name = %q, want the first occurrence %q", got, ct.AttachmentFileName)
+		}
+		if len(c.List.FileNames) != 2 {
+			t.Errorf("file names = %v", c.List.FileNames)
+		}
+	})
+}
+
+// One function decides which attachments are expected (design D6 of
+// capture-collection).
+func TestPersonalAttachments(t *testing.T) {
+	ref := func(item, attachment string) capture.AttachmentRef {
+		return capture.AttachmentRef{ItemID: item, AttachmentID: attachment}
+	}
+	list := func(items ...capture.ListedItem) *capture.ItemList {
+		return &capture.ItemList{Items: items}
+	}
+	personal := capture.ListedItem{ID: "item-b", AttachmentIDs: []string{"att-2", "att-1"}}
+	organization := capture.ListedItem{ID: "item-org", OrganizationID: "org-1", AttachmentIDs: []string{"att-9"}}
+	archived := capture.ListedItem{ID: "item-a", AttachmentIDs: []string{"att-3"}}
+
+	for _, tc := range []struct {
+		name  string
+		lists []*capture.ItemList
+		want  []capture.AttachmentRef
+	}{
+		{
+			name:  "pair in both lists",
+			lists: []*capture.ItemList{list(personal), list(personal)},
+			want:  []capture.AttachmentRef{ref("item-b", "att-2"), ref("item-b", "att-1")},
+		},
+		{
+			name:  "organization item",
+			lists: []*capture.ItemList{list(organization, personal)},
+			want:  []capture.AttachmentRef{ref("item-b", "att-2"), ref("item-b", "att-1")},
+		},
+		{
+			name: "duplicate within one list",
+			lists: []*capture.ItemList{list(
+				capture.ListedItem{ID: "item-b", AttachmentIDs: []string{"att-1", "att-1"}}, personal)},
+			want: []capture.AttachmentRef{ref("item-b", "att-1"), ref("item-b", "att-2")},
+		},
+		{
+			name:  "nil list",
+			lists: []*capture.ItemList{nil, list(archived), nil},
+			want:  []capture.AttachmentRef{ref("item-a", "att-3")},
+		},
+		{
+			name:  "order of the result",
+			lists: []*capture.ItemList{list(personal), list(archived)},
+			want:  []capture.AttachmentRef{ref("item-b", "att-2"), ref("item-b", "att-1"), ref("item-a", "att-3")},
+		},
+		{
+			name:  "no lists",
+			lists: nil,
+			want:  nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := capture.PersonalAttachments(tc.lists...)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	t.Run("intact fixture", func(t *testing.T) {
+		c := mustParse(t, ct.Intact(t))
+		got := capture.PersonalAttachments(c.List, c.ArchivedList)
+		want := []capture.AttachmentRef{
+			ref(ct.ItemPasskeyLogin, ct.AttachmentFirst),
+			ref(ct.ItemPasskeyLogin, ct.AttachmentSecond),
+			ref(ct.ItemArchivedLogin, ct.AttachmentArchived),
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("got %v, want %v", got, want)
 		}
 	})
 }

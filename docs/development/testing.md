@@ -26,7 +26,7 @@ Rules the fixtures follow:
 - Encrypted fields are opaque placeholders in the CLI's encrypted-string notation. They are not ciphertext.
 - The fixture records a reference inventory outside the documents: credential ID, key fingerprint and counter per passkey, and a content hash per attachment. A variant that changes a document leaves the reference untouched.
 
-Twenty-two variants each break the intact fixture in one place: missing item, duplicate ID, one passkey missing, all passkeys dropped, blob login item, unrecognized item form, empty key, unparsable key, non-numeric counter, unknown key algorithm, swapped credential with equal count, organization items, listed item not exported, exported item not listed (removed from both lists), and the eight variants of the change archived-item-list: archive filter ignored with the archived item in neither list, archive filter ignored in a vault without archived items, an item in both lists with different attachment IDs, an item in both lists with a different organization, a duplicate ID within the archived list, an archived list that is not valid JSON, an absent archived list, and a missing download for the attachment of the archived item. The last two document variants replace the rendered archived list with a byte override. Every variant declares the places it changes, and a test compares that list with the actual difference to the intact fixture. The plaintext export and the item lists render the same decrypted view, so a variant that changes decrypted content changes both.
+Twenty-three variants each break the intact fixture in one place: missing item, duplicate ID, one passkey missing, all passkeys dropped, blob login item, unrecognized item form, empty key, unparsable key, non-numeric counter, unknown key algorithm, swapped credential with equal count, organization items, listed item not exported, exported item not listed (removed from both lists), and the eight variants of the change archived-item-list: archive filter ignored with the archived item in neither list, archive filter ignored in a vault without archived items, an item in both lists with different attachment IDs, an item in both lists with a different organization, a duplicate ID within the archived list, an archived list that is not valid JSON, an absent archived list, and a missing download for the attachment of the archived item. The change capture-collection adds a twenty-third variant with three decryption error lines on the plaintext export and three on the download of the first attachment; it changes only the counts, not the documents. The variants of an invalid and an absent archived list replace the rendered archived list with a byte override. Every variant declares the places it changes, and a test compares that list with the actual difference to the intact fixture. The plaintext export and the item lists render the same decrypted view, so a variant that changes decrypted content changes both.
 
 ## Verification Tests
 
@@ -83,6 +83,10 @@ Every scenario of the capture-verification spec has one test of the same name in
 | Archive filter that did not apply is reported | Archived list repeats the default list | `TestArchivedListRepeatsTheDefaultList` |
 | | Disjoint lists | `TestDisjointLists` |
 | | Both lists empty | `TestBothListsEmpty` |
+| Decryption error lines are reported | Decryption errors on the plaintext export | `TestDecryptionErrorsOnThePlaintextExport`, each document in `TestDecryptionErrorsOnEachDocument` |
+| | Decryption errors together with a proven deviation | `TestDecryptionErrorsTogetherWithAProvenDeviation` |
+| | Decryption errors on an attachment download | `TestDecryptionErrorsOnAnAttachmentDownload` |
+| | No decryption errors | `TestNoDecryptionErrors`, counts of zero or less in `TestDecryptionErrorsNegativeOrOnAFailedDownload` |
 
 ## Test Run of 14 November 2026
 
@@ -386,6 +390,55 @@ In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3 and OpenSpe
 
 Not run in the dev container: the tests on macOS, Windows and Linux amd64, which ran in CI afterwards, see [CI run of archived-item-list](#ci-run-of-16-november-2026-archived-item-list); any test with a real capture, an account that may not archive, the trash, or an archived item with an attachment.
 
+## Collection Tests
+
+The change capture-collection adds `internal/collect`. It has two layers (design D11 of that change):
+
+- **Unit tests** run the collection against an in-memory vault. It answers each call from a queue per method, records the calls, and reports a call without a queued answer as a test failure. The clock is fixed with a sub-millisecond part, and the wait before a retry records its duration and returns at once. They cover every scenario of the spec, every row of the classification table of design D7, the millisecond precision of the freshness check, a failure of each of the four document commands, and the clearing of documents and attachment content.
+- **Integration tests** named `TestIntegration…` start the real `bwcli.Client` against the fake `bw` of `internal/bwcli/bwclitest`, with the documents and attachments of the intact `capturetest` fixture as answers. `TestMain` builds the fake once per package run. They log in through a fake terminal, run the snapshot, `archive.NewWriter`, the attachments, `verify` and `publish.Publish` to a published generation, and open it again with `archive` and the test identity.
+
+A retry with a later success is covered at unit level only, because the fake gives the same command one fixed answer.
+
+Evidence level: mock. That `list`, `export` and `get` start no sync of their own comes from the [code notes of 17 November 2026](../research/bw-cli-code-notes-2026-11-17.md), not from a run.
+
+### Spec Scenario Coverage of capture-collection
+
+Every scenario of the capture-collection spec has at least one test in `internal/collect`. The mapping was checked with `go test -list` on 18 November 2026.
+
+| Requirement | Scenario | Test |
+|---|---|---|
+| Collection starts with a forced sync | Sync fails | `TestSyncFails`, `TestIntegrationFailingSync` |
+| Snapshot must be fresh | Fresh snapshot | `TestFreshSnapshot`, precision in `TestFreshnessAtMillisecondPrecision` |
+| | Stale snapshot | `TestStaleSnapshot`, `TestIntegrationStaleLastSync` |
+| | No last sync time | `TestNoLastSyncTime` |
+| | Vault not unlocked | `TestVaultNotUnlocked` |
+| Source comes from the status | Source of a capture | `TestSourceOfACapture`, `TestIntegrationIntactRun` |
+| Four documents are collected | All documents collected | `TestAllDocumentsCollected`, `TestIntegrationIntactRun` |
+| | Export fails | `TestExportFails`, each command in `TestEachDocumentCommandFails` |
+| Attachments of personal items are downloaded once | Attachment shown by both lists | `TestAttachmentShownByBothLists` |
+| | Organization attachment | `TestOrganizationAttachment` |
+| | Unparsable item list | `TestUnparsableItemList` |
+| Attachments are handed on one at a time | Two attachments | `TestTwoAttachments` |
+| | Receiver fails | `TestReceiverFails`, fixed text in `TestReceiverFailureTextIsNotRepeated` |
+| Download results record hash and size | Successful download | `TestSuccessfulDownload` |
+| | Error text with a sentinel | `TestErrorTextWithASentinel`, `TestIntegrationSentinelInErrorText` |
+| Transient download failures are retried | Second attempt succeeds | `TestSecondAttemptSucceeds` (unit level only) |
+| | Every attempt fails | `TestEveryAttemptFails` |
+| | Output limit exceeded | `TestOutputLimitExceeded`, row `output` in `TestDownloadClassification` |
+| Premium failure is a failed download | Premium required | `TestPremiumRequired`, `TestIntegrationPremiumRequired` |
+| Run-level failures end the collection | Session lost during the downloads | `TestSessionLostDuringTheDownloads` |
+| | Cancelled run | `TestCancelledRun`, during a wait in `TestCancellationDuringAWait` |
+| Decryption error counts are passed on | Plaintext export with decryption errors | `TestPlaintextExportWithDecryptionErrors`, `TestIntegrationDecryptionErrorsOnThePlaintextExport` |
+| | Download with decryption errors | `TestDownloadWithDecryptionErrors`, `TestIntegrationDecryptionErrorsOnADownload` |
+
+### Test Run of 18 November 2026, capture-collection
+
+In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3, age 1.2.1, GNU tar 1.34 and OpenSpec 2.0.0: `gofmt -l .` printed nothing, `go vet ./...` passed, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed in all packages with only expected skips, and `go test -race ./...` passed. The skips were `TestLeaveGenerationForOfflineExercise`, `TestKillHelper` and the five `TestRealBW…` tests, each with its reason. `GOOS=darwin` and `GOOS=windows` `go vet ./...` passed. The key-material search printed nothing. Evidence level: mock.
+
+After the review fixes of the same day (tasks 8.1 to 8.5 of the change: the output buffer of `bwcli`, no retry for output beyond the limit, `ErrReceive`, and the per-item views in `verify`), the same checks were run again with the same result and the same seven skips.
+
+Not run in the dev container: the tests on macOS, Windows and Linux amd64; any collection against the real `bw` or a live vault; a premium failure, a stale `lastSync` or decryption error lines from a real server; an archived item with an attachment; an attachment larger than a few kilobytes.
+
 ## Skip Report
 
 A skipped test is not a passed test. The program `internal/tools/skipreport` reads the output of `go test -json`, echoes it, and lists every skipped test with its reason. It exits with status 1 when a test failed or when a test was skipped that the list of expected skips does not allow for the platform. Run it the same way locally and in CI:
@@ -430,6 +483,12 @@ The workflow ran on the branch `archived-item-list` after the commit `0c78002`. 
 Evidence level: mock, on three platforms. Runner image versions and durations were not recorded. No test ran against a real capture, an account that may not archive, the trash or an archived item with an attachment.
 
 After this run the workflow was split to save runner minutes: `ci.yml` keeps the test matrix and runs only on changes to Go code, the module files, the list of expected skips or itself, and on pushes to `main` only; the new `checks.yml` runs formatting, module tidiness and the key-material search on every change. The first run after the split failed in `TestWorkflowStructure`, which still expected the checks in `ci.yml`. The test now covers both workflows and the path filters. After the commit `005b30f` the maintainer started both workflows by hand on the branch, and both passed.
+
+## CI Run of 18 November 2026, capture-collection
+
+The workflows ran on the pull request of the branch `capture-collection` at the commit `d9c9dca`: [CI](https://github.com/sercxanto/bw-takeout/actions/runs/44276489342) and [Checks](https://github.com/sercxanto/bw-takeout/actions/runs/44276489264). Both passed. The test matrix passed on `ubuntu-24.04`, `macos-26` and `windows-2025`, and the race tests ran on Linux only, as intended. The skip report passed on each runner, so every skip was one that `.github/expected-skips.txt` allows. The change added no skip, and the file was not changed. The integration tests of `internal/collect` built and ran the fake `bw` on all three platforms.
+
+Evidence level: mock, on three platforms. No test ran against the real `bw`, a live vault, a premium failure from a real server, or an archived item with an attachment.
 
 ## Race Tests on Linux Only, 17 November 2026
 

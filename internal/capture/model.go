@@ -44,6 +44,19 @@ type Input struct {
 	// document that does not parse (design D1 of archived-item-list).
 	ArchivedItemList []byte
 	Downloads        []Download
+	// DecryptionErrors holds the number of decryption error lines the CLI
+	// wrote with each document (design D9 of capture-collection). The zero
+	// value means no lines.
+	DecryptionErrors DecryptionErrors
+}
+
+// DecryptionErrors counts the decryption error lines of each document. The
+// lines name neither item nor field, so only their number is kept.
+type DecryptionErrors struct {
+	PlaintextExport  int
+	EncryptedExport  int
+	ItemList         int
+	ArchivedItemList int
 }
 
 // Capture is the parsed form of one capture. A document that was rejected
@@ -60,6 +73,8 @@ type Capture struct {
 	// download result, sorted.
 	DuplicateDownloads []AttachmentRef
 	Errors             []*DocumentError
+	// DecryptionErrors is copied from the input unchanged.
+	DecryptionErrors DecryptionErrors
 }
 
 // EncryptedExport is what the account-bound encrypted export shows. It
@@ -122,6 +137,11 @@ type ItemList struct {
 	// DuplicateAttachments lists every ID pair that occurs more than once
 	// on one item, sorted.
 	DuplicateAttachments []AttachmentRef
+	// FileNames maps every ID pair of the list to the file name of its
+	// first occurrence. A name that is absent or not a string is empty. The
+	// name is vault content: it is kept only for the encrypted manifest, and
+	// no check reads it (design D5 of capture-collection).
+	FileNames map[AttachmentRef]string
 }
 
 // ListedItem is one element of the item list.
@@ -151,6 +171,9 @@ type Download struct {
 	// SHA256 is the hex SHA-256 of the downloaded content.
 	SHA256 string
 	Size   int64
+	// DecryptionErrors is the number of decryption error lines the CLI
+	// wrote with a successful download. It is zero for a failed one.
+	DecryptionErrors int
 }
 
 // Ref returns the ID pair of the download.

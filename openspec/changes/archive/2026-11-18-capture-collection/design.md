@@ -40,7 +40,7 @@ Evidence for the behavior of `bw` 2026.10.1:
 - Login, logout, profile teardown and their order. These are in change C. The collection takes a client that is already logged in, and returns.
 - Report wording and exit codes.
 - Any comparison of two snapshots, and any inventory from another source than the four documents.
-- Changing `archive`, `publish` or the fake `bw`. The only change to `bwcli` is the default time limit of D12.
+- Changing `archive`, `publish` or the fake `bw`. The changes to `bwcli` are the default time limit of D12 and the buffer fix of D13.
 
 ## Decisions
 
@@ -65,6 +65,8 @@ Attachments(ctx, vault, snap, receive)     -> []capture.Download, error
 ```
 
 Change C calls `Snapshot` before it touches the target. It calls `Attachments` inside the `publish.WriteFunc`, after `archive.NewWriter` has taken the documents, and passes `(*archive.Writer).AddAttachment` as `receive`. The capture for `verify` is then `capture.Parse` of the snapshot documents with the downloads and the counts.
+
+A failure of the receiver ends the collection. It is returned wrapped in `ErrReceive`, an error of this package with fixed text, and the receiver's failure stays reachable through `errors.Unwrap`. The text of the receiver's failure, for example an entry path or an operating system error from the archive writer, therefore does not reach a report unless the caller asks for it, and every failure of the package stays a `*bwcli.Error` or an error of this package (review of 18 November 2026).
 
 *Alternative: one `Collect` call with a callback that opens the writer.* Rejected. It would hide inside the collection the point where the target directory is created, and that order belongs to change C. Two calls make the order visible at the call site and testable on its own.
 
@@ -107,6 +109,8 @@ A new function `capture.PersonalAttachments(lists ...*ItemList) []AttachmentRef`
 
 With one function, the downloads the collection makes are exactly the results the verification expects. A planned download can never be reported as unexpected, and an expected one can never be skipped by the plan.
 
+Every entry of a personal item counts, also when an item is listed twice. The other per-item views of `verify` follow the same rule: the check whether an unexpected download belongs to an organization item, and the comparison of listed attachments with a reference inventory, read every entry of the item in both lists, not only the first one (review of 18 November 2026). An item whose entries differ is a failed capture anyway, but its other findings must not contradict the expected set.
+
 If `ParseItemList` rejects either list, the plan is empty. The capture still goes to `verify`, where the document finding makes the verdict failed (spec scenario "Unparsable item list"). Downloading the attachments of the other list would cost time for a generation that is never published.
 
 ### D7. Classification of a failed download
@@ -115,7 +119,7 @@ If `ParseItemList` rejects either list, the plan is empty. The capture still goe
 |---|---|---|---|
 | `timeout` | yes | failed download after the last attempt | `process` |
 | `exit` | yes | failed download after the last attempt | `status` |
-| `output` | yes | failed download after the last attempt | `other` |
+| `output` | no | failed download | `other` |
 | `premium_required` | no | failed download | `status` |
 | `invalid_argument` | no | failed download | `other` |
 | `not_logged_in`, `locked`, `cancelled`, `start`, `profile_not_used`, `stray_file` | no | collection ends | — |
@@ -124,6 +128,7 @@ If `ParseItemList` rejects either list, the plan is empty. The capture still goe
 Notes on the table:
 
 - **`exit`** is what remains after `bwcli` has ruled out not logged in and locked with its status query. It can be a server or network error that a second attempt survives.
+- **`output`** on a download means only that the content passed the output limit of `bwcli` (1 GiB): `Attachment` takes empty output as content and does not check its form. A second attempt meets the same limit and would fetch up to the limit again, so it is not retried (maintainer decision, 18 November 2026, after the review).
 - **`invalid_argument`** means that the item list holds an ID of a form the archive would refuse. This is a fact about one attachment.
 - **The last row** cannot occur on a download. Ending the collection is the strictest answer, so an unexpected case never ends more leniently than a known one.
 - **Download error classes** are kept only for the report. `verify` treats every class the same (spec `capture-verification`, "Attachment accounting by ID").
@@ -153,7 +158,20 @@ The finding is unverified rather than failed, and the reasons are in the proposa
 
 The collection holds the four raw documents in the `Snapshot` until change C has passed them to `archive.NewWriter` and parsed them. `Snapshot` offers a `Wipe` method that clears the document bytes, and change C calls it after both steps.
 
-During `Attachments`, the content of one attachment exists while it is hashed and handed to `receive`. The collection clears the slice after `receive` returns, whether it succeeded or not. No step writes a file. The point in the roadmap about plaintext copies is met without a change to the writer, as the explore session of 16 November 2026 expected.
+During `Attachments`, the content of one attachment exists while it is hashed and handed to `receive`. The collection clears the slice after `receive` returns, whether it succeeded or not. No step writes a file.
+
+What is cleared:
+
+- the four raw documents, by `Wipe`, and the documents collected before a failed document command, at once,
+- the content of each attachment after `receive` returns, and the output of a failed attempt, which `bwcli` clears,
+- the earlier arrays of the output buffer of `bwcli`, which grows by copying (D13).
+
+What is not cleared, because Go strings cannot be overwritten and the garbage collector frees them at a time of its own:
+
+- the decoded JSON trees of the parsers: the item lists that `Snapshot` parses for the plan, the documents that `capture.Parse` reads, and the plaintext export that `archive.NewWriter` parses to count items,
+- the file names in `Snapshot.Plan` and the values in `Snapshot.Source`.
+
+They can appear in a core dump, a swap file or a memory snapshot of the process. This residual risk belongs to the memory hardening of change C (review of 18 November 2026).
 
 ### D11. Tests
 
@@ -186,16 +204,31 @@ The limit stays a field of `bwcli.Timeouts`, which the caller can set. The colle
 
 *Alternative: no retry after a timeout.* Rejected. A retry helps against a download that hangs. It does not help a download that is too slow for the limit, which fails on every attempt.
 
+### D13. The output buffer clears what it leaves behind
+
+The output buffer of `bwcli` grew with `append`. Each time it grew, the content so far was copied into a new array, and the old array was dropped without being cleared, so a document or an attachment that arrived in many writes left partial plaintext copies on the heap. The buffer now grows by allocating a larger array, copying and clearing the old one. This applies to every command, so it also covers the plaintext export (maintainer decision, 18 November 2026, after the review).
+
+*Alternative: a follow-up in the memory hardening of change C.* Rejected by the maintainer. The fix is small, and the copies hold the most sensitive document.
+
 ## Risks / Trade-offs
 
 - **Hidden syncs.** If `list`, `export` or `get` start a sync after all, the snapshot can change between the documents. → Task 1.1 reads the three commands and the services they call before any code is written. If it finds a sync, the work stops and the design returns to the comparison before and after.
 - **Large attachments over slow connections.** With a limit of 5 minutes (D12), an attachment that takes longer to transfer fails on every attempt and in every run, so the account gets no generation, as in the premium case. → Documented in `docs/user/limitations.md` with the bandwidth needed. Making the limit configurable belongs to the configuration format (roadmap item 6). The report in change C shows which download timed out.
+- **Attachments larger than the output limit.** An attachment whose content passes the output limit of 1 GiB fails once per run and is not retried (D7), so the account gets no generation.
 - **Long runs on a hanging attachment.** Three attempts take up to 15 minutes per attachment. → Accepted for the prototype.
 - **Accounts with lapsed premium never get a generation.** A premium failure stays a failed download, and a failed capture is not published. → Accepted and documented in `docs/user/limitations.md`. Publishing failed captures under a marker is not part of this change.
 - **Decryption error lines on a download are only a warning.** The probe showed exact bytes with error lines, but whether lines on a download can ever come with wrong content was not tested. → The warning keeps the case visible. Without a reference inventory, attachment content stays a standing limit of every result.
 - **Clock moved backwards during the sync.** `lastSync` can then lie before `t0`. → The collection ends, which is the safe direction. The user runs again.
 - **All four documents in memory at once.** Their size is bounded by the output limit of `bwcli`, which is 1 GiB per command. → Accepted for the prototype. Hardening is in roadmap item 6.
 - **Empty server URL in the manifest.** `bw status` may report no server URL for the default cloud server. This was not observed. → The source then holds an empty server URL, and the manifest accepts it. Change C decides how the report names the default.
+
+## Review of 18 November 2026
+
+A review of the branch led to D13, the `output` row of D7, `ErrReceive` in D2, the per-item views in D6 and the account in D10. Three findings led to no change:
+
+- **Retried timeouts under a limit of 5 minutes.** A retry does not help a download that is too slow for the limit. D12 and D8 already weighed this and keep the retry against a hanging download.
+- **A decryption warning for downloads outside the expected set.** D9 says every successful download, and the collection downloads only planned attachments, so the case does not arise from a collection.
+- **Each attachment is hashed twice**, by the collection and by the archive writer. Changing `archive` is out of scope, and the cost is small for attachments of a few megabytes.
 
 ## Migration Plan
 

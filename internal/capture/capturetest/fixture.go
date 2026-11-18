@@ -89,6 +89,10 @@ type Fixture struct {
 	ArchivedItemListBytes []byte
 	Attachments           []Attachment
 	Reference             Reference
+	// DecryptionErrors is the number of decryption error lines the CLI is
+	// taken to have written with each document. [Fixture.Input] passes it
+	// on unchanged.
+	DecryptionErrors capture.DecryptionErrors
 }
 
 // Attachment is the content of one attachment, identified by ID pair.
@@ -96,6 +100,9 @@ type Attachment struct {
 	ItemID       string
 	AttachmentID string
 	Content      []byte
+	// DecryptionErrors is the number of decryption error lines the CLI is
+	// taken to have written with the download.
+	DecryptionErrors int
 }
 
 // Reference is the inventory the fixture was built from. It is recorded
@@ -117,12 +124,14 @@ func (f *Fixture) Input(t testing.TB) capture.Input {
 		EncryptedExport:  f.EncryptedExportJSON(t),
 		ItemList:         f.ItemListJSON(t),
 		ArchivedItemList: f.ArchivedItemListJSON(t),
+		DecryptionErrors: f.DecryptionErrors,
 	}
 	for _, a := range f.Attachments {
 		sum := sha256.Sum256(a.Content)
 		in.Downloads = append(in.Downloads, capture.Download{
 			ItemID: a.ItemID, AttachmentID: a.AttachmentID,
 			SHA256: hex.EncodeToString(sum[:]), Size: int64(len(a.Content)),
+			DecryptionErrors: a.DecryptionErrors,
 		})
 	}
 	return in
@@ -254,6 +263,7 @@ func (f *Fixture) Clone() *Fixture {
 		EncryptedExport:  cloneTree(f.EncryptedExport).(map[string]any),
 		ItemList:         cloneTree(f.ItemList).([]any),
 		ArchivedItemList: cloneTree(f.ArchivedItemList).([]any),
+		DecryptionErrors: f.DecryptionErrors,
 	}
 	if f.ArchivedItemListBytes != nil {
 		c.ArchivedItemListBytes = append([]byte{}, f.ArchivedItemListBytes...)

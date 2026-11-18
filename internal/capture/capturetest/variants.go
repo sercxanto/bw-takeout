@@ -31,6 +31,9 @@ const (
 	ArchivedListInvalidJSON            = "archived-list-invalid-json"
 	ArchivedListAbsent                 = "archived-list-absent"
 	ArchivedAttachmentDownloadMissing  = "archived-attachment-download-missing"
+
+	// Variant of the change capture-collection (design D9).
+	DecryptionErrorLines = "decryption-error-lines"
 )
 
 // IDs that only variants use.
@@ -348,6 +351,20 @@ func Variants() []Variant {
 			Changes: []string{"~ attachments"},
 			apply: func(t testing.TB, f *Fixture) {
 				f.Attachments = withoutAttachmentsOf(f.Attachments, ItemArchivedLogin)
+			},
+		},
+		{
+			Name: DecryptionErrorLines,
+			Models: "The CLI wrote three decryption error lines with the plaintext export and three " +
+				"with the download of the first attachment, and exited with code 0 each time.",
+			Changes: []string{"~ attachments", "~ decryption-errors"},
+			apply: func(t testing.TB, f *Fixture) {
+				f.DecryptionErrors.PlaintextExport = 3
+				for i := range f.Attachments {
+					if f.Attachments[i].AttachmentID == AttachmentFirst {
+						f.Attachments[i].DecryptionErrors = 3
+					}
+				}
 			},
 		},
 	}

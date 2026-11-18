@@ -1,10 +1,10 @@
-# Spec Delta
+# capture-collection Specification
 
 ## Purpose
 
 Collects one capture of a personal vault from a logged-in official CLI: a fresh local snapshot, the four captured documents and the attachments of personal items, handed on one at a time, with download results and decryption error counts the verification can judge.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Collection starts with a forced sync
 The collection SHALL start with a forced sync before any document is requested. A failure of the sync SHALL end the collection without a capture.
@@ -71,7 +71,7 @@ The collection SHALL request one download for each attachment that the default o
 - **AND** the capture is still passed to the verification
 
 ### Requirement: Attachments are handed on one at a time
-The collection SHALL hand each successfully downloaded attachment, with its IDs and its file name from the item list, to the receiver before it requests the next one, and SHALL NOT keep the content after the receiver returns. The collection SHALL NOT write attachment content to a file. A failure of the receiver SHALL end the collection.
+The collection SHALL hand each successfully downloaded attachment, with its IDs and its file name from the item list, to the receiver before it requests the next one, and SHALL NOT keep the content after the receiver returns. The collection SHALL NOT write attachment content to a file. A failure of the receiver SHALL end the collection with a failure that keeps the receiver's failure as its cause and does not repeat its text.
 
 #### Scenario: Two attachments
 - **WHEN** two attachments are downloaded
@@ -94,7 +94,7 @@ For each requested attachment, the collection SHALL record exactly one download 
 - **THEN** the download result and the collection failure do not contain the sentinel
 
 ### Requirement: Transient download failures are retried
-A download that fails with a timeout, a non-zero exit code without a more specific class, or output of an unexpected form SHALL be retried up to a fixed number of attempts. A download that succeeds on a later attempt SHALL count as successful. When the last attempt fails, the result SHALL be a failed download.
+A download that fails with a timeout or a non-zero exit code without a more specific class SHALL be retried up to a fixed number of attempts. A download that succeeds on a later attempt SHALL count as successful. When the last attempt fails, the result SHALL be a failed download. A download whose output passes the output limit SHALL NOT be retried and SHALL be recorded as a failed download.
 
 #### Scenario: Second attempt succeeds
 - **WHEN** the first attempt of a download times out and the second succeeds
@@ -103,6 +103,12 @@ A download that fails with a timeout, a non-zero exit code without a more specif
 #### Scenario: Every attempt fails
 - **WHEN** every attempt of a download exits with a non-zero exit code
 - **THEN** the download result is failed
+- **AND** the collection goes on with the next attachment
+
+#### Scenario: Output limit exceeded
+- **WHEN** a download fails because its output passes the output limit
+- **THEN** the download is requested once
+- **AND** its result is a failed download
 - **AND** the collection goes on with the next attachment
 
 ### Requirement: Premium failure is a failed download
