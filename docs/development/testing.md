@@ -150,7 +150,7 @@ Every scenario of the three specs of the change archive-generation has at least 
 | | Leftover from an aborted run | `publish.TestLeftoverFromAnAbortedRun` |
 | | Missing target | `publish.TestMissingTarget` |
 | | Permissions on Linux | `publish.TestPermissionsOnLinux` |
-| offline-verification | System without bw | `main.TestSystemWithoutBW`, `main.TestNoNetworkOrProcessPackage` |
+| offline-verification | System without bw | `main.TestSystemWithoutBW`, `offline.TestNoNetworkOrProcessPackage` |
 | | Intact generation | `main.TestVerifiedCapture`, `main.TestEndToEnd` |
 | | Entry differs from the manifest | `archive.TestReaderScenarios/entry_differs_from_the_manifest`, `archive.TestReaderScenariosForTheArchivedItemList`, `main.TestFailedVerification/damaged_entry` |
 | | Entry not listed | `archive.TestReaderScenarios/entry_not_listed`, `archive.TestReaderScenariosForTheArchivedItemList` |
@@ -160,7 +160,7 @@ Every scenario of the three specs of the change archive-generation has at least 
 | | Altered byte | `archive.TestAlteredByte`, `main.TestFailedVerification/altered_byte` |
 | | Identity of another key pair | `archive.TestIdentityOfAnotherKeyPair`, `main.TestFailedVerification/identity_of_another_key_pair` |
 | | Partial generation | `main.TestPartialGeneration`, `main.TestDirectoryWithoutArchive` |
-| | Partial generation reached through another path | `main.TestPartialGenerationByAnotherPath` |
+| | Partial generation reached through another path | `offline.TestPartialGenerationByAnotherPath` |
 | | Symbolic link entry | `archive.TestReaderScenarios/symbolic_link_entry` |
 | | Recovery instructions not first | `archive.TestReaderScenarios/recovery_instructions_not_first` |
 | | Newer format version | `archive.TestReaderScenarios/newer_format_version`, `main.TestFailedVerification/newer_format_version` |
@@ -169,6 +169,8 @@ Every scenario of the three specs of the change archive-generation has at least 
 | | Unverified capture | `main.TestUnverifiedCapture` |
 | | Failed verification | `main.TestFailedVerification` |
 | | Generation with sentinel values | `main.TestGenerationWithSentinelValues` |
+
+The change interactive-backup-run replaced the check of the whole binary for "System without bw" with `offline.TestNoNetworkOrProcessPackage`, which checks the dependencies of the package that holds the `verify` command, because the binary now also holds the backup command (design D9 of that change).
 
 ## Test Run of 14 November 2026, archive-generation
 
@@ -439,6 +441,168 @@ After the review fixes of the same day (tasks 8.1 to 8.5 of the change: the outp
 
 Not run in the dev container: the tests on macOS, Windows and Linux amd64; any collection against the real `bw` or a live vault; a premium failure, a stale `lastSync` or decryption error lines from a real server; an archived item with an attachment; an attachment larger than a few kilobytes.
 
+## Backup Run Tests
+
+The change interactive-backup-run adds `internal/run`, `internal/report`, `internal/offline`, `internal/printable` and the `backup` subcommand of `cmd/bw-takeout` (design D11 of that change).
+
+- **Run tests** in `internal/run` start `run.Run` with the real `bwcli.Client` against the fake `bw` of `internal/bwcli/bwclitest`, which `TestMain` builds once per package run. The tests are in the external package `run_test`, so that they can wire the run through `report` as the command does. `export_test.go` exposes two internals: a hook that sees the snapshot, to check that its four documents are wiped, and the logout limit a run uses.
+  - A profile function wraps `profile.Creator.Create` on a temporary location and writes the scenario into each new data directory. It moves the data directory out of the profile directory, so that the records of the fake survive teardown. The tests check the removal of the profile directory itself.
+  - The terminal is a fake `bwcli.Terminal`, the login reads from the null device, and its standard error is a file.
+  - Signals are a channel that the test writes to. A test sends a signal once the record file shows that the command it wants to interrupt started, or from a hook in the progress recorder or in a publisher that wraps `publish.Publisher`. The hooks place a signal after a failed version query, after the downloads, between the write function and the commit, and between `Publish` and teardown.
+  - The clock is fixed, waits between download attempts return at once, and the logout limit is injected: 200 ms in the test of a hanging logout, with a separate test that the default is 10 s.
+  - Documents and attachments come from `capturetest`. Every fake command except the login writes a sentinel to standard error.
+  - The target is hashed before and after where it must stay untouched. `TMPDIR`, `TMP` and `TEMP` point at an empty directory that must stay empty.
+  - A profile directory that cannot be removed is made with a missing write permission on Unix and a file held open inside it on Windows.
+- **Report tests** in `internal/report` render synthetic outcomes: a golden test of the example of design D8, the ending lines of each kind of run, and a table test of `ExitStatus` over every row of design D7.
+- **Command tests** in `cmd/bw-takeout` run the built binary with a search path that holds no `bw` and user cache directories that must stay empty. They cover the usage errors, the checks before the first process, the signals the command subscribes to, and a comparison of the flags in the usage text with the [usage page](../user/usage.md).
+
+The interrupt tests passed `go test -race -count=20 -run 'Interrupt|Terminate|BWEnds' ./internal/run/` in the dev container on 18 November 2026.
+
+The fake ends a command only when it is stopped or when its answer is written, so a `bw` that ends on its own while the run handles an interrupt is placed by a hook, not by timing. The interrupt path of the real `bw` on Windows, where the console sends the interrupt to `bw` as well, is untested.
+
+Evidence level: mock.
+
+### Spec Scenario Coverage of backup-run
+
+Every scenario of the backup-run delta has at least one test. Names without a package are in `internal/run`. The mapping was checked with `go test -list` on 18 November 2026.
+
+| Requirement | Scenario | Test |
+|---|---|---|
+| Backup inputs are flags | Server flag missing | `main.TestServerFlagMissing` |
+| | Server address not HTTPS | `main.TestServerAddressNotHTTPS`, `bwcli.TestValidServerAddressExported` |
+| Recipients come from a file | Two recipients with a comment | `archive.TestTwoRecipientsWithAComment` |
+| | Invalid line | `archive.TestInvalidLine` |
+| Inputs are checked before the first bw process | Target missing | `TestTargetMissing`, `main.TestBackupTargetMissingWithoutBW` |
+| | bw not found | `TestBWNotFound`, `main.TestBackupBWNotFound` |
+| The target is untouched until the snapshot is complete | Stale snapshot | `TestStaleSnapshot` |
+| Logout after every login attempt | Login refused | `TestLoginRefused` |
+| | Failure before the login | `TestFailureBeforeTheLogin` |
+| Logout is bounded | Logout hangs | `TestLogoutHangs`, `TestDefaultLogoutLimit` |
+| Interrupts end the run and keep teardown | Interrupt during the attachments | `TestInterruptDuringTheAttachments`, `TestInterruptMessagesOnStandardError` |
+| | Interrupt before the target is touched | `TestInterruptBeforeTheTargetIsTouched` |
+| An interrupt during teardown ends the logout | Second interrupt during the logout | `TestSecondInterruptDuringTheLogout`, before the logout in `TestSecondInterruptBeforeTheLogout` |
+| The run decides on interrupts itself | bw ends on its own after the interrupt | `TestBWEndsOnItsOwnAfterTheInterrupt`, `report.TestEndingLines` |
+| | Terminate signal | `TestTerminateSignal`, `main.TestInterruptSignalsOnUnix` |
+| Plaintext stays in memory | No temporary files | `TestNoTemporaryFiles`, `TestDocumentsWipedAfterPublishedRun`, `TestDocumentsWipedAfterWriterFailure` |
+| Report shows the setup and the leftovers | Leftovers present | `TestLeftoversPresent` |
+| Report shows progress per attachment | One download fails | `TestOneDownloadFails` |
+| Report shows the verdict in full | Failed verdict | `TestFailedVerdict`, `report.TestEndingLines` |
+| Report shows how the run ended | Profile not removed | `TestProfileNotRemoved` |
+| | Status without server address | `TestStatusWithoutServerAddress`, `report.TestStatusWithoutServerAddressUsesTheFlag` |
+| Report holds no vault content and no bw text | Sentinels in the vault and in bw output | `TestSentinelsInTheVaultAndInBWOutput` |
+| | Control characters in the account address | `TestControlCharactersInTheAccountAddress`, `report.TestValuesAreCleaned` |
+| Exit status of a backup | Verified backup | `TestVerifiedBackup`, `report.TestExitStatusTable` |
+| | Unverified backup | `TestUnverifiedBackup` |
+| | Published generation, logout failed | `TestPublishedGenerationLogoutFailed` |
+| | Failed verdict | `TestFailedVerdict` |
+| | No generation and profile not removed | `TestNoGenerationAndProfileNotRemoved` |
+
+Further tests cover the cases of the tasks beyond the scenarios: a target that is a file, an empty or missing recipients file, a CA path that is a directory, a relative `--bw` path, the full intact run with the archive opened again, the first interrupt during the logout, an interrupt during the commit and one just before it, a failed logout, the removal error in the outcome, and the golden report. The review fixes of 18 November 2026 added `TestPublishedGenerationWithFlushError`, `TestFailedVerdictWithFailedAbort`, `TestWriteFailureWithFailedAbort`, `TestPanicKeepsTeardown`, `TestLogoutResultByCause` and `main.TestBrokenPipeOnStandardOutput`, the second round `TestFailureBeforeAnInterruptDuringTheLogout` and `TestSignalAfterTheLogoutReturned` and further cases of `report.TestEndingLines`. Each failed with its fix reverted.
+
+### Test Run of 18 November 2026, interactive-backup-run
+
+In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3: `gofmt -l .` printed nothing, `go vet ./...` passed for Linux, `GOOS=darwin` and `GOOS=windows`, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed in all packages with only expected skips, and `go test -race ./...` passed. The skips were `TestLeaveGenerationForOfflineExercise`, `TestKillHelper` and the five `TestRealBW…` tests, each with its reason. The change added no skip. It moved the Windows skip of `TestPartialGenerationByAnotherPath` in `.github/expected-skips.txt` from `cmd/bw-takeout` to `internal/offline` together with the test. `cmd/bw-takeout` was built for `darwin/arm64` and `windows/amd64`. The key-material search printed nothing. Evidence level: mock.
+
+Not run in the dev container: the tests on macOS, Windows and Linux amd64, any backup against the real `bw` or a live server, the [manual backup exercise](#manual-backup-exercise), an interrupt of the real `bw` on any platform, and attachments larger than a few kilobytes. The manual exercise ran later the same day, see [its record](#backup-exercise-of-18-november-2026).
+
+### Manual Backup Exercise
+
+The backup needs a terminal and a person who types, so it cannot run in `go test`. This exercise runs `bw-takeout backup` by hand against the Vaultwarden instance of the [login exercise](#manual-login-exercise), with a synthetic account. It is the first full run against a real server. It measures how long the logout takes and checks whether an archived item with an attachment reaches the generation, which was not observed yet. All files go to the ignored `.local/` directory. Run every command from the repository root in a real terminal of the dev container.
+
+**1. Start the server.** Follow steps 1 to 4 of the login exercise: fetch Vaultwarden 1.37.4, create the certificate, start the server and forward port 8087.
+
+**2. Prepare the account** in the web vault at `https://localhost:8087` on the host. Use a synthetic account with an address under `example.invalid`, a password used nowhere else, and two-step login with an authenticator app. The account of the login exercise can be reused. The vault holds exactly:
+
+- a login item with a passkey,
+- a login item with one attachment,
+- an archived login item with one attachment.
+
+The web vault cannot create a passkey by hand, so the first item is imported. The following commands write an import file in the Bitwarden JSON format with one login item and one passkey. The key is generated on the spot and exists only in `.local/` and in the synthetic vault:
+
+```sh
+EX="$PWD/.local/backup-exercise"
+mkdir -p "$EX"
+KEY=$(openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 | openssl pkcs8 -topk8 -nocrypt -outform DER | basenc --base64url -w0 | tr -d =)
+CRED=$(cat /proc/sys/kernel/random/uuid)
+HANDLE=$(head -c 16 /dev/urandom | basenc --base64url -w0 | tr -d =)
+jq -n --arg key "$KEY" --arg cred "$CRED" --arg handle "$HANDLE" '{encrypted: false, folders: [], items: [{
+  type: 1, name: "exercise passkey", favorite: false, reprompt: 0,
+  login: {username: "exercise", password: null, totp: null, uris: [{uri: "https://passkey.example.invalid", match: null}],
+    fido2Credentials: [{credentialId: $cred, keyType: "public-key", keyAlgorithm: "ECDSA", keyCurve: "P-256",
+      keyValue: $key, rpId: "passkey.example.invalid", userHandle: $handle, userName: "exercise", counter: "0",
+      rpName: "Exercise", userDisplayName: "Exercise", discoverable: "true", creationDate: "2026-11-18T00:00:00.000Z"}]}}]}' \
+  >"$EX/import.json"
+head -c 20000000 /dev/urandom >"$EX/attachment-personal.bin"
+head -c 20000000 /dev/urandom >"$EX/attachment-archived.bin"
+```
+
+In the web vault, import `import.json` with the format "Bitwarden (json)" and check that the item shows a passkey. Create the second and the third login item by hand and add `attachment-personal.bin` to the second and `attachment-archived.bin` to the third. Then archive the third item. The attachments are random bytes of 20 MB each, so that a download takes long enough to be interrupted. Record whether the import kept the passkey and whether the web vault offered the archive action. Then delete `import.json`.
+
+**3. Create the key pair and build the command:**
+
+```sh
+EX="$PWD/.local/backup-exercise"
+mkdir -p "$EX/target" "$EX/target-redirected" "$EX/target-interrupted"
+age-keygen -o "$EX/identity.txt"
+age-keygen -y "$EX/identity.txt" >"$EX/recipients.txt"
+go build -o .local/bin/bw-takeout ./cmd/bw-takeout
+GOOS=darwin GOARCH=arm64 go build -o .local/bin/bw-takeout-darwin-arm64 ./cmd/bw-takeout
+backup() { .local/bin/bw-takeout backup --server https://localhost:8087 --ca "$PWD/.local/vaultwarden/cert.pem" --recipients-file "$EX/recipients.txt" --target "$1"; }
+```
+
+**4. Run the three backups** of design D11 of the change interactive-backup-run, one after the other. Each run asks for the address, the master password and the code at the terminal.
+
+| Run | Command | What the person does |
+|---|---|---|
+| 1. Output on the terminal | `backup "$EX/target"; echo "exit $?"` | Enter address, password and code |
+| 2. Output redirected | `backup "$EX/target-redirected" >"$EX/report.txt"; echo "exit $?"; cat "$EX/report.txt"` | As in run 1. The prompts still appear, because they go to standard error |
+| 3. Interrupt during the attachments | `backup "$EX/target-interrupted"; echo "exit $?"; ls -A "$EX/target-interrupted"` | As in run 1, then press Ctrl-C once after the line `Attachments: 2 planned` and before the report ends |
+
+Run 3 must end with exit status 1, print the interrupt message on standard error and leave `target-interrupted` empty. If the downloads finish before Ctrl-C, record that and repeat the run with larger attachments.
+
+**5. Check the generations offline:**
+
+```sh
+for g in "$EX"/target/bw-takeout-* "$EX"/target-redirected/bw-takeout-*; do
+  .local/bin/bw-takeout verify --identity "$EX/identity.txt" "$g"; echo "exit $?"
+  age -d -i "$EX/identity.txt" "$g/vault.tar.age" | tar -t | grep '^attachments/'
+done
+ls -A ~/.cache/bw-takeout/profiles
+```
+
+The `tar -t` line lists entry names only, which hold IDs, and writes nothing to disk. It shows whether the attachment of the archived item is in the generation. The profile location must be empty.
+
+**6. On macOS, if possible,** repeat runs 1 and 3 with the official single-file `bw` 2026.10.1 and `bw-takeout-darwin-arm64`, as in step 8 of the login exercise, with `--bw "$PWD/bw"`, and the generation of run 1 checked with `verify`.
+
+**What to record.** For each run: the system, the run, the full report (it holds no vault content), the exit status, the messages on standard error other than the prompts of `bw`, and anything unexpected on the terminal. Once per system: the `bw` line and the `bw version` line of the report, `go version` and the operating system version. From the report of each run: the logout line with its duration. From step 5: the output of `verify`, the attachment entries, and whether the attachment of the archived item is among them. From the web vault after all runs: the number of device entries of the account. Never record the password, the code, the TOTP seed, the identity, the session key, the archive or text that `bw` wrote beyond the prompt names.
+
+**7. Clean up.** Stop the server, remove `.local/backup-exercise` and `.local/bin/bw-takeout*`, remove the folder on the Mac, and delete the entry of the synthetic account from the authenticator app.
+
+### Backup Exercise of 18 November 2026
+
+The maintainer ran the [manual backup exercise](#manual-backup-exercise) against Vaultwarden 1.37.4 with web vault 2026.7.0, fetched and checked as in step 1 of the login exercise, in the dev container on Debian 12, Linux 6.8 aarch64. The command was built from the working tree of the change with Go 1.27.3, for Linux arm64 and for darwin/arm64. The account was a new synthetic account under `example.invalid` with two-step login by an authenticator app. It held the three items of step 2. The web vault imported the passkey item with its passkey shown, and offered the archive action for the third item.
+
+| System | `bw` | Run | Exit | Report |
+|---|---|---|---:|---|
+| Linux arm64, dev container | npm 2026.10.1, sha256 of `bw.js` `8a443d1190643330826e8cc0b27381fba5af5a06c6c3d7c7254033913a51ee9b` | 1. output on the terminal | 0 | `verified`, 2 of 2 attachments ok, generation published, logout ok (2.6 s), profile removed |
+| | | 2. output redirected | 0 | as run 1, logout ok (2.6 s). The prompts of `bw` appeared on the terminal, and the file held the report only |
+| | | 3. interrupt during the attachments | 1 | interrupt message on standard error, `Generation:  none published`, `Interrupted during attachments.`, logout ok (2.6 s), profile removed, target empty |
+| macOS 26.7.3 (25G342) arm64 | official single-file 2026.10.1, sha256 `447a511044b8add85059c6f3f43b61e0e3dcfa2e0208e5baf68317552c156369`, from the release asset with the digest of the login exercise | 1. output on the terminal | 0 | as run 1 on Linux, logout ok (2.6 s) |
+| | | 3. interrupt during the attachments | 1 | as run 3 on Linux, logout ok (2.7 s) |
+
+Results:
+
+- `bw-takeout verify` passed with exit status 0 on the generations of runs 1 and 2 on Linux and of run 1 on macOS, which was copied into the dev container, because the identity stayed there. Each held 3 items, 2 attachments and 7 entries, and the verdict `verified`.
+- The attachment of the archived item was in every generation, under `attachments/<item ID>/<attachment ID>`. This is the first observation of an archived item with an attachment in a real capture. The attachment IDs of Vaultwarden have 20 hexadecimal characters.
+- The login worked with standard output redirected to a file, as the code of `bwcli` predicts.
+- The logout took 2.6 to 2.7 seconds on both systems, below the limit of 10 seconds.
+- The profile location was empty after the last run on both systems, and no run left a partial generation.
+- After all five runs the web vault listed six devices for the account: one web browser and five CLI entries, one per run with a successful login, including the interrupted runs. The logout did not remove any entry, as finding 10 of the code notes expects.
+- `bw` showed the address and the two-step code as typed on the terminal after each prompt. That is output of `bw`, not of the report. The codes are not recorded here.
+- No result contradicts a code note, so no research note was added.
+
+Not run: Windows, Linux amd64, Bitwarden Cloud, a second interrupt during the logout, an interrupt at a prompt of `bw` during the backup, an account with organization items, an account with lapsed premium, attachments larger than 20 MB, and run 2 on macOS. Evidence level: manual end-to-end run with a synthetic account, Vaultwarden only.
+
 ## Skip Report
 
 A skipped test is not a passed test. The program `internal/tools/skipreport` reads the output of `go test -json`, echoes it, and lists every skipped test with its reason. It exits with status 1 when a test failed or when a test was skipped that the list of expected skips does not allow for the platform. Run it the same way locally and in CI:
@@ -461,7 +625,7 @@ Evidence level: mock, on three platforms. The runner image versions, the Go and 
 
 CI covers the tests on Linux amd64, macOS arm64 and Windows amd64 with the file systems of the runners (ext4, APFS and NTFS, as far as the images use them). It does not cover Linux arm64, which stays with the dev container, nor FAT or exFAT media, network shares, the manual offline exercise on a second system, any live capture or the real `bw` binary. CI passing is not a statement of platform support.
 
-The run on FAT or exFAT media is deferred to the change `interactive-backup-run` (maintainer decision of 15 November 2026). Until a backup command exists, no user writes to such a target. A failure there would show as an error with a partial generation left behind, not as a backup that only looks successful. The weak guarantees of these file systems after a power loss are stated in the [limitations](../user/limitations.md) and are beyond what a test run shows. The run must pass before a first release.
+The run on FAT or exFAT media was deferred on 15 November 2026 (maintainer decision) and is now item D of the [roadmap](architecture.md#roadmap). Since 18 November 2026 `bw-takeout backup` can write to such a target. A failure there would show as an error with a partial generation left behind, not as a backup that only looks successful. The weak guarantees of these file systems after a power loss are stated in the [limitations](../user/limitations.md) and are beyond what a test run shows. The run must pass before a first release.
 
 ## CI Run of 15 November 2026, bw-process-adapter
 

@@ -1,6 +1,6 @@
 # Security
 
-The archive contains passkey keys and other highly sensitive data. Anyone who has both an archive and a matching identity can read all of it. Handling of temporary plaintext and leftovers from aborted runs is defined for writing and verifying archives. The handling of the `bw` process and its profile, described below, is built and tested against a stand-in for `bw`. The backup run that uses it does not exist yet.
+The archive contains passkey keys and other highly sensitive data. Anyone who has both an archive and a matching identity can read all of it. Handling of temporary plaintext and leftovers from aborted runs is defined for writing and verifying archives. The handling of the `bw` process and its profile, described below, is built and tested against a stand-in for `bw`. `bw-takeout backup` uses it, and was run by hand against a Vaultwarden server on Linux and macOS, see [testing](../development/testing.md#backup-exercise-of-18-november-2026).
 
 ## Key Separation
 
@@ -11,6 +11,18 @@ The verify command reads the identity only from a file. Error messages about an 
 ## Plaintext
 
 Writing and verifying an archive keep plaintext in memory and inside the encryption stream. Neither creates a temporary file. Manual recovery with age and tar writes plaintext to disk, see [recovery](recovery.md).
+
+## Swap, Hibernation and Core Dumps
+
+This program writes no vault content to a file, but the operating system can still put the memory of the process on disk. During a backup the four captured documents, among them the plaintext export with every password, note and passkey key, stay in memory for the whole download phase, because the verification needs them together with the download results. They are overwritten as soon as the capture is parsed. Decoded copies of parts of them stay in memory as text until the Go runtime frees them, and they cannot be overwritten.
+
+While they are in memory, three things can copy them to disk:
+
+- **Swap**: the system can move memory of the process to a swap file or partition.
+- **Hibernation**: the system writes all memory to disk when it hibernates.
+- **Core dumps**: a crash of the process can write its memory to a core file, depending on the settings of the system.
+
+Use encrypted swap or an encrypted disk, such as FileVault on macOS, BitLocker on Windows or LUKS on Linux, on any system that runs a backup. The program does not yet limit core dumps and does not lock its memory. A separate memory hardening change, planned after the first backup command, will disable core dumps on Linux and macOS and examine what Windows offers.
 
 ## Permissions
 

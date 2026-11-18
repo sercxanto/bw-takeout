@@ -90,44 +90,94 @@ func ParseRecipients(recipients []string) ([]age.Recipient, error) {
 	return out, nil
 }
 
-// maxIdentityFile bounds how much of an identity file is read.
-const maxIdentityFile = 1 << 20
+// maxKeyFile bounds how much of an identity or recipients file is read.
+const maxKeyFile = 1 << 20
 
 // ErrIdentityFile is wrapped by every error about an identity file. The
 // errors name line numbers and never content.
 var ErrIdentityFile = errors.New("identity file")
 
-// ParseIdentityFile reads unencrypted age X25519 identities, one per line.
-// Empty lines and lines starting with # are skipped. Any other line that is
-// not an identity, and a file without any identity, are refused.
-func ParseIdentityFile(r io.Reader) ([]age.Identity, error) {
-	data, err := io.ReadAll(io.LimitReader(r, maxIdentityFile+1))
+// ErrRecipientFile is wrapped by every error about a recipients file. The
+// errors name line numbers and never content (design D10 of
+// interactive-backup-run).
+var ErrRecipientFile = errors.New("recipients file")
+
+// keyLine is one line of a key file that is neither empty nor a comment.
+type keyLine struct {
+	n    int
+	text string
+}
+
+// readKeyLines reads a file of one key per line. Empty lines and lines
+// starting with # are skipped, and whitespace at both ends of a line is
+// trimmed. Errors wrap base and name no content.
+func readKeyLines(r io.Reader, base error) ([]keyLine, error) {
+	data, err := io.ReadAll(io.LimitReader(r, maxKeyFile+1))
 	if err != nil {
-		return nil, fmt.Errorf("%w: cannot be read", ErrIdentityFile)
+		return nil, fmt.Errorf("%w: cannot be read", base)
 	}
-	if len(data) > maxIdentityFile {
-		return nil, fmt.Errorf("%w: larger than %d bytes", ErrIdentityFile, maxIdentityFile)
+	if len(data) > maxKeyFile {
+		return nil, fmt.Errorf("%w: larger than %d bytes", base, maxKeyFile)
 	}
-	var ids []age.Identity
+	var lines []keyLine
 	sc := bufio.NewScanner(strings.NewReader(string(data)))
-	sc.Buffer(make([]byte, 0, 4096), maxIdentityFile)
+	sc.Buffer(make([]byte, 0, 4096), maxKeyFile)
 	for n := 1; sc.Scan(); n++ {
 		line := strings.TrimSpace(sc.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		id, err := age.ParseX25519Identity(line)
-		if err != nil {
-			// The age error may quote the line, so it is not wrapped.
-			return nil, fmt.Errorf("%w: line %d is not an unencrypted age X25519 identity", ErrIdentityFile, n)
-		}
-		ids = append(ids, id)
+		lines = append(lines, keyLine{n, line})
 	}
 	if err := sc.Err(); err != nil {
-		return nil, fmt.Errorf("%w: cannot be read", ErrIdentityFile)
+		return nil, fmt.Errorf("%w: cannot be read", base)
+	}
+	return lines, nil
+}
+
+// ParseIdentityFile reads unencrypted age X25519 identities, one per line.
+// Empty lines and lines starting with # are skipped. Any other line that is
+// not an identity, and a file without any identity, are refused.
+func ParseIdentityFile(r io.Reader) ([]age.Identity, error) {
+	lines, err := readKeyLines(r, ErrIdentityFile)
+	if err != nil {
+		return nil, err
+	}
+	var ids []age.Identity
+	for _, l := range lines {
+		id, err := age.ParseX25519Identity(l.text)
+		if err != nil {
+			// The age error may quote the line, so it is not wrapped.
+			return nil, fmt.Errorf("%w: line %d is not an unencrypted age X25519 identity", ErrIdentityFile, l.n)
+		}
+		ids = append(ids, id)
 	}
 	if len(ids) == 0 {
 		return nil, fmt.Errorf("%w: holds no identity", ErrIdentityFile)
 	}
 	return ids, nil
+}
+
+// ParseRecipientFile reads native age X25519 recipients, one per line, in
+// the form of an identity file: empty lines and lines starting with # are
+// skipped, and whitespace at both ends of a line is trimmed. Any other line
+// that is not a recipient, and a file without any recipient, are refused.
+// It returns the recipient strings, which NewWriter parses again.
+func ParseRecipientFile(r io.Reader) ([]string, error) {
+	lines, err := readKeyLines(r, ErrRecipientFile)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, l := range lines {
+		if _, err := age.ParseX25519Recipient(l.text); err != nil {
+			// The age error quotes the value, so it is not wrapped.
+			return nil, fmt.Errorf("%w: line %d is not a native age X25519 recipient", ErrRecipientFile, l.n)
+		}
+		out = append(out, l.text)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("%w: holds no recipient", ErrRecipientFile)
+	}
+	return out, nil
 }

@@ -239,7 +239,7 @@ func TestRefusedServerAddresses(t *testing.T) {
 
 func TestAcceptedServerAddresses(t *testing.T) {
 	for _, a := range []string{testServer, "https://vault.example.invalid", "https://[::1]:8443/bitwarden", "HTTPS://vault.example.invalid"} {
-		if !validServerAddress(a) {
+		if !ValidServerAddress(a) {
 			t.Errorf("%q refused", a)
 		}
 	}

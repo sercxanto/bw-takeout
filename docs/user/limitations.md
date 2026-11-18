@@ -4,7 +4,7 @@ A successful CLI export can deliver decryptable partial inventories while items 
 
 ## What a Verdict Can and Cannot Detect
 
-Every capture is judged failed, unverified or verified ([ADR 0004](../decisions/0004-completeness-verdict.md)). The verification is planned and not yet part of a usable tool. Its rules are tested with synthetic data only. No live capture backs them yet.
+Every capture is judged failed, unverified or verified ([ADR 0004](../decisions/0004-completeness-verdict.md)). `bw-takeout backup` runs the verification on every capture. Its rules are tested with synthetic data only. No live capture backs them yet.
 
 The verification reads two item lists: the default list of `bw list items` and the list of archived items from `bw list items --archived`. It treats them as one listing. An item that both lists show is accepted when both entries name the same attachments and the same organization.
 
@@ -58,6 +58,18 @@ The program starts the official `bw` program. The handling of it is tested again
 - **Attachments larger than 1 GiB.** The program holds at most 1 GiB of output per `bw` command. A larger attachment fails once, without a retry, and the capture fails in every run.
 - **Time limit of 5 minutes per attempt.** `bw` downloads, decrypts and only then writes an attachment, so the limit covers the whole transfer. Within 5 minutes, an attachment of 100 MB needs about 3 Mbit/s and one of 500 MB about 14 Mbit/s. An attachment too large for the connection fails on every attempt and in every run, so the account gets no generation until the limit can be configured. A hanging download costs at most 15 minutes in all.
 - **No proxy support yet.** Proxy variables of your environment are not passed to `bw`, so `bw` connects without a proxy. `bw` itself reads only the lowercase `http_proxy` and `https_proxy`. How a proxy is configured is decided together with the configuration format.
+
+## Interrupting a Backup
+
+`bw-takeout backup` can be interrupted with Ctrl-C. A run always tries to log out and to remove its CLI profile, because the profile holds the tokens of the login.
+
+- **The first Ctrl-C** ends the run. A generation that is not committed yet is removed, so that nothing of it stays in the target. The run then prints `Interrupted. Logging out, at most 10 s. Press Ctrl-C again to skip the logout.` on standard error, logs out and removes the profile.
+- **A second Ctrl-C** stops the logout at once and prints `Interrupted. Skipping the logout.` The profile is still removed, so the tokens on disk are gone. The report states that the logout was skipped.
+- **The logout has a limit of 10 seconds.** A logout that takes longer is stopped and reported as not successful. The profile is removed afterwards in any case. A run that published a generation then ends with exit status 4.
+- **Ctrl-C at a prompt of `bw`** during the login, such as the password or two-step prompt, reaches `bw` as a character, not as an interrupt, as seen in the login exercise of 15 November 2026. The login then fails, and the report shows a failed login instead of an interrupt. The logout and the removal of the profile follow as for any failed login.
+- **An interrupt during the commit** does not stop it. When the archive is complete and the generation is being renamed to its final name, the commit finishes and the generation is published.
+- **Closing the console window on Windows**, logging off and shutting down count as an interrupt. Windows ends the process a few seconds after such an event, so the logout and the removal of the profile may not finish. A profile left behind is listed as a leftover by the next run and must be removed by hand. This comes from the Go documentation and was not observed.
+- **The real `bw` on Windows is untested.** On Windows, the console sends Ctrl-C to `bw` as well. The run decides from its own record that it was interrupted, so the report states an interrupt whatever `bw` did. The automated tests run a stand-in for `bw` on Windows, never the real one.
 
 ## Storage Guarantees
 

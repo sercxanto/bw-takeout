@@ -168,7 +168,7 @@ func TestUsageErrors(t *testing.T) {
 	dir := t.TempDir()
 	for name, args := range map[string][]string{
 		"no arguments":       nil,
-		"unknown subcommand": {"backup"},
+		"unknown subcommand": {"restore"},
 		"verify alone":       {"verify"},
 		"no identity":        {"verify", dir},
 		"no directory":       {"verify", "--identity", id},
@@ -312,44 +312,6 @@ func TestPartialGeneration(t *testing.T) {
 	}
 }
 
-func TestPartialGenerationByAnotherPath(t *testing.T) {
-	target := t.TempDir()
-	id := archivetest.NewKey(t)
-	g, err := (&publish.Publisher{}).Begin(target)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Windows cannot remove a directory that holds an open file.
-	t.Cleanup(func() {
-		if err := g.Abort(); err != nil {
-			t.Error(err)
-		}
-	})
-	f, v := fixtureFor(t, verify.Verified)
-	archivetest.WriteTo(t, g.Writer(), f, v, id.Recipient().String())
-	partial := filepath.Join(target, g.PartialName())
-	link := filepath.Join(t.TempDir(), "latest")
-	if err := os.Symlink(partial, link); err != nil {
-		t.Skipf("symbolic links are not available: %v", err)
-	}
-	identity := writeIdentity(t, id)
-	for _, c := range []struct{ name, cwd, dir string }{
-		{"current directory", partial, "."},
-		{"symbolic link", "", link},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			if c.cwd != "" {
-				t.Chdir(c.cwd)
-			}
-			var stdout, stderr bytes.Buffer
-			code := verifyGeneration(identity, c.dir, &stdout, &stderr)
-			if code != exitFailed || !strings.Contains(stderr.String(), "incomplete") {
-				t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout.String(), stderr.String())
-			}
-		})
-	}
-}
-
 func TestDirectoryWithoutArchive(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), publish.NamePrefix+"20261114T170000Z-0000abcd")
 	if err := os.Mkdir(dir, 0o700); err != nil {
@@ -369,22 +331,6 @@ func TestSystemWithoutBW(t *testing.T) {
 	o := runCommand(t, []string{"PATH="}, "verify", "--identity", g.identity, g.dir)
 	if o.code != exitVerified {
 		t.Fatal(o)
-	}
-}
-
-func TestNoNetworkOrProcessPackage(t *testing.T) {
-	out, err := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "list", "-deps", ".").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	deps := strings.Fields(string(out))
-	if len(deps) < 10 {
-		t.Fatalf("dependency list too short: %v", deps)
-	}
-	for _, d := range deps {
-		if d == "net" || strings.HasPrefix(d, "net/") || d == "os/exec" || d == "bw-takeout/internal/verify" {
-			t.Errorf("the command depends on %s", d)
-		}
 	}
 }
 
@@ -484,23 +430,5 @@ func TestIdentityFileWithSentinelLine(t *testing.T) {
 				t.Errorf("identity file content in output\n%s", o)
 			}
 		})
-	}
-}
-
-func TestStoredResultMatchesPackageVerify(t *testing.T) {
-	_, v := fixtureFor(t, verify.Unverified)
-	var full verify.Result
-	var part storedResult
-	if err := json.Unmarshal(v, &full); err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(v, &part); err != nil {
-		t.Fatal(err)
-	}
-	if part.Verdict != string(full.Verdict) || len(part.Findings) != len(full.Findings) || len(part.Warnings) != len(full.Warnings) {
-		t.Fatalf("stored result %+v, full %+v", part, full)
-	}
-	if publish.VerdictVerified != string(verify.Verified) || publish.VerdictUnverified != string(verify.Unverified) {
-		t.Fatal("verdict constants differ")
 	}
 }

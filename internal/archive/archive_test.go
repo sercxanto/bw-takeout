@@ -671,3 +671,80 @@ func TestParseIdentityFile(t *testing.T) {
 		}
 	}
 }
+
+// recipientFile builds the content of a recipients file from lines.
+func recipientFile(lines ...string) string { return strings.Join(lines, "\n") + "\n" }
+
+func TestTwoRecipientsWithAComment(t *testing.T) {
+	a, b := archivetest.NewKey(t), archivetest.NewKey(t)
+	content := recipientFile("# backup keys", "", a.Recipient().String(), b.Recipient().String())
+	recipients, err := archive.ParseRecipientFile(strings.NewReader(content))
+	if err != nil || len(recipients) != 2 {
+		t.Fatalf("got %v, %v", recipients, err)
+	}
+	f := capturetest.Intact(t)
+	v, _ := archivetest.Verification(t, f, true)
+	data := archivetest.Build(t, f, v, recipients...)
+	for name, id := range map[string]*age.X25519Identity{"first": a, "second": b} {
+		if _, err := archive.Read(bytes.NewReader(data), []age.Identity{id}, nil); err != nil {
+			t.Errorf("%s identity alone: %v", name, err)
+		}
+	}
+}
+
+func TestInvalidLine(t *testing.T) {
+	a := archivetest.NewKey(t)
+	sentinel := capturetest.Marker + "-recipient-line"
+	content := recipientFile("# comment", a.Recipient().String(), sentinel)
+	_, err := archive.ParseRecipientFile(strings.NewReader(content))
+	if !errors.Is(err, archive.ErrRecipientFile) || !strings.Contains(err.Error(), "line 3") {
+		t.Fatalf("got %v", err)
+	}
+	if strings.Contains(err.Error(), sentinel) || strings.Contains(err.Error(), capturetest.Marker) {
+		t.Errorf("line content in error: %v", err)
+	}
+}
+
+func TestParseRecipientFile(t *testing.T) {
+	a, b := archivetest.NewKey(t), archivetest.NewKey(t)
+	ra, rb := a.Recipient().String(), b.Recipient().String()
+	t.Run("trailing whitespace", func(t *testing.T) {
+		got, err := archive.ParseRecipientFile(strings.NewReader("  " + ra + " \t\n" + rb + "   \n"))
+		if err != nil || len(got) != 2 || got[0] != ra || got[1] != rb {
+			t.Fatalf("got %q, %v", got, err)
+		}
+	})
+	t.Run("CRLF file", func(t *testing.T) {
+		got, err := archive.ParseRecipientFile(strings.NewReader("# keys\r\n\r\n" + ra + "\r\n" + rb + "\r\n"))
+		if err != nil || len(got) != 2 || got[0] != ra || got[1] != rb {
+			t.Fatalf("got %q, %v", got, err)
+		}
+	})
+	t.Run("no final line ending", func(t *testing.T) {
+		got, err := archive.ParseRecipientFile(strings.NewReader(ra))
+		if err != nil || len(got) != 1 {
+			t.Fatalf("got %q, %v", got, err)
+		}
+	})
+	for name, content := range map[string]string{
+		"comments only": "# a\n# b\n\n",
+		"empty":         "",
+		"identity":      a.String() + "\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := archive.ParseRecipientFile(strings.NewReader(content))
+			if !errors.Is(err, archive.ErrRecipientFile) {
+				t.Fatalf("got %v", err)
+			}
+			if strings.Contains(err.Error(), "AGE-SECRET-KEY") {
+				t.Errorf("content in error: %v", err)
+			}
+		})
+	}
+	t.Run("too large", func(t *testing.T) {
+		_, err := archive.ParseRecipientFile(strings.NewReader(strings.Repeat("#", 1<<20+1)))
+		if !errors.Is(err, archive.ErrRecipientFile) || !strings.Contains(err.Error(), "larger") {
+			t.Fatalf("got %v", err)
+		}
+	})
+}

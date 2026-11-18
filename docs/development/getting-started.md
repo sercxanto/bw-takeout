@@ -36,10 +36,11 @@ Once the repository is on GitHub, the workflow `CI` runs the tests on Linux amd6
 
 ```sh
 go build -o .local/bin/bw-takeout ./cmd/bw-takeout
+.local/bin/bw-takeout backup --server <https-url> --target <dir> --recipients-file <file>
 .local/bin/bw-takeout verify --identity <identity-file> <generation-directory>
 ```
 
-The command has one subcommand so far, the offline check of a backup generation, described in [usage](../user/usage.md). `.local/` is ignored by git. A synthetic generation to try it on can be left by an opt-in test, see [testing](testing.md#archive-and-publishing-tests).
+The command has two subcommands, the interactive backup of one account and the offline check of a backup generation, described in [usage](../user/usage.md). A backup needs a server with an account; the [manual backup exercise](testing.md#manual-backup-exercise) sets up a local Vaultwarden instance. `.local/` is ignored by git. A synthetic generation to try it on can be left by an opt-in test, see [testing](testing.md#archive-and-publishing-tests).
 
 ## OpenSpec setup
 
