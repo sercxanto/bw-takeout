@@ -106,13 +106,18 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 // other address is refused before a process is started. bw refuses the
 // command while an account is logged in (notes 11).
 func (c *Client) SetServer(ctx context.Context, address string) error {
-	if !validServerAddress(address) {
+	if !ValidServerAddress(address) {
 		return failure(OpServer, ClassInvalidArgument, NoExitCode)
 	}
 	return c.runDiscard(ctx, c.cmdServer(address))
 }
 
-func validServerAddress(address string) bool {
+// ValidServerAddress reports whether bw may be given the address: an HTTPS
+// URL with a host, without user information and without a line break.
+// SetServer refuses any other address before a process is started. The
+// backup command checks the flag with it before the first process (design
+// D2 of the change interactive-backup-run).
+func ValidServerAddress(address string) bool {
 	if strings.ContainsAny(address, "\r\n") {
 		return false
 	}

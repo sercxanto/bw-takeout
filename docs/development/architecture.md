@@ -2,24 +2,24 @@
 
 The fixed integration boundary is the unmodified official bw CLI. Decisions and their status are in the [decision index](../decisions/README.md).
 
-**Everything on this page is planned, except where a status says otherwise.** The code that exists is the Go module with the packages `internal/capture` and `internal/verify` from the archived change `capture-verification`, the packages `internal/manifest`, `internal/archive` and `internal/publish` and the command `cmd/bw-takeout` with its single subcommand `verify` from the change `archive-generation`, and the packages `internal/bwcli`, `internal/profile` and `internal/vaultid` with the development tool `internal/tools/loginprobe` from the change `bw-process-adapter`. The change `archived-item-list` extended `internal/capture`, `internal/verify` and `internal/archive` to a second item list. The change `capture-collection` added the package `internal/collect` and extended `internal/capture` and `internal/verify` by decryption error counts and attachment file names. The component model and the roadmap come from the explore session of 13 November 2026 and may change with each later change.
+**Everything on this page is planned, except where a status says otherwise.** The code that exists is the Go module with the packages `internal/capture` and `internal/verify` from the archived change `capture-verification`, the packages `internal/manifest`, `internal/archive` and `internal/publish` and the command `cmd/bw-takeout` with its single subcommand `verify` from the change `archive-generation`, and the packages `internal/bwcli`, `internal/profile` and `internal/vaultid` with the development tool `internal/tools/loginprobe` from the change `bw-process-adapter`. The change `archived-item-list` extended `internal/capture`, `internal/verify` and `internal/archive` to a second item list. The change `capture-collection` added the package `internal/collect` and extended `internal/capture` and `internal/verify` by decryption error counts and attachment file names. The change `interactive-backup-run` added the packages `internal/run`, `internal/report`, `internal/offline` and `internal/printable` and the subcommand `backup`. The component model and the roadmap come from the explore session of 13 November 2026 and may change with each later change.
 
 ## Planned flow
 
-Interactive profile → sync and inventory → JSON exports and individual attachment downloads → verification result → encrypted archive → published generation. The last two steps exist and are tested with synthetic captures. Starting `bw`, the interactive login, the single commands of the second and third steps and the profile exist and are tested against a fake `bw`.
+Checks before the first `bw` process → profile, version, server and interactive login → sync and inventory → JSON exports and individual attachment downloads → verification result → encrypted archive → published generation → logout and removal of the profile. `bw-takeout backup` runs this flow in `run` and reports it through `report`. Every step exists and is tested against a fake `bw` and with synthetic captures. The [manual backup exercise](testing.md#backup-exercise-of-18-november-2026) ran the flow against Vaultwarden on Linux and macOS on 18 November 2026.
 
 Collecting a capture exists in two phases, tested against an in-memory vault and the fake `bw`:
 
 - **Snapshot**, before the target directory is touched: one forced sync, the freshness check, the four documents with their decryption error counts, the source for the manifest and the plan of attachment downloads.
 - **Attachments**, inside the write function of the publishing step: one download at a time, each handed to the archive writer and then cleared, with one download result per planned attachment.
 
-The `backup` command that orders the phases, logs in and tears down does not exist yet (change C). Personal and organization views are handled separately.
+`run` calls the snapshot before it touches the target, the attachments inside the write function of the publishing step, and `Snapshot.Wipe` as soon as the capture is parsed. Teardown follows on every path. Personal and organization views are handled separately.
 
 ## Rules
 
 1. Only one component knows `bw`. Everything else works against an interface and is testable with a fake.
 2. Verification is a pure function over a captured data model.
-3. Plaintext exists only in process memory and inside the encryption stream, never as a file.
+3. Plaintext exists only in process memory and inside the encryption stream. This program writes none of it to a file, but the operating system can still put process memory on disk: swap, hibernation and core dumps (see the [security page](../user/security.md#swap-hibernation-and-core-dumps)).
 4. Only one component touches the target directory, and it only creates new names.
 
 ## Components
@@ -34,15 +34,17 @@ The `backup` command that orders the phases, logs in and tears down does not exi
 | `manifest` | Format version, creation time, source, versions, entry sizes and hashes, embedded verification result | implemented |
 | `archive` | Write and read the age-encrypted tar stream with four captured documents, recovery instructions, recipient and identity parsing | implemented |
 | `publish` | Create a new partial generation directory exclusively, flush, publish by verdict without replacing, list leftovers | implemented, tested on Linux only |
-| `report` | User output with redaction, exit codes | planned. The `verify` command prints its own redacted output and exit codes |
-| `run` | Order of phases and teardown, also on abort | planned |
+| `run` | Checks before the first `bw` process, order of phases, teardown with a bounded logout, interrupts, one outcome per run. Works against an injected profile, terminal, clock, signals and publisher | implemented, tested against the fake `bw` |
+| `report` | Progress, final report with redaction and every finding, exit status of a backup | implemented, tested with synthetic outcomes and through `run` |
+| `offline` | The `verify` command. Its dependency list holds no network package, no `os/exec` and none of `verify`, `bwcli`, `collect` and `run`, which a test checks | implemented, moved from `cmd/bw-takeout` |
+| `printable` | Replacement of characters that are not printable, shared by `offline` and `report` | implemented |
 
 ## Roadmap
 
 1. `capture-verification`: verdict rules over a captured inventory. Done, archived on 14 November 2026. The agreed behavior is in `openspec/specs/capture-verification/`.
 2. `archive-generation`: container, encryption, manifest, exclusive publishing and an offline verify command. Done, archived on 14 November 2026. The agreed behavior is in `openspec/specs/backup-archive/`, `openspec/specs/generation-publishing/` and `openspec/specs/offline-verification/`.
 3. `bw-process-adapter`: `bwcli` and `profile` against a fake `bw`, unauthenticated tests with the real binary and a manual login exercise against Vaultwarden on Linux and macOS. Done, archived on 15 November 2026. The agreed behavior is in `openspec/specs/bw-invocation/` and `openspec/specs/bw-profile/`. Results are in the [code notes](../research/bw-cli-code-notes-2026-11-15.md) and the [login exercise](../research/login-exercise-2026-11-15.md).
-4. The former item `interactive-backup-run` was split into four changes in the explore session of 16 November 2026. Together they complete the first prototype. B builds on the model of A. C and D are not created yet, because their open questions are not settled.
+4. The former item `interactive-backup-run` was split into four changes in the explore session of 16 November 2026. Together they complete the first prototype. B builds on the model of A. The explore session of 18 November 2026 settled the questions of C and moved memory hardening out of it into E. D is not created yet.
    - **A. `archived-item-list`**: the capture holds the default and the archived item list as two documents, the verification treats them as one listing and reports an archive filter that did not apply, and the archive stores the fourth document `documents/items.archived.json`. Done, archived on 16 November 2026. The agreed behavior is in `openspec/specs/capture-verification/`, `openspec/specs/backup-archive/` and `openspec/specs/offline-verification/`. This takes the obligation that the capture must include `list items --archived`, because the default list leaves archived items out while both exports keep them ([live probe](../research/vaultwarden-live-probe-2026-11-14.md), added case "archived item"; [code notes of 16 November 2026](../research/bw-cli-code-notes-2026-11-16.md)).
    - **B. `capture-collection`**: collect a capture through `bwcli` in two phases, snapshot and attachments, against an interface that `bwcli.Client` satisfies. Tested against an in-memory vault and the fake `bw`. Done, archived on 18 November 2026. The agreed behavior is in `openspec/specs/capture-collection/` and `openspec/specs/capture-verification/`. The decisions of 17 November 2026:
      - Freshness rule: the run forces one sync and requires `bw status` to report an unlocked vault and a `lastSync` at or after the start of that sync, compared at millisecond precision. A failed or stale sync ends the run without a generation. It does not lower the verdict.
@@ -52,20 +54,33 @@ The `backup` command that orders the phases, logs in and tears down does not exi
      - Decryption error lines: lines on any of the four documents make the verdict at least unverified, lines on a successful download give a warning. [ADR 0004](../decisions/0004-completeness-verdict.md) stays proposed and was updated in place.
      - Default time limit of one attachment download: 5 minutes instead of 30.
      - Plaintext in memory: one attachment at a time, cleared after the archive writer took it, a `Wipe` method for the four documents, and an output buffer in `bwcli` that clears what it leaves behind when it grows. No step writes a file. Decoded JSON trees, file names and other strings are not cleared and stay until the garbage collector frees them; this residual risk goes to the memory hardening of C.
-   - **C. `interactive-backup-run`**: the `backup` command, order of phases, the login, teardown and logout on abort, report and exit codes, user documentation. Tested against the fake `bw` and by hand against Vaultwarden. It must account for:
-     - The order of the two collection phases around the target directory, and the call of `Snapshot.Wipe` once the documents were handed to the archive writer and parsed.
-     - How the report names attachments by ID and the `bw` command and class of a failure that ended the run, and how it names the default server when `bw status` reports no server URL.
-     - Teardown on abort of the whole run, with a logout after every login attempt, also a failed one, because `bw` can be logged in although the client refused its session key (review of 15 November 2026).
-     - Memory hardening: disable core dumps for the run. On Unix the limit is inherited by the `bw` processes. The way on Windows is open. Document swap, hibernation and core dumps as residual risk in `docs/user/security.md`, with the advice to use encrypted swap or an encrypted disk, and correct rule 3 above, which says that plaintext never exists as a file.
-     - The next live run should include an archived item with an attachment, which was not observed yet.
+   - **C. `interactive-backup-run`**: the `backup` command, order of phases, the login, teardown and logout on abort, report and exit codes, user documentation. Tested against the fake `bw`, and by hand against Vaultwarden on Linux and macOS in the [backup exercise of 18 November 2026](testing.md#backup-exercise-of-18-november-2026). Done, archived on 18 November 2026. The agreed behavior is in `openspec/specs/backup-run/`. The decisions of 18 November 2026:
+     - Inputs are flags only: `--server`, `--target` and `--recipients-file` are required, `--bw` and `--ca` optional. `--server` is required so that a fresh profile never falls back to the default cloud server unnoticed. The recipients file has the form of the identity file. There is no configuration file yet.
+     - Checks before the first `bw` process: the target is an existing directory, the recipients file yields a recipient, `bw` resolves to a regular file and a given CA file is readable. A mistake costs no two-step code.
+     - Order: the snapshot before the target is touched, the attachments, the verification and the archive inside the publishing step, and `Snapshot.Wipe` as soon as the capture is parsed. Done.
+     - The report names attachments by ID, a failure by its phase, `bw` operation and class, and the server from the flags when `bw status` reports none. It lists every finding and warning, also for a failed verdict, for which it is the only record. Done.
+     - Teardown: a logout after every login attempt, also a failed one, with a limit of 10 seconds, then the removal of the profile on every path. Done.
+     - Interrupts: the first ends the run and aborts a generation that is not committed, a second skips the logout. On Unix SIGTERM and SIGHUP count as interrupts. The run decides from its own record that it was interrupted.
+     - Exit statuses 0, 3, 4, 1 and 2. Status 4 marks a published generation whose logout did not succeed or whose profile was not removed.
+     - One binary: `verify` moved into `internal/offline`, and the dependency test checks that package instead of the binary.
+     - Swap, hibernation and core dumps are documented as residual risk in [security](../user/security.md#swap-hibernation-and-core-dumps), with the advice to use encrypted swap or an encrypted disk, and rule 3 above is corrected. Done.
+     - The next live run includes an archived item with an attachment. Done: the backup exercise of 18 November 2026 found the attachment of the archived item in every generation.
    - **D. FAT and exFAT run**: the run of `publish` on a FAT or exFAT target that was deferred from `archive-generation`, see [testing](testing.md). Independent of `bw`.
-5. Follow-ups recorded by `bw-process-adapter` and `capture-collection`, not yet ordered:
+   - **E. Memory hardening**, after C: the points moved out of C on 18 November 2026.
+     - Disable core dumps for the run on Unix. The limit is inherited by the `bw` processes.
+     - Examine the way on Windows, which is open.
+     - Correct the [security page](../user/security.md#swap-hibernation-and-core-dumps), which says that core dumps are not limited yet.
+5. Follow-ups recorded by `bw-process-adapter`, `capture-collection` and `interactive-backup-run`, not yet ordered:
    - A separate explore session on an automated Vaultwarden test setup, including account creation without a person.
    - A small change that reports export fields unknown to this project at run time.
    - Reusing one profile across runs in a logged-out state, so that the server keeps one device entry. To be looked at before a first release.
    - Publishing failed captures under a marker, raised by `capture-collection` for accounts whose premium lapsed. A later explore session may take it up.
    - Comparing passkey counters with an earlier generation. Reading an earlier generation needs an identity, which ADR 0003 keeps off the backing-up system, so this fits an offline comparison of two generations.
-6. Later: platform hardening, configuration and multiple accounts (including the attachment time limit and the number of download attempts that `capture-collection` fixed), organizations, release, then batch operation and a KDBX derivative. Platform hardening starts with locking memory: it does not reach the `bw` processes, common limits are smaller than a vault with attachments, and Go gives little control over copies on the heap, so an experiment per platform comes first.
+   - A machine-readable report such as `--json`, and with it the question whether progress moves to standard error.
+   - Progress per attachment while the downloads run. `collect` returns the download results only at the end, so the report prints the attachment lines after the downloads (review of 18 November 2026, finding C3).
+   - An exit status that tells an aborted run from a failed verdict. Both give 1 now.
+   - `bw.cmd` on Windows: `npm` installs `bw` as a script there. Whether starting it behaves like the single-file `bw.exe` for arguments, the environment and stopping is untested.
+6. Later: platform hardening, configuration and multiple accounts (including the attachment time limit and the number of download attempts that `capture-collection` fixed, and the logout limit that `interactive-backup-run` fixed), organizations, release, then batch operation and a KDBX derivative. Batch operation needs login data taken from another vault instead of the terminal. Platform hardening starts with locking memory: it does not reach the `bw` processes, common limits are smaller than a vault with attachments, and Go gives little control over copies on the heap, so an experiment per platform comes first.
 
 Not planned at all: capturing the trash, which is a [non-goal](../product/non-goals.md) of the product. Both personal exports and both item lists leave deleted items out, so items in the trash are not backed up (maintainer decision, 16 November 2026, see [limitations](../user/limitations.md)).
 

@@ -14,3 +14,29 @@ rules:
     - Plan affected user and developer documentation as well as concrete failure-case tests.
     - Plan an ADR only if the ADR criteria are met.
     - Start tasks.md with a section "Recommended apply setup" without checkboxes that names a model and an effort level for the apply session, with a one-sentence reason based on the size and risk of the tasks. Repeat the recommendation when presenting the finished artifacts.
+operations:
+  apply:
+    guidance:
+      - >-
+        When every task of the change is done, also when apply starts in state all_done, run an independent review before reporting completion.
+        First run gofmt -l ., go vet ./... and go test -race ./... and fix what fails.
+        Then start two subagents in parallel, each in a fresh context that does not inherit this session, with the instructions in .claude/agents/change-code-reviewer.md and .claude/agents/change-security-reviewer.md (in Claude Code and opencode, the subagents of the same names from .claude/agents/ and .opencode/agents/).
+        If the tool cannot start an agent with its own context, pause and ask the user to run both reviews in a new session. Never review the change in this session instead.
+      - >-
+        Give each reviewer only the change name, the base commit from git merge-base HEAD main and the note that uncommitted and untracked files belong to the change.
+        Do not pass your own reasoning, summaries, known weaknesses or expected findings, so that the review stays independent.
+      - >-
+        Evaluate every finding yourself against the code, the spec delta and the design, and confirm it with a test where you can.
+        Classify it as confirmed, rejected or needing a decision. A reviewer's claim is not proof, and a rejection needs a reason that holds in review.
+      - >-
+        Fix confirmed findings that stay within the specified behavior and scope without asking: add a section "Review fixes" to tasks.md with one task per finding, add a regression test that fails without the fix, implement the fix and mark the task done.
+        A finding whose fix would change specified behavior, the scope, a security assumption or an ADR needs a maintainer decision: present it with options and pause, as the apply instructions require for added scope.
+      - >-
+        Record the review in design.md as earlier changes did: each fix under the affected decision with "(review of <date>)", and each rejected finding with its reason.
+        Update the documentation that the fixes affect.
+      - >-
+        After fixes, run the checks again and start one more round with fresh reviewers: always the code reviewer, and the security reviewer as well if a fix touched code or documentation relevant to security.
+        Tell them to check the section "Review fixes" in tasks.md first. Stop after this second round and report remaining findings to the user instead of starting a third.
+      - >-
+        End with a review summary: every finding with its ID, verdict and fix or reason, the open decisions and the checks that ran.
+        Do not commit. The user decides when to commit.
