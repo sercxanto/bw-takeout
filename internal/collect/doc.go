@@ -1,6 +1,6 @@
 // Package collect collects one capture of a personal vault from a logged-in
 // official CLI. It works in two phases (design D2 of the change
-// capture-collection, openspec/changes/capture-collection/design.md):
+// capture-collection, openspec/changes/archive/2026-11-18-capture-collection/design.md):
 //
 //   - [Collector.Snapshot] forces one sync, checks that the snapshot is
 //     fresh and collects the four documents, their decryption error counts,
