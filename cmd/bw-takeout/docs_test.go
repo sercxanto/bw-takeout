@@ -44,14 +44,22 @@ func codeBlocks(text, lang string) []string {
 	return out
 }
 
-// The command line and the flag table of the usage page match the usage
-// text of the command.
-func TestUsagePageMatchesBackupFlags(t *testing.T) {
+// usagePage reads the usage page with line feeds only. Git on the Windows
+// runners checks text files out with CRLF line endings.
+func usagePage(t *testing.T) string {
+	t.Helper()
 	data, err := os.ReadFile("../../docs/user/usage.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	sec := section(t, string(data), "Making a Backup")
+	return strings.ReplaceAll(string(data), "\r\n", "\n")
+}
+
+// The command line and the flag table of the usage page match the usage
+// text of the command.
+func TestUsagePageMatchesBackupFlags(t *testing.T) {
+	page := usagePage(t)
+	sec := section(t, page, "Making a Backup")
 	blocks := codeBlocks(sec, "sh")
 	if len(blocks) == 0 {
 		t.Fatal("no command line on the page")
@@ -91,11 +99,8 @@ func TestUsagePageMatchesBackupFlags(t *testing.T) {
 // that do not parse, so that a copied example is refused instead of
 // encrypting to keys of unknown holders.
 func TestUsagePageRecipientsExample(t *testing.T) {
-	data, err := os.ReadFile("../../docs/user/usage.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	blocks := codeBlocks(section(t, string(data), "Making a Backup"), "text")
+	page := usagePage(t)
+	blocks := codeBlocks(section(t, page, "Making a Backup"), "text")
 	if len(blocks) != 1 {
 		t.Fatalf("%d text blocks", len(blocks))
 	}
