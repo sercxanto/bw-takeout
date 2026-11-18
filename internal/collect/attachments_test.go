@@ -179,12 +179,27 @@ func TestReceiverFails(t *testing.T) {
 	c, _ := collector()
 	r := &received{failOn: att2}
 	downloads, err := c.Attachments(context.Background(), v, s, r.receive)
-	if !errors.Is(err, r.err) || downloads != nil {
-		t.Errorf("downloads %v, error %v, want the receiver failure", downloads, err)
+	if !errors.Is(err, collect.ErrReceive) || !errors.Is(err, r.err) || errors.Unwrap(err) != r.err || downloads != nil {
+		t.Errorf("downloads %v, error %v, want ErrReceive with the receiver failure as its cause", downloads, err)
 	}
 	wantCalls(t, v, attachCall(att1), attachCall(att2))
 	if !allZero(r.got[1].Content) {
 		t.Error("content refused by the receiver was not cleared")
+	}
+}
+
+// The text of the receiver's failure does not leave the package (design
+// D2): an archive writer names entry paths and operating system errors.
+func TestReceiverFailureTextIsNotRepeated(t *testing.T) {
+	v := newVault(t).on(mAttach, ok("first"))
+	c, _ := collector()
+	cause := errors.New("write entry attachments/" + ct.Marker + "-path: disk full")
+	_, err := c.Attachments(context.Background(), v, planned(att1), func(collectAttachment) error { return cause })
+	if !errors.Is(err, collect.ErrReceive) || !errors.Is(err, cause) {
+		t.Fatalf("error %v, want ErrReceive with the cause", err)
+	}
+	if strings.Contains(err.Error(), ct.Marker) || err.Error() != collect.ErrReceive.Error() {
+		t.Errorf("error text %q, want the fixed text of ErrReceive", err)
 	}
 }
 
@@ -298,6 +313,22 @@ func TestEveryAttemptFails(t *testing.T) {
 	}
 }
 
+func TestOutputLimitExceeded(t *testing.T) {
+	v := newVault(t).on(mAttach, fails(bwcli.ClassOutput), ok("next"))
+	downloads, _, w, err := runAttachments(t, v, planned(att1, att2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := capture.Download{ItemID: itemA, AttachmentID: att1, Error: capture.ErrorOther}
+	if len(downloads) != 2 || downloads[0] != want || downloads[1].Error != "" {
+		t.Errorf("downloads = %+v, want a failed first and a successful second download", downloads)
+	}
+	wantCalls(t, v, attachCall(att1), attachCall(att2))
+	if len(w.got) != 0 {
+		t.Errorf("waits = %v, want none", w.got)
+	}
+}
+
 // Requirement: Premium failure is a failed download.
 
 func TestPremiumRequired(t *testing.T) {
@@ -402,7 +433,7 @@ func TestDownloadClassification(t *testing.T) {
 	}{
 		{bwcli.ClassTimeout, 3, capture.ErrorProcess},
 		{bwcli.ClassExit, 3, capture.ErrorStatus},
-		{bwcli.ClassOutput, 3, capture.ErrorOther},
+		{bwcli.ClassOutput, 1, capture.ErrorOther},
 		{bwcli.ClassPremiumRequired, 1, capture.ErrorStatus},
 		{bwcli.ClassInvalidArgument, 1, capture.ErrorOther},
 		{bwcli.ClassNotLoggedIn, 1, ""},

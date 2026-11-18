@@ -12,7 +12,8 @@ Each step around a capture already exists: `bwcli` starts the single `bw` comman
 - **Documents.** The plaintext export, the encrypted export, the default item list and the archived item list are collected in this order. A failure of any of these commands ends the collection without a capture.
 - **Attachments.** The attachments of the personal items in the combined listing are downloaded, once for each ID pair. Their file names come from the item list and go into the manifest only.
 - **Failures of a download.**
-  - A timeout, a non-zero exit code or output of an unexpected form is retried. If the last attempt also fails, the download is recorded as failed.
+  - A timeout or a non-zero exit code is retried. If the last attempt also fails, the download is recorded as failed.
+  - A download whose output passes the output limit is not retried and is recorded as failed, because a second attempt meets the same limit (maintainer decision, 18 November 2026).
   - A premium failure is not retried and is recorded as failed. It is never treated more leniently than any other failed download.
   - Not logged in, locked, cancelled, failure to start, an unused profile and a stray file end the collection without a capture. These failures concern the run as a whole, not one attachment.
   - The remaining failures map to the three download error classes. The classes do not change the verdict.
@@ -45,7 +46,7 @@ Not part of this change: the `backup` command, the login, logout and teardown, t
 - `internal/verify`: two reason codes.
 - Tests that wire collection, verification, archive and publishing against the fake `bw`.
 
-- `internal/bwcli`: the default attachment time limit only.
+- `internal/bwcli`: the default attachment time limit, and the output buffer, which now clears its old array when it grows (review of 18 November 2026).
 
 `internal/archive`, `internal/publish` and `internal/manifest` do not change.
 

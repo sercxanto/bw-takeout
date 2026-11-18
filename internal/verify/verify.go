@@ -74,7 +74,12 @@ type verifier struct {
 	listed    map[string]capture.ListedItem
 	listedDoc map[string]capture.Document
 	// shared lists, in order, the item IDs that both lists show.
-	shared    []string
+	shared []string
+	// personal holds, per item ID, the attachment IDs of every personal
+	// entry of the item in both lists, in the order of
+	// capture.PersonalAttachments. Every per-item view of attachments reads
+	// it (design D6 of capture-collection).
+	personal  map[string][]string
 	downloads map[capture.AttachmentRef]capture.Download
 
 	encryptedOrder []string
@@ -148,6 +153,10 @@ func (v *verifier) index() {
 				v.add(Finding{Severity: SeverityFailed, Reason: ListedItemDiffersBetweenLists, ItemID: item.ID})
 			}
 		}
+	}
+	v.personal = map[string][]string{}
+	for _, ref := range capture.PersonalAttachments(v.c.List, v.c.ArchivedList) {
+		v.personal[ref.ItemID] = append(v.personal[ref.ItemID], ref.AttachmentID)
 	}
 	v.downloads = map[capture.AttachmentRef]capture.Download{}
 	for _, d := range v.c.Downloads {
@@ -443,16 +452,20 @@ func (v *verifier) decryptionErrors() {
 	}
 }
 
-// organizationAttachment reports whether the item list shows the
-// attachment on an organization item.
+// organizationAttachment reports whether an entry of either item list shows
+// the attachment on an organization item. Every entry counts, as in
+// capture.PersonalAttachments.
 func (v *verifier) organizationAttachment(ref capture.AttachmentRef) bool {
-	item, ok := v.listed[ref.ItemID]
-	if !ok || item.OrganizationID == "" {
-		return false
-	}
-	for _, id := range item.AttachmentIDs {
-		if id == ref.AttachmentID {
-			return true
+	for _, list := range []*capture.ItemList{v.c.List, v.c.ArchivedList} {
+		for _, item := range list.Items {
+			if item.ID != ref.ItemID || item.OrganizationID == "" {
+				continue
+			}
+			for _, id := range item.AttachmentIDs {
+				if id == ref.AttachmentID {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -577,10 +590,8 @@ func keyFingerprint(keyValue string) string {
 // missing download is already reported by the attachment accounting.
 func (v *verifier) referenceAttachments(item capture.ReferenceItem) {
 	listed := map[string]bool{}
-	if l, ok := v.listed[item.ItemID]; ok && l.OrganizationID == "" {
-		for _, id := range l.AttachmentIDs {
-			listed[id] = true
-		}
+	for _, id := range v.personal[item.ItemID] {
+		listed[id] = true
 	}
 	expected := map[string]bool{}
 	for _, want := range item.Attachments {
@@ -598,14 +609,10 @@ func (v *verifier) referenceAttachments(item capture.ReferenceItem) {
 			v.add(attachmentFinding(SeverityFailed, ReferenceAttachmentMismatch, ref))
 		}
 	}
-	if l, ok := v.listed[item.ItemID]; ok && l.OrganizationID == "" {
-		seen := map[string]bool{}
-		for _, id := range l.AttachmentIDs {
-			if !expected[id] && !seen[id] {
-				seen[id] = true
-				v.add(attachmentFinding(SeverityFailed, ReferenceAttachmentNotExpected,
-					capture.AttachmentRef{ItemID: item.ItemID, AttachmentID: id}))
-			}
+	for _, id := range v.personal[item.ItemID] {
+		if !expected[id] {
+			v.add(attachmentFinding(SeverityFailed, ReferenceAttachmentNotExpected,
+				capture.AttachmentRef{ItemID: item.ItemID, AttachmentID: id}))
 		}
 	}
 }

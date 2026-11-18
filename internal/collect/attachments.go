@@ -32,7 +32,9 @@ type Receiver func(archive.Attachment) error
 //
 // A failure of the receiver, a cancelled context and a failure of a
 // download that concerns the run as a whole end the collection: no download
-// results are returned, and the error is the failure.
+// results are returned. A failure of the receiver is returned as
+// [ErrReceive] with the receiver's failure as its cause; any other failure is
+// returned as it is.
 func (c *Collector) Attachments(ctx context.Context, v Vault, s *Snapshot, receive Receiver) ([]capture.Download, error) {
 	downloads := make([]capture.Download, 0, len(s.Plan))
 	for _, p := range s.Plan {
@@ -58,7 +60,7 @@ func (c *Collector) Attachments(ctx context.Context, v Vault, s *Snapshot, recei
 		})
 		clear(out.Data)
 		if err != nil {
-			return nil, err
+			return nil, &receiveError{cause: err}
 		}
 		downloads = append(downloads, d)
 	}
@@ -106,7 +108,9 @@ func classify(class bwcli.Class) (retry bool, result capture.ErrorClass, failed 
 	case bwcli.ClassExit:
 		return true, capture.ErrorStatus, true
 	case bwcli.ClassOutput:
-		return true, capture.ErrorOther, true
+		// On a download, output means only that the content passed the
+		// output limit. A second attempt meets the same limit.
+		return false, capture.ErrorOther, true
 	case bwcli.ClassPremiumRequired:
 		return false, capture.ErrorStatus, true
 	case bwcli.ClassInvalidArgument:

@@ -13,7 +13,9 @@ import (
 // Snapshot is the first phase of a collection: the four documents as bw
 // wrote them, their decryption error counts, the manifest source and the
 // plan of attachment downloads. The documents are plaintext vault content.
-// The caller clears them with Wipe once it no longer needs them.
+// The caller clears them with Wipe once it no longer needs them. The file
+// names in Plan and the values in Source are strings, which Wipe cannot
+// clear.
 type Snapshot struct {
 	PlaintextExport  []byte
 	EncryptedExport  []byte

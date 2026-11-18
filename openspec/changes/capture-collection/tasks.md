@@ -62,6 +62,17 @@ Model Opus, effort high: the change spans five packages and has a code-reading t
 - [x] 7.3 Run `openspec validate capture-collection --strict`. Verify it passes.
 - [ ] 7.4 Record the CI run on Linux, macOS and Windows with its skip report, as the test strategy describes. Verify the run is linked in `docs/development/testing.md` and that `.github/expected-skips.txt` matches.
 
+## 8. Review findings of 18 November 2026
+
+Work through this group before task 7.4.
+
+- [x] 8.1 Make the output buffer of `bwcli` grow by allocating, copying and clearing the old array (design D13). Verify a test in `internal/bwcli` that writes in many small pieces and finds every earlier array cleared, and that `go test ./internal/bwcli/...` passes.
+- [x] 8.2 Stop retrying a download that fails with the class `output` and record it as failed with the class `other` (design D7). Verify the row of the D7 table test with one attempt, a unit test named after the scenario "Output limit exceeded", the downloads bullet in the package documentation of `internal/collect`, the retried failure kinds in `docs/user/limitations.md`, and a row for the new scenario in the coverage table of `docs/development/testing.md`.
+- [x] 8.3 Wrap a failure of the receiver in `ErrReceive` with fixed text and the receiver's failure as its cause (design D2). Verify a test with a receiver whose failure contains the fixture marker: `errors.Is` finds `ErrReceive` and the receiver's failure, and `err.Error()` holds no marker.
+- [x] 8.4 Base the organization check of unexpected downloads and the reference comparison of listed attachments in `verify` on every entry of an item in both lists (design D6). Verify a test with an item that both lists show, once as an organization item and once as a personal item with an attachment, with the reference inventory, and that the serialized result of every `capturetest` variant stays byte-identical.
+- [x] 8.5 Reword the plaintext lifetime in the package documentation of `internal/collect` and, where it applies, `internal/capture`, so that it states what is cleared and what is not (design D10). Verify the text against D10.
+- [x] 8.6 Run the checks of tasks 7.1 to 7.3 again, record the run in `docs/development/testing.md`, and compare the changed requirements of the `capture-collection` delta with the code. Then continue with task 7.4.
+
 ## Workflow follow-up
 
 - Archive the change after the maintainer's review.

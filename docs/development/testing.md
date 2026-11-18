@@ -419,11 +419,12 @@ Every scenario of the capture-collection spec has at least one test in `internal
 | | Organization attachment | `TestOrganizationAttachment` |
 | | Unparsable item list | `TestUnparsableItemList` |
 | Attachments are handed on one at a time | Two attachments | `TestTwoAttachments` |
-| | Receiver fails | `TestReceiverFails` |
+| | Receiver fails | `TestReceiverFails`, fixed text in `TestReceiverFailureTextIsNotRepeated` |
 | Download results record hash and size | Successful download | `TestSuccessfulDownload` |
 | | Error text with a sentinel | `TestErrorTextWithASentinel`, `TestIntegrationSentinelInErrorText` |
 | Transient download failures are retried | Second attempt succeeds | `TestSecondAttemptSucceeds` (unit level only) |
 | | Every attempt fails | `TestEveryAttemptFails` |
+| | Output limit exceeded | `TestOutputLimitExceeded`, row `output` in `TestDownloadClassification` |
 | Premium failure is a failed download | Premium required | `TestPremiumRequired`, `TestIntegrationPremiumRequired` |
 | Run-level failures end the collection | Session lost during the downloads | `TestSessionLostDuringTheDownloads` |
 | | Cancelled run | `TestCancelledRun`, during a wait in `TestCancellationDuringAWait` |
@@ -433,6 +434,8 @@ Every scenario of the capture-collection spec has at least one test in `internal
 ### Test Run of 18 November 2026, capture-collection
 
 In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3, age 1.2.1, GNU tar 1.34 and OpenSpec 2.0.0: `gofmt -l .` printed nothing, `go vet ./...` passed, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed in all packages with only expected skips, and `go test -race ./...` passed. The skips were `TestLeaveGenerationForOfflineExercise`, `TestKillHelper` and the five `TestRealBW…` tests, each with its reason. `GOOS=darwin` and `GOOS=windows` `go vet ./...` passed. The key-material search printed nothing. Evidence level: mock.
+
+After the review fixes of the same day (tasks 8.1 to 8.5 of the change: the output buffer of `bwcli`, no retry for output beyond the limit, `ErrReceive`, and the per-item views in `verify`), the same checks were run again with the same result and the same seven skips.
 
 Not run in the dev container: the tests on macOS, Windows and Linux amd64; any collection against the real `bw` or a live vault; a premium failure, a stale `lastSync` or decryption error lines from a real server; an archived item with an attachment; an attachment larger than a few kilobytes.
 

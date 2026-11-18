@@ -99,7 +99,10 @@ func stripANSI(b []byte) []byte {
 var errOutputLimit = errors.New("output limit exceeded")
 
 // limitedBuffer holds standard output in memory up to a limit. When a write
-// would pass the limit, it calls onExceed once and refuses the write.
+// would pass the limit, it calls onExceed once and refuses the write. When
+// it grows, it clears the array it leaves behind, so that no partial copy of
+// the output stays on the heap (design D13 of the change
+// capture-collection).
 type limitedBuffer struct {
 	buf      []byte
 	limit    int64
@@ -118,8 +121,28 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 		}
 		return 0, errOutputLimit
 	}
+	if need := len(b.buf) + len(p); need > cap(b.buf) {
+		b.grow(need)
+	}
 	b.buf = append(b.buf, p...)
 	return len(p), nil
+}
+
+// minBufferSize is the first capacity of the buffer.
+const minBufferSize = 4096
+
+// grow moves the content into a larger array and clears the old one. The
+// capacity at least doubles and never passes the limit; need is within the
+// limit, because Write checked it.
+func (b *limitedBuffer) grow(need int) {
+	size := max(need, 2*cap(b.buf), minBufferSize)
+	if int64(size) > b.limit {
+		size = int(b.limit)
+	}
+	grown := make([]byte, len(b.buf), size)
+	copy(grown, b.buf)
+	clear(b.buf)
+	b.buf = grown
 }
 
 // wipe overwrites the held output.

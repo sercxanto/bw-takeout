@@ -34,7 +34,19 @@ var (
 	// ErrUnexpected replaces a failure of a Vault that is not a
 	// *bwcli.Error. Its text is dropped, because it could quote bw.
 	ErrUnexpected = errors.New("collect: unexpected failure of a vault call")
+	// ErrReceive: the receiver refused an attachment. The receiver's
+	// failure is the cause, reachable through errors.Unwrap, and its text
+	// is not repeated (design D2).
+	ErrReceive = errors.New("collect: receiver refused an attachment")
 )
+
+// receiveError is a failure of the receiver. Its text is that of
+// ErrReceive, and errors.Is finds both ErrReceive and the cause.
+type receiveError struct{ cause error }
+
+func (e *receiveError) Error() string        { return ErrReceive.Error() }
+func (e *receiveError) Unwrap() error        { return e.cause }
+func (e *receiveError) Is(target error) bool { return target == ErrReceive }
 
 // Collector collects captures. The zero value uses the system clock and
 // waits with a timer.
