@@ -16,6 +16,7 @@ import (
 	"bw-takeout/internal/bwcli"
 	"bw-takeout/internal/capture"
 	"bw-takeout/internal/collect"
+	"bw-takeout/internal/crashdump"
 	"bw-takeout/internal/manifest"
 	"bw-takeout/internal/profile"
 	"bw-takeout/internal/publish"
@@ -76,6 +77,9 @@ func (d Deps) withDefaults() Deps {
 	}
 	if d.Progress == nil {
 		d.Progress = discard{}
+	}
+	if d.LimitCrashDumps == nil {
+		d.LimitCrashDumps = crashdump.Limit
 	}
 	return d
 }
@@ -224,8 +228,14 @@ func (r *runner) run() {
 }
 
 // check runs the checks of design D3. It starts no process and creates
-// nothing.
+// nothing. Crash dumps are limited first, so that no later check runs with
+// them enabled (design D2 of the change memory-hardening).
 func (r *runner) check() error {
+	protection, err := r.d.LimitCrashDumps()
+	if err != nil {
+		return err
+	}
+	r.o.Setup.CrashDumps = protection
 	r.o.Setup.Server = r.cfg.Server
 	if info, err := os.Stat(r.cfg.Target); err != nil || !info.IsDir() {
 		return ErrTarget

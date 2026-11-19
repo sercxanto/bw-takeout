@@ -5,7 +5,8 @@
 // It reads its scenario from the data directory named in
 // BITWARDENCLI_APPDATA_DIR and appends one record per start to a file in the
 // same directory: the arguments, the full environment, the working
-// directory, whether standard input was empty, and its process ID.
+// directory, whether standard input was empty, its process ID and, outside
+// Windows, the soft and the hard core file size limit it inherited.
 //
 // # Behaviors and their evidence
 //
@@ -97,7 +98,7 @@ func run() int {
 	}
 	login := len(args) > 0 && args[0] == "login"
 
-	rec := bwclitest.Record{Args: args, Env: os.Environ(), PID: os.Getpid()}
+	rec := bwclitest.Record{Args: args, Env: os.Environ(), PID: os.Getpid(), CoreLimit: coreLimit()}
 	rec.Dir, _ = os.Getwd()
 	if b.SpawnChild {
 		self, err := os.Executable()

@@ -18,7 +18,7 @@ One run backs up one account. You type the login, the master password and the tw
 | `--bw <path>` | Optional. The `bw` executable. Without it, `bw` is looked up on the program search path. A relative path is taken relative to the working directory. |
 | `--ca <file>` | Optional. An additional certificate authority file, for a server with a certificate of your own authority. |
 
-Before it starts `bw`, the command checks that the target is an existing directory, that the recipients file holds at least one recipient, that `bw` can be found and is a regular file, and that a given CA file can be read. A mistake then costs no login and no two-step code.
+Before it starts `bw`, the command first limits crash dumps: on Linux and macOS it sets the core file size limit of its process to zero, which every `bw` process inherits, and on Linux it also marks its own process as not dumpable, see [security](security.md#swap-hibernation-and-core-dumps). On Linux and macOS a run whose limit or mark cannot be set ends here with `Failed:      checks:` and the part that failed, and exit status 1. On Windows crash dumps are not limited, and the run continues. Then the command checks that the target is an existing directory, that the recipients file holds at least one recipient, that `bw` can be found and is a regular file, and that a given CA file can be read. A mistake then costs no login and no two-step code.
 
 ### Recipients File
 
@@ -42,6 +42,7 @@ Progress and report go to standard output. The prompts of `bw` and the interrupt
 In this order, it shows:
 
 - the `bw` executable with its version and SHA-256, the server, the target and the number of recipients,
+- the crash dump protection of the run: `Crash dumps: core limit 0, process not dumpable` on Linux, `Crash dumps: core limit 0` on macOS, and `Crash dumps: not limited on this platform` on Windows,
 - leftover profiles of other runs and leftover partial generations in the target, each with its path and age, or `none`. They are never changed or removed, see [security](security.md#leftovers),
 - after the sync, the server the status names, or the one given with `--server` when the status names none, and the account address and ID,
 - the number of planned attachments and, once all downloads have ended, one line per download in order. A failed download names its item ID, attachment ID and error class. While the downloads run, no line appears, and after an interrupt or a failure during the downloads no attachment line appears,

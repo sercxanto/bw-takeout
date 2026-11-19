@@ -100,6 +100,9 @@ func TestFakeRecordsEachStart(t *testing.T) {
 	if rec.PID == 0 {
 		t.Error("process ID not recorded")
 	}
+	if want := ownCoreLimit(t); (want == nil) != (rec.CoreLimit == nil) || (want != nil && *want != *rec.CoreLimit) {
+		t.Errorf("core limit %v, want %v", rec.CoreLimit, want)
+	}
 	if _, err := os.Stat(filepath.Join(r.data, bwclitest.DataFile)); err != nil {
 		t.Errorf("data file not created: %v", err)
 	}

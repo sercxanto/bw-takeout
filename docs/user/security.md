@@ -22,7 +22,19 @@ While they are in memory, three things can copy them to disk:
 - **Hibernation**: the system writes all memory to disk when it hibernates.
 - **Core dumps**: a crash of the process can write its memory to a core file, depending on the settings of the system.
 
-Use encrypted swap or an encrypted disk, such as FileVault on macOS, BitLocker on Windows or LUKS on Linux, on any system that runs a backup. The program does not yet limit core dumps and does not lock its memory. A separate memory hardening change, planned after the first backup command, will disable core dumps on Linux and macOS and examine what Windows offers.
+The same holds for every `bw` process the backup starts: it decrypts the whole vault for an export, the master password at the login, or one attachment.
+
+What a run limits before it starts the first `bw` process:
+
+- **Linux and macOS**: the soft and the hard core file size limit of the process are set to zero and read back. Every `bw` process inherits both limits and cannot raise them. A run whose limit cannot be set, or does not read back as zero, ends in the checks with no generation, before it creates a profile and before it starts `bw`.
+- **Linux, in addition**: the `bw-takeout` process marks itself as not dumpable and reads the mark back. The kernel then writes no core for it at all, also not through a crash handler. The mark also means that other processes of the same user can no longer read the memory of the run or trace it, so a debugger cannot attach to a running backup. A run whose mark cannot be set ends in the checks in the same way. Starting a program resets the mark, so it does not reach the `bw` processes, which keep only the core limit.
+- **Windows**: nothing is limited yet. Windows Error Reporting can still write a dump of a crashed process, depending on the settings of the system. The report says `Crash dumps: not limited on this platform`, and the run continues.
+
+What stays outside the control of this program: on Linux, the setting `core_pattern` can pipe a core to a crash handler, such as systemd-coredump, apport or abrt. The kernel then does not apply the core limit itself. It passes the limit to the handler, and the handler decides on its own whether it stores the core of a `bw` process. Whether the common handlers honour a limit of zero was not checked on a real distribution, see [testing](../development/testing.md#crash-dump-tests). A `core_pattern` that names a file is subject to the core limit, so no such core is written for `bw-takeout` or a `bw` process. Should a file still appear in the empty working directory of a `bw` process, it ends the run with no generation, and teardown removes it with the profile.
+
+`bw-takeout verify` limits nothing: on every platform a crash of it can write the identity and decrypted archive content to a core file, depending on the settings of the system.
+
+Use encrypted swap or an encrypted disk, such as FileVault on macOS, BitLocker on Windows or LUKS on Linux, on any system that runs a backup or opens a generation. The program does not lock its memory against swap and does nothing about hibernation.
 
 ## Permissions
 

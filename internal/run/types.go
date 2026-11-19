@@ -8,6 +8,7 @@ import (
 
 	"bw-takeout/internal/bwcli"
 	"bw-takeout/internal/capture"
+	"bw-takeout/internal/crashdump"
 	"bw-takeout/internal/manifest"
 	"bw-takeout/internal/profile"
 	"bw-takeout/internal/publish"
@@ -93,6 +94,10 @@ type Deps struct {
 	LogoutLimit time.Duration
 	// Progress receives the lines while the run goes on. Nil drops them.
 	Progress Progress
+	// LimitCrashDumps limits the crash dumps of the process, the first
+	// step of the checks (design D2 of the change memory-hardening). Nil
+	// takes crashdump.Limit.
+	LimitCrashDumps func() (crashdump.Protection, error)
 }
 
 // Phase names the step of a run in which it ended.
@@ -138,6 +143,8 @@ type Setup struct {
 	Server              string
 	Target              string
 	Recipients          int
+	// CrashDumps is the crash dump protection of the run.
+	CrashDumps crashdump.Protection
 }
 
 // Leftovers are the profiles of other runs and the partial generations in

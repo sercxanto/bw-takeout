@@ -11,6 +11,7 @@ import (
 
 	"bw-takeout/internal/bwcli"
 	"bw-takeout/internal/capture"
+	"bw-takeout/internal/crashdump"
 	"bw-takeout/internal/manifest"
 	"bw-takeout/internal/profile"
 	"bw-takeout/internal/publish"
@@ -32,6 +33,7 @@ func exampleOutcome() *run.Outcome {
 		Setup: run.Setup{
 			BWPath: "/usr/local/bin/bw", BWVersion: "2026.10.1", BWSHA256: exampleHash,
 			Server: "https://vault.example.org", Target: "/mnt/backup", Recipients: 2,
+			CrashDumps: crashdump.Protection{CoreLimit: true, NotDumpable: true},
 		},
 		Leftovers: run.Leftovers{
 			Profiles: []profile.Leftover{{Name: "profile-x", Path: "/home/u/.cache/bw-takeout/profiles/profile-x", Age: 76 * time.Hour}},
@@ -86,6 +88,7 @@ bw version:  2026.10.1, sha256 ` + exampleHash + `
 Server:      https://vault.example.org
 Target:      /mnt/backup
 Recipients:  2
+Crash dumps: core limit 0, process not dumpable
 Leftover profile:  /home/u/.cache/bw-takeout/profiles/profile-x (age 3d4h)
 Leftover partial:  ` + filepath.Join("/mnt/backup", "bw-takeout-20261118T090300Z-00000001.partial") + ` (age 1h12m)
 Sync:        fresh
@@ -289,5 +292,28 @@ func TestAge(t *testing.T) {
 		if got := report.Age(d); got != want {
 			t.Errorf("Age(%v) = %q, want %q", d, got, want)
 		}
+	}
+}
+
+// Scenarios "Run on Linux" and "Run on macOS" of "Report names the crash
+// dump protection", and the Windows line with the protection of the stub.
+func TestCrashDumpLine(t *testing.T) {
+	cases := map[string]struct {
+		p    crashdump.Protection
+		want string
+	}{
+		"Run on Linux":   {crashdump.Protection{CoreLimit: true, NotDumpable: true}, "Crash dumps: core limit 0, process not dumpable"},
+		"Run on macOS":   {crashdump.Protection{CoreLimit: true}, "Crash dumps: core limit 0"},
+		"Run on Windows": {crashdump.Protection{}, "Crash dumps: not limited on this platform"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			o := exampleOutcome()
+			o.Setup.CrashDumps = c.p
+			stdout, _ := render(o)
+			if !strings.Contains(stdout, "Recipients:  2\n"+c.want+"\n") {
+				t.Errorf("setup lines lack %q after the recipients\n%s", c.want, stdout)
+			}
+		})
 	}
 }
