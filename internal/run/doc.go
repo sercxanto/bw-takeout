@@ -9,7 +9,8 @@
 //
 // # Order
 //
-//  1. The checks before the first bw process (D3): the target is an existing
+//  1. The checks before the first bw process (D3): crash dumps are limited
+//     (design D2 of the change memory-hardening), the target is an existing
 //     directory, the recipients file yields at least one recipient, bw
 //     resolves to a regular file, a given CA file is a regular file, and
 //     the partial generations of the target are listed.

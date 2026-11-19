@@ -14,10 +14,12 @@ import (
 	"io"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"bw-takeout/internal/capture"
+	"bw-takeout/internal/crashdump"
 	"bw-takeout/internal/manifest"
 	"bw-takeout/internal/printable"
 	"bw-takeout/internal/run"
@@ -66,6 +68,23 @@ func (w *Writer) setup(s run.Setup) {
 	w.line("Server:      %s", clean(s.Server))
 	w.line("Target:      %s", clean(s.Target))
 	w.line("Recipients:  %d", s.Recipients)
+	w.line("Crash dumps: %s", CrashDumps(s.CrashDumps))
+}
+
+// CrashDumps names the crash dump protection of a run (design D5 of the
+// change memory-hardening).
+func CrashDumps(p crashdump.Protection) string {
+	var parts []string
+	if p.CoreLimit {
+		parts = append(parts, "core limit 0")
+	}
+	if p.NotDumpable {
+		parts = append(parts, "process not dumpable")
+	}
+	if len(parts) == 0 {
+		return "not limited on this platform"
+	}
+	return strings.Join(parts, ", ")
 }
 
 // Leftovers writes one line per leftover profile and partial generation.

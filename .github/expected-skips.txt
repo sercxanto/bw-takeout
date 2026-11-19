@@ -11,6 +11,15 @@
 *       bw-takeout/internal/bwcli          TestRealBWNotLoggedIn                   # opt-in, needs BW_TAKEOUT_REAL_BW and contacts Bitwarden Cloud, run by hand in the dev container
 *       bw-takeout/internal/bwcli          TestRealBWCleanExitInCallingEnvironment # opt-in, needs BW_TAKEOUT_REAL_BW and contacts Bitwarden Cloud, run by hand in the dev container
 *       bw-takeout/internal/bwcli          TestRealBWLoginWithoutTerminal          # opt-in, needs BW_TAKEOUT_REAL_BW and contacts Bitwarden Cloud, run by hand in the dev container
+linux   bw-takeout/internal/crashdump      TestRealLimitHelper                     # helper process of TestRealLimit, reports a skip when run on its own
+darwin  bw-takeout/internal/crashdump      TestRealLimitHelper                     # helper process of TestRealLimit, reports a skip when run on its own
+*       bw-takeout/internal/run            TestCrashDumpHelper                     # helper process of the real-path crash dump tests, reports a skip when run on its own
+linux   bw-takeout/internal/run            TestRunOnWindows                        # checks the Windows stub of crashdump.Limit, runs in the Windows CI job
+darwin  bw-takeout/internal/run            TestRunOnWindows                        # checks the Windows stub of crashdump.Limit, runs in the Windows CI job
+darwin  bw-takeout/internal/run            TestRunProcessNotDumpable               # the not-dumpable mark exists on Linux only
+windows bw-takeout/internal/run            TestRunProcessNotDumpable               # the not-dumpable mark exists on Linux only
+windows bw-takeout/internal/run            TestBWInheritsTheLimit                  # Windows has no core file size limit, crashdump.Limit changes nothing there
+windows bw-takeout/internal/run            TestLimitSetBeforeTheFirstBWProcess     # Windows has no core file size limit, crashdump.Limit changes nothing there
 windows bw-takeout/internal/publish        TestPermissionsOnLinux                  # Windows has no POSIX permissions, access control lists are a non-goal
 windows bw-takeout/internal/profile        TestPermissionsOnLinuxAndMacOS          # Windows has no POSIX permissions, access control lists are a non-goal
 windows bw-takeout/cmd/bw-takeout    TestSystemWithoutBW                     # the empty search path is tested on Unix only

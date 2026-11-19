@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	"bw-takeout/internal/bwcli/bwclitest"
 	"bw-takeout/internal/capture"
 	ct "bw-takeout/internal/capture/capturetest"
+	"bw-takeout/internal/crashdump"
 	"bw-takeout/internal/manifest"
 	"bw-takeout/internal/profile"
 	"bw-takeout/internal/publish"
@@ -37,6 +39,12 @@ import (
 var fakePath string
 
 func TestMain(m *testing.M) {
+	// A re-executed child of crashdump_test.go uses the fake of its
+	// parent.
+	if p := os.Getenv(helperFakeEnv); p != "" {
+		fakePath = p
+		os.Exit(m.Run())
+	}
 	dir, err := os.MkdirTemp("", "run-fake-")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -229,6 +237,10 @@ type env struct {
 	// onProfile is called with each new profile once the scenario is
 	// written.
 	onProfile func(p *profile.Profile)
+	// limitCalls counts the calls of the recording LimitCrashDumps, and
+	// limitErr is what it returns.
+	limitCalls int
+	limitErr   error
 }
 
 func newEnv(t *testing.T, s bwclitest.Scenario) *env {
@@ -273,8 +285,30 @@ func newEnv(t *testing.T, s bwclitest.Scenario) *env {
 		Wait:        func(ctx context.Context, d time.Duration) error { return ctx.Err() },
 		LogoutLimit: 5 * time.Second,
 		Progress:    e.progress,
+		// No in-process test lowers the limits of the test binary. The
+		// real path runs in a child process (crashdump_test.go).
+		LimitCrashDumps: e.recordLimit,
 	}
 	return e
+}
+
+// recordLimit is the recording LimitCrashDumps of the in-process tests. It
+// returns the protection the real function gives on this platform, or
+// limitErr.
+func (e *env) recordLimit() (crashdump.Protection, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.limitCalls++
+	if e.limitErr != nil {
+		return crashdump.Protection{}, e.limitErr
+	}
+	return platformProtection(), nil
+}
+
+// platformProtection is what crashdump.Limit gives on this platform when it
+// succeeds.
+func platformProtection() crashdump.Protection {
+	return crashdump.Protection{CoreLimit: runtime.GOOS != "windows", NotDumpable: runtime.GOOS == "linux"}
 }
 
 // newProfile wraps the creator. The data directory of each new profile

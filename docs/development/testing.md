@@ -603,6 +603,49 @@ Results:
 
 Not run: Windows, Linux amd64, Bitwarden Cloud, a second interrupt during the logout, an interrupt at a prompt of `bw` during the backup, an account with organization items, an account with lapsed premium, attachments larger than 20 MB, and run 2 on macOS. Evidence level: manual end-to-end run with a synthetic account, Vaultwarden only.
 
+## Crash Dump Tests
+
+The change memory-hardening adds `internal/crashdump` and calls it first in the checks of `internal/run` (design D6 of that change).
+
+- **Seams of `crashdump`.** Unexported variables hold the system calls: setting and reading the core file size limit on Unix, and setting and reading the dumpable mark on Linux. The unit tests replace them and cover a failed set, a failed read, a soft or a hard limit that reads back as 1, a failed dumpable set and a dumpable read-back of 1, each mapped to its error, and check that no error text holds a number or a path. No unit test calls the real functions in the test process.
+- **Re-executed children.** The real `crashdump.Limit` runs only in a child of the test binary, as in `internal/publish/kill_test.go`, so that the test process keeps its own limits. `TestRealLimit` starts `TestRealLimitHelper`, which calls `Limit` and prints the core limits and, on Linux, the dumpable value it reads afterwards. The parent checks `core 0 0` and `dumpable 0` and that its own limits did not change. In `internal/run`, `TestBWInheritsTheLimit`, `TestRunProcessNotDumpable` and `TestLimitSetBeforeTheFirstBWProcess` start `TestCrashDumpHelper`, which runs one backup with a nil `LimitCrashDumps`, so with the real function, against the fake `bw` of the parent. The helper prints the core limit of each record of the fake and its own limits after the run, and returns so that its temporary directories are removed. The parent gives it a temporary directory of its own and checks that it is empty afterwards.
+- **In-process run tests.** `newEnv` injects a recording `LimitCrashDumps`, which returns the protection of the platform or an injected error, so that no in-process test lowers the limits of the test binary. `cmd/bw-takeout` runs the built binary in its own process.
+- **Record of the fake.** `bwclitest.Record.CoreLimit` holds the soft and the hard core limit the fake saw at its start. It is nil on Windows.
+- **Windows.** `crashdump.TestLimitOnWindows` and `run.TestRunOnWindows` check the stub in the Windows CI job. The real-path tests skip there with a reason, and `.github/expected-skips.txt` lists them.
+
+Evidence level: mock, with the real system calls on Linux in the dev container. macOS and Windows run in CI only.
+
+### Spec Scenario Coverage of memory-hardening
+
+Every scenario of the backup-run delta of memory-hardening has at least one test. Names without a package are in `internal/run`. The mapping was checked with `go test -list . ./internal/crashdump/ ./internal/run/ ./internal/report/` on 19 November 2026.
+
+| Requirement | Scenario | Test |
+|---|---|---|
+| Core dumps are limited before the first bw process | bw inherits the limit | `TestBWInheritsTheLimit`, `bwclitest.TestFakeRecordsEachStart` |
+| | Limit set before the first bw process | `TestLimitSetBeforeTheFirstBWProcess`, `TestCrashDumpsLimitedBeforeTargetCheck`, `crashdump.TestRealLimit` |
+| The run process is not dumpable on Linux | Run process not dumpable | `TestRunProcessNotDumpable`, `crashdump.TestRealLimit` |
+| A run that cannot limit crash dumps does not start bw | Core limit cannot be set | `TestCoreLimitCannotBeSet`, `crashdump.TestCoreLimitErrors` |
+| | Core limit does not read back as zero | `TestCoreLimitDoesNotReadBackAsZero`, `crashdump.TestCoreLimitErrors` |
+| | Not-dumpable mark cannot be set on Linux | `TestNotDumpableMarkCannotBeSetOnLinux`, `crashdump.TestDumpableErrors` |
+| Windows runs state that crash dumps are not limited | Run on Windows | `TestRunOnWindows`, `crashdump.TestLimitOnWindows`, `report.TestCrashDumpLine/Run_on_Windows` |
+| Report names the crash dump protection | Run on Linux | `report.TestCrashDumpLine/Run_on_Linux`, `report.TestReportOfTheDesignExample` |
+| | Run on macOS | `report.TestCrashDumpLine/Run_on_macOS` |
+| A core file left by bw ends the run | bw leaves a core file | `TestBWLeavesACoreFile` |
+
+`crashdump.TestLimitOnWindows` and `TestRunOnWindows` are built or run on Windows only, so `go test -list` in the dev container does not show them. `crashdump.TestLimitSucceeds` covers the protection a successful `Limit` reports.
+
+### Manual Check of a Pipe Handler
+
+Design D9 of memory-hardening asks for a check on a Linux host whose `core_pattern` pipes to systemd-coredump: a helper lowers the limits like the run, aborts with SIGABRT, and `coredumpctl list` shows whether a core was stored, once with only the core limit and once with the dumpable mark as well.
+
+Not run, 19 November 2026. No such host was available during apply. The dev container (Debian 12, Linux 6.8 aarch64) has `core_pattern = core` and no systemd-coredump, and cannot change the setting. The [security page](../user/security.md#swap-hibernation-and-core-dumps) therefore says only that such a handler decides on its own, and that the common handlers were not checked.
+
+### Test Run of 19 November 2026, memory-hardening
+
+In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3: `gofmt -l .` printed nothing, `go vet ./...` passed for Linux, `GOOS=darwin` and `GOOS=windows`, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed in all packages with only expected skips, and `go test -race ./...` passed. `openspec validate memory-hardening --strict` passed. The change added the expected skips `TestRealLimitHelper`, `TestCrashDumpHelper` and, on Linux and macOS, `TestRunOnWindows`, and for Windows `TestBWInheritsTheLimit` and `TestLimitSetBeforeTheFirstBWProcess`, each with its reason in `.github/expected-skips.txt`. The review fixes of the same day added `TestRunProcessNotDumpable`, skipped on macOS and Windows. After the review fixes R1 to R3, all of these checks ran again with the same result. `cmd/bw-takeout` was built for `darwin/arm64` and `windows/amd64`. `ulimit -c` of the shell was `unlimited` before and after the tests. Evidence level: mock, with the real system calls on Linux.
+
+Not run in the dev container: the tests on macOS, Windows and Linux amd64, the [manual check of a pipe handler](#manual-check-of-a-pipe-handler), and any backup against the real `bw`.
+
 ## Skip Report
 
 A skipped test is not a passed test. The program `internal/tools/skipreport` reads the output of `go test -json`, echoes it, and lists every skipped test with its reason. It exits with status 1 when a test failed or when a test was skipped that the list of expected skips does not allow for the platform. Run it the same way locally and in CI:

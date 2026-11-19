@@ -122,3 +122,17 @@ func TestUsagePageRecipientsExample(t *testing.T) {
 		t.Errorf("example file accepted: %v", err)
 	}
 }
+
+// The security page states that the verify command does not limit crash
+// dumps, which only a backup run does (review of 19 November 2026 of the
+// change memory-hardening, finding S1).
+func TestSecurityPageNamesVerifyCrashDumps(t *testing.T) {
+	data, err := os.ReadFile("../../docs/user/security.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec := section(t, strings.ReplaceAll(string(data), "\r\n", "\n"), "Swap, Hibernation and Core Dumps")
+	if !strings.Contains(sec, "`bw-takeout verify` limits nothing") {
+		t.Error("the section does not say that verify limits no crash dumps")
+	}
+}

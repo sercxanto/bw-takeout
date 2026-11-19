@@ -85,6 +85,10 @@ type Record struct {
 	Line       string `json:"line,omitempty"`
 	PID        int    `json:"pid"`
 	ChildPID   int    `json:"childPid,omitempty"`
+	// CoreLimit is the soft and the hard core file size limit the fake
+	// saw at its start. It is nil on Windows, which has no such limit
+	// (design D6 of the change memory-hardening).
+	CoreLimit *[2]uint64 `json:"coreLimit,omitempty"`
 }
 
 // Lookup returns the environment value of name in the record, and whether
