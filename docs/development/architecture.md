@@ -67,7 +67,7 @@ Collecting a capture exists in two phases, tested against an in-memory vault and
      - Swap, hibernation and core dumps are documented as residual risk in [security](../user/security.md#swap-hibernation-and-core-dumps), with the advice to use encrypted swap or an encrypted disk, and rule 3 above is corrected. Done.
      - The next live run includes an archived item with an attachment. Done: the backup exercise of 18 November 2026 found the attachment of the archived item in every generation.
    - **D. FAT and exFAT run**: the run of `publish` on a FAT or exFAT target that was deferred from `archive-generation`, see [testing](testing.md). Independent of `bw`.
-   - **E. Memory hardening**, change `memory-hardening`: limit crash dumps before the first `bw` process. Done. The behavior is in the spec delta of `backup-run` in `openspec/changes/memory-hardening/`. The decisions of 19 November 2026:
+   - **E. Memory hardening**, change `memory-hardening`: limit crash dumps before the first `bw` process. Done, archived on 19 November 2026. The agreed behavior is in `openspec/specs/backup-run/`. The decisions of 19 November 2026:
      - On Linux and macOS the run sets the soft and the hard core file size limit of its process to zero and reads them back. Every `bw` process inherits both. On Linux the run process is also marked as not dumpable, which does not reach `bw`.
      - Fail closed: on Linux and macOS a run whose limit or mark cannot be set, or does not read back as set, ends in the checks with no generation, before a profile is created and before `bw` starts.
      - A debugger can no longer attach to a running `bw-takeout` on Linux. Accepted.
