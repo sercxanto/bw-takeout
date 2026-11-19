@@ -705,6 +705,15 @@ At `4bf19fa` [CI](https://github.com/sercxanto/bw-takeout/actions/runs/443913054
 
 Evidence level: mock, on three platforms. On Windows no test ran against the real `bw`, and no interrupt came from a console.
 
+## CI Run of 19 November 2026, memory-hardening
+
+The workflows ran on [pull request 4](https://github.com/sercxanto/bw-takeout/pull/4) of the branch `memory-hardening`. At the commit `d606198` [Checks](https://github.com/sercxanto/bw-takeout/actions/runs/44612109126) passed, and in [CI](https://github.com/sercxanto/bw-takeout/actions/runs/44612109122) the test matrix passed on `ubuntu-24.04`, `macos-26` and `windows-2025`. The skip report passed on each runner. The maintainer checked the test output of the macOS and the Windows job:
+
+- On `macos-26`, `crashdump.TestRealLimit`, `TestBWInheritsTheLimit` and `TestLimitSetBeforeTheFirstBWProcess` passed, so the real core limit was set, read back and inherited by the fake `bw` on macOS. `TestRunProcessNotDumpable` and `TestRunOnWindows` were skipped, as expected.
+- On `windows-2025`, `crashdump.TestLimitOnWindows` and `TestRunOnWindows` passed, so the stub changes nothing and the run goes on to its profile. `TestBWInheritsTheLimit` and `TestLimitSetBeforeTheFirstBWProcess` were skipped, as expected.
+
+Evidence level: mock, on three platforms, with the real system calls on Linux and macOS. No pipe handler of `core_pattern` was involved, and no test crashed a process.
+
 ## Race Tests on Linux Only, 17 November 2026
 
 From 17 November 2026 the step with the race detector in `ci.yml` runs on `ubuntu-24.04` only; vet and the tests with the skip report still run on all three runners. A passing `test` job on macOS or Windows therefore no longer includes race tests. `TestWorkflowStructure` checks the condition.
