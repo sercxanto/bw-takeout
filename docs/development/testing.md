@@ -694,7 +694,7 @@ In the dev container on Debian 12.15, Linux 6.8 aarch64, with Go 1.27.3, `bw` 20
 - The CI step of design D10 was reproduced in the dev container: with `HOME`, `GOCACHE` and `GOMODCACHE` set to empty directories under `/tmp` and an empty `.local/vaultwarden-cache/`, the suite passed in 225 seconds, including the download of the image from Docker Hub. The run in Docker on the runner is the workflow follow-up.
 - The [limitations](../user/limitations.md) said that no live capture backed the verdict rules and that `bw` was tested without a login only. Both runs contradict that, so the two sentences were updated. No other statement there was contradicted.
 
-Not run: Linux amd64 at run time (the workflow follow-up), Bitwarden Cloud and the cases listed above. Evidence level: automated end-to-end, Vaultwarden only.
+Not run in the dev container: Linux amd64, which the [CI run of the same day](#ci-run-of-21-november-2026-vaultwarden-test-setup) covered, Bitwarden Cloud and the cases listed above. Evidence level: automated end-to-end, Vaultwarden only.
 
 ### Test Run of 21 November 2026, vaultwarden-test-setup
 
@@ -762,6 +762,20 @@ The workflows ran on the pull request of the branch `interactive-backup-run`. At
 At `4bf19fa` [CI](https://github.com/sercxanto/bw-takeout/actions/runs/44391305498) and [Checks](https://github.com/sercxanto/bw-takeout/actions/runs/44391305582) passed. The test matrix passed on `ubuntu-24.04`, `macos-26` and `windows-2025`, and the race tests ran on Linux only, as intended. The skip report passed on each runner. The change added no skip and moved the Windows skip of `TestPartialGenerationByAnotherPath` to `internal/offline`. The run tests of `internal/run`, including the interrupt tests and the profile that cannot be removed because a file in it is held open, ran against the fake `bw` on all three platforms for the first time.
 
 Evidence level: mock, on three platforms. On Windows no test ran against the real `bw`, and no interrupt came from a console.
+
+## CI Run of 21 November 2026, vaultwarden-test-setup
+
+The maintainer started `vaultwarden.yml` by hand on `main` after the merge of the change ([pull request 5](https://github.com/sercxanto/bw-takeout/pull/5), commit `999c82b` on `main`). It was the first run of the workflow, and the first run of the Vaultwarden tests on Linux amd64. `workflow_dispatch` offers a workflow only once it is on the default branch, so it could not be started on the branch before the merge. The job built the dev container image on `ubuntu-24.04` and ran `go test -count=1 -tags vaultwarden -v ./internal/e2e/` inside it with the runner's user and group. It passed.
+
+- All tests of the package passed, `ok` in 216 seconds, the same time as on Linux arm64. The empty module cache was filled from the Go module proxy at the start.
+- `TestVaultwardenFromDockerHub` got the linux/amd64 server binary with the SHA-256 `392bc9afa7de1821e372a6d93369c87c1070644c68e26057017a2bf1b9cac3be` of the table, fetched from Docker Hub without a rate limit. This was the first run of the amd64 binary: the server started, registered the accounts and served `bw`.
+- `TestCipherPutReplacesKeyValue` passed, so the `PUT` of a changed `keyValue` works on amd64 as well.
+- Tampered passkey: exit status 1, verdict `failed`, `failed passkey_count_mismatch` with `expected=1 found=0` as the only failed finding, and `unverified document_decryption_errors` with `count=3` for the plaintext export, the item list and the archived item list, as on Linux arm64. No generation, logout ok (2.7 s), profile removed.
+- Intact vault: exit status 0 after 37 seconds, verdict `verified`, 0 findings, 2 of 2 attachments ok, generation published, logout ok (2.7 s), profile removed. The report names the same `bw` 2026.10.1 with the SHA-256 of `bw.js` `8a443d1190643330826e8cc0b27381fba5af5a06c6c3d7c7254033913a51ee9b` as in the dev container, and `Crash dumps: core limit 0, process not dumpable` inside the container.
+- Seeding took 47 seconds, `TestServerStartsAndStops` stopped the server in 1 ms.
+- The log check found none of the 16 recorded values in 5768 bytes of test output, and the excerpt shows the account as `<address>`.
+
+The whole run took 4 minutes 24 seconds, well below the limit of 30 minutes: about 3 seconds for the checkout of commit `999c82b889db9590349776c3c216cfe5bf313fb4`, 28 seconds for the build of the dev container image and 216 seconds for the tests. The runner image was `ubuntu-24.04` version 20261116.133.1 with runner 2.338.2. The raw log holds no address under `example.invalid` and no warning of the workflow itself; the image build printed one deprecation notice of npm for a dependency of the pinned packages. The link to the run was not recorded. The results of `CI` and `Checks` on the pull request were not recorded. Evidence level: automated end-to-end, Vaultwarden only, on Linux amd64.
 
 ## CI Run of 19 November 2026, memory-hardening
 

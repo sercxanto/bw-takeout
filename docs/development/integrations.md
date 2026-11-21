@@ -30,7 +30,7 @@ The `bw` client of this project runs any `bw` version and produces no message ab
 | 2026.10.1 (official single-file program, `bw-macos-arm64`) | macOS 26.7.3 arm64 | Manual login exercise from a Go parent against Vaultwarden 1.37.4 in the dev container: successful login, wrong password and interrupt at the password prompt ([login exercise](../research/login-exercise-2026-11-15.md)) |
 | 2026.10.1 | Windows | Not run |
 
-The automated [Vaultwarden tests](testing.md#vaultwarden-tests) ran against 2026.10.1 from npm on Linux arm64 in the dev container on 21 November 2026: an interactive login through `bw-takeout backup` at a pseudo-terminal, an intact vault and a tampered passkey against Vaultwarden 1.37.4. They run in the same dev container image on Linux amd64 through `vaultwarden.yml`, which has not run yet.
+The automated [Vaultwarden tests](testing.md#vaultwarden-tests) ran against 2026.10.1 from npm on Linux arm64 in the dev container on 21 November 2026: an interactive login through `bw-takeout backup` at a pseudo-terminal, an intact vault and a tampered passkey against Vaultwarden 1.37.4. They ran in the same dev container image on Linux amd64 through `vaultwarden.yml` on `main` after the merge of the change ([CI run](testing.md#ci-run-of-21-november-2026-vaultwarden-test-setup)).
 
 Bitwarden Cloud with an account is untested for every version.
 
@@ -43,7 +43,7 @@ The Vaultwarden tests and the manual exercises use Vaultwarden 1.37.4, the image
 | arm64 | `sha256:c82bc74bb0a88821fd3fbce48e7867e8aca4e492e512970a309d02a629ab91d4` | `ae658947f85964e934d7673d9cab4c0edbce8e6167422d6ff3b10008e125421d` |
 | amd64 | `sha256:7d90670a4e2531e752f014e58f7283b9d197847b6f073bf84e99598f49d80ffd` | `392bc9afa7de1821e372a6d93369c87c1070644c68e26057017a2bf1b9cac3be` |
 
-The arm64 binary ran in the dev container. The amd64 binary was hashed in the [spike of 21 November 2026](../research/vaultwarden-registration-spike-2026-11-21.md) and has not run yet.
+The arm64 binary ran in the dev container. The amd64 binary was hashed in the [spike of 21 November 2026](../research/vaultwarden-registration-spike-2026-11-21.md) and first ran in the dispatched `vaultwarden.yml` run on `main` after the merge of the change.
 
 To update Vaultwarden, fetch the index of the new release tag and its manifests as in step 1 of the [manual login exercise](testing.md#manual-login-exercise), unpack `vaultwarden` for each architecture, record its SHA-256 and check `vaultwarden --version` where it can run. Then replace the index digest, the version and both rows in `fetch_test.go`, in this page and in the manual exercise together, and run the Vaultwarden tests in the dev container and through `vaultwarden.yml`. A release can change the registration API or the prompts of the server, so the update is a reviewed change of its own.
 
