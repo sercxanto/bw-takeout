@@ -798,6 +798,12 @@ The maintainer started `vaultwarden.yml` by hand on `main` after the merge of th
 
 The whole run took 4 minutes 24 seconds, well below the limit of 30 minutes: about 3 seconds for the checkout of commit `999c82b889db9590349776c3c216cfe5bf313fb4`, 28 seconds for the build of the dev container image and 216 seconds for the tests. The runner image was `ubuntu-24.04` version 20261116.133.1 with runner 2.338.2. The raw log holds no address under `example.invalid` and no warning of the workflow itself; the image build printed one deprecation notice of npm for a dependency of the pinned packages. The link to the run was not recorded. The results of `CI` and `Checks` on the pull request were not recorded. Evidence level: automated end-to-end, Vaultwarden only, on Linux amd64.
 
+## CI Run of 21 November 2026, vaultwarden-totp-login
+
+The maintainer started `vaultwarden.yml` by hand on the branch `vaultwarden-totp-login` at commit `5ee06141303f5a39029acdf016126e6fcddbc005`, the commit of the change ([run](https://github.com/sercxanto/bw-takeout/actions/runs/44907229965)). The run used the trigger `workflow_dispatch` and passed on `ubuntu-24.04` (Linux amd64). The job started at 13:07:01 UTC and ended at 13:11:42 UTC, so it took 4 minutes 41 seconds, well below the limit of 30 minutes. All steps succeeded: the checkout, the build of the dev container image and `go test -count=1 -tags vaultwarden -v ./internal/e2e/`, which includes the log check of `TestMain`.
+
+This is the first run of the two-step login scenario and of both login failure scenarios on Linux amd64. The maintainer reported that the tests passed. The per-test output, the class and the `Logout:` line of the failure scenarios on amd64, and the results of `CI` and `Checks` were not recorded here. Evidence level: automated end-to-end, Vaultwarden only, on Linux amd64.
+
 ## CI Run of 19 November 2026, memory-hardening
 
 The workflows ran on [pull request 4](https://github.com/sercxanto/bw-takeout/pull/4) of the branch `memory-hardening`. At the commit `d606198` [Checks](https://github.com/sercxanto/bw-takeout/actions/runs/44612109126) passed, and in [CI](https://github.com/sercxanto/bw-takeout/actions/runs/44612109122) the test matrix passed on `ubuntu-24.04`, `macos-26` and `windows-2025`. The skip report passed on each runner. The maintainer checked the test output of the macOS and the Windows job:
