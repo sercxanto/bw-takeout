@@ -18,13 +18,15 @@ documents/export.json
 documents/export.encrypted.json
 documents/items.json
 documents/items.archived.json
+documents/organizations/<org-id>/export.json            (per chosen organization)
+documents/organizations/<org-id>/export.encrypted.json  (per chosen organization)
 attachments/<item-id>/<attachment-id>
 manifest.json
 ```
 
-The recovery instructions come first and hold no vault data. The four captured documents are stored byte for byte: the plaintext export, the account-bound encrypted export, the default item list and the archived item list. Each of them is required. The two item lists stay separate documents, because a merged list is a document `bw` never wrote. Attachments are stored by item ID and attachment ID. Their file names appear only in the manifest, inside the encryption.
+The recovery instructions come first and hold no vault data. The four captured documents are stored byte for byte: the plaintext export, the account-bound encrypted export, the default item list and the archived item list. Each of them is required. The two item lists stay separate documents, because a merged list is a document `bw` never wrote. For each organization chosen for the backup, its plaintext and its encrypted organization export follow the four documents, in the order the organizations were chosen, under a directory named by the organization ID; both are required for every organization the manifest lists. Entry names are built from fixed names and validated IDs only, so an organization name never enters a path. Attachments are stored by item ID and attachment ID. Their file names appear only in the manifest, inside the encryption.
 
-**Manifest last.** `manifest.json` is the last entry. It holds the format name `bw-takeout-generation` and version 1, the creation time, the source server and account, the tool and `bw` versions, the item and attachment counts, the verification result embedded byte for byte, and size and SHA-256 of every other entry. A reader refuses an unknown format version and ignores unknown additional keys.
+**Manifest last.** `manifest.json` is the last entry. It holds the format name `bw-takeout-generation` and version 1, the creation time, the source server and account, the tool and `bw` versions, the item and attachment counts, the list of chosen organizations with ID, name and the item count of their plaintext export, which is empty without one and required, the verification result embedded byte for byte, and size and SHA-256 of every other entry. A reader refuses an unknown format version and ignores unknown additional keys.
 
 **Generation directory.** A generation is a directory `bw-takeout-<YYYYMMDD>T<HHMMSS>Z-<8 hex digits>` in an existing target, with the time in UTC and a random part. It is created with the marker `.partial` and renamed only after the archive is written and flushed. An unverified capture is published with the marker `.unverified`, a failed capture is not published. A directory without `.partial` is complete by construction. No run modifies content that existed before it.
 
@@ -44,7 +46,9 @@ The recovery instructions come first and hold no vault data. The four captured d
 - Attachment file names, item names and vault content are never visible outside the encryption. The directory name reveals the creation time.
 - A crash leaves a `.partial` directory with ciphertext only. It is reported and never removed automatically, because without a lock a dead run cannot be told from a running one.
 - The format version and the directory names become a promise. A new format version needs a reader that still opens version 1, and changing the names or markers needs a superseding ADR.
-- Format version 1 was redefined once, before any release: the change archived-item-list added `documents/items.archived.json` as a required entry without a new version, because no command wrote a generation yet and the only archives were built inside tests. Archives of the earlier three-document layout are refused. From the first release on, every layout change needs a new format version.
+- Format version 1 was redefined once, before any release: the change archived-item-list added `documents/items.archived.json` as a required entry without a new version, because no command wrote a generation yet and the only archives were built inside tests. Archives of the earlier three-document layout are refused.
+- Format version 1 was redefined a second time, before any release: the change organization-export added the organization documents under `documents/organizations/<org-id>/` and the required manifest key `organizations` without a new version, because the tool is not in use yet and the only generations come from exercises with synthetic accounts (maintainer decision of 21 November 2026). Manifests of the earlier layout have no organization list and are refused; the key is required rather than read as empty, because reading it as empty would be a compatibility rule for archives nobody relies on.
+- From the first release on, every layout change needs a new format version.
 - Directory flushing is not available on Windows, and FAT or exFAT give weak guarantees after a power loss. Offline verification detects the resulting damage but cannot prevent it.
 
-The rules in detail are in the design of the change archive-generation.
+The rules in detail are in the design of the change archive-generation, and for organizations in the design of the change organization-export and [ADR 0008](0008-organization-export.md).

@@ -251,6 +251,7 @@ func (r *runner) check() error {
 		return err
 	}
 	r.o.Setup.Recipients = len(r.recipients)
+	r.o.Setup.Organizations = append([]string(nil), r.cfg.Organizations...)
 
 	r.bwPath, err = resolveBW(r.cfg.BW)
 	if err != nil {
@@ -339,7 +340,7 @@ func (r *runner) session(client *bwcli.Client, loginStarted *bool) {
 	}
 
 	r.at(PhaseSnapshot)
-	collector := &collect.Collector{Now: r.d.Now, Wait: r.d.Wait}
+	collector := &collect.Collector{Now: r.d.Now, Wait: r.d.Wait, Organizations: r.cfg.Organizations}
 	snap, err := collector.Snapshot(r.ctx, client)
 	if err != nil {
 		r.fail(PhaseSnapshot, err)
@@ -428,7 +429,8 @@ func (r *runner) write(w io.Writer, created time.Time, collector *collect.Collec
 	if r.ctx.Err() != nil {
 		return nil, ErrInterrupted
 	}
-	out, err := aw.Finish(archive.Meta{Source: snap.Source, Tool: tool, BW: bw, Verification: verification})
+	out, err := aw.Finish(archive.Meta{Source: snap.Source, Tool: tool, BW: bw, Verification: verification,
+		OrganizationNames: snap.OrganizationNames()})
 	if err != nil {
 		return nil, err
 	}

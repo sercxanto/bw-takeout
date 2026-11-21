@@ -33,7 +33,24 @@ const (
 	ArchivedItemListPath = "documents/items.archived.json"
 	ManifestPath         = "manifest.json"
 	attachmentsDir       = "attachments/"
+	organizationsDir     = "documents/organizations/"
+	// The file names of the two documents of one organization (design D7
+	// of organization-export).
+	organizationExportName    = "export.json"
+	organizationEncryptedName = "export.encrypted.json"
 )
+
+// OrganizationPlaintextExportPath returns the entry name of the plaintext
+// export of one organization. It does not validate the ID.
+func OrganizationPlaintextExportPath(organizationID string) string {
+	return organizationsDir + organizationID + "/" + organizationExportName
+}
+
+// OrganizationEncryptedExportPath returns the entry name of the encrypted
+// export of one organization. It does not validate the ID.
+func OrganizationEncryptedExportPath(organizationID string) string {
+	return organizationsDir + organizationID + "/" + organizationEncryptedName
+}
 
 // AttachmentPath returns the entry name of one attachment. It does not
 // validate the IDs.
@@ -49,24 +66,39 @@ func ValidItemID(id string) bool { return vaultid.ValidItemID(id) }
 // and digits (design D3). The rule lives in package vaultid.
 func ValidAttachmentID(id string) bool { return vaultid.ValidAttachmentID(id) }
 
-// kindOf returns the kind an entry name stands for, and for an attachment
-// its IDs. ok is false for a name the format does not define.
-func kindOf(name string) (kind manifest.Kind, itemID, attachmentID string, ok bool) {
+// entryName is what an entry name stands for.
+type entryName struct {
+	kind manifest.Kind
+	// itemID and attachmentID are set for an attachment, organizationID for
+	// an organization document.
+	itemID, attachmentID, organizationID string
+}
+
+// kindOf returns what an entry name stands for. ok is false for a name the
+// format does not define.
+func kindOf(name string) (n entryName, ok bool) {
 	switch name {
 	case RecoveryPath:
-		return manifest.KindRecovery, "", "", true
+		return entryName{kind: manifest.KindRecovery}, true
 	case PlaintextExportPath, EncryptedExportPath, ItemListPath, ArchivedItemListPath:
-		return manifest.KindDocument, "", "", true
+		return entryName{kind: manifest.KindDocument}, true
+	}
+	if rest, found := strings.CutPrefix(name, organizationsDir); found {
+		org, file, found := strings.Cut(rest, "/")
+		if !found || !vaultid.ValidOrganizationID(org) || (file != organizationExportName && file != organizationEncryptedName) {
+			return entryName{}, false
+		}
+		return entryName{kind: manifest.KindDocument, organizationID: org}, true
 	}
 	rest, found := strings.CutPrefix(name, attachmentsDir)
 	if !found {
-		return "", "", "", false
+		return entryName{}, false
 	}
-	itemID, attachmentID, found = strings.Cut(rest, "/")
+	itemID, attachmentID, found := strings.Cut(rest, "/")
 	if !found || !ValidItemID(itemID) || !ValidAttachmentID(attachmentID) {
-		return "", "", "", false
+		return entryName{}, false
 	}
-	return manifest.KindAttachment, itemID, attachmentID, true
+	return entryName{kind: manifest.KindAttachment, itemID: itemID, attachmentID: attachmentID}, true
 }
 
 // ErrNoRecipient is returned when writing is requested without a recipient.

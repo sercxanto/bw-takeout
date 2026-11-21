@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"bw-takeout/internal/capture"
@@ -49,10 +50,10 @@ func TestParseIntact(t *testing.T) {
 	c := mustParse(t, f)
 
 	wantEncrypted := []capture.EncryptedItem{
-		{ID: ct.ItemPasskeyLogin, Type: capture.TypeLogin, Format: capture.FormatLegacy, PasskeyCount: 2},
-		{ID: ct.ItemPlainLogin, Type: capture.TypeLogin, Format: capture.FormatLegacy, PasskeyCount: 0},
-		{ID: ct.ItemNote, Type: 2, Format: capture.FormatLegacy, PasskeyCount: 0},
-		{ID: ct.ItemArchivedLogin, Type: capture.TypeLogin, Format: capture.FormatLegacy, PasskeyCount: 0},
+		{ID: ct.ItemPasskeyLogin, Type: capture.TypeLogin, RevisionDate: ct.RevisionDate, Format: capture.FormatLegacy, PasskeyCount: 2},
+		{ID: ct.ItemPlainLogin, Type: capture.TypeLogin, RevisionDate: ct.RevisionDate, Format: capture.FormatLegacy, PasskeyCount: 0},
+		{ID: ct.ItemNote, Type: 2, RevisionDate: ct.RevisionDate, Format: capture.FormatLegacy, PasskeyCount: 0},
+		{ID: ct.ItemArchivedLogin, Type: capture.TypeLogin, RevisionDate: ct.RevisionDate, Format: capture.FormatLegacy, PasskeyCount: 0},
 	}
 	if !reflect.DeepEqual(c.Encrypted.Items, wantEncrypted) {
 		t.Errorf("encrypted items:\n got %+v\nwant %+v", c.Encrypted.Items, wantEncrypted)
@@ -75,6 +76,11 @@ func TestParseIntact(t *testing.T) {
 	if passkeys[0].Counter != "0" || passkeys[1].Counter != "6" {
 		t.Errorf("counters %q and %q, want 0 and 6", passkeys[0].Counter, passkeys[1].Counter)
 	}
+	for _, item := range c.Plaintext.Items {
+		if item.RevisionDate != ct.RevisionDate {
+			t.Errorf("plaintext item %s: revision date %q", item.ID, item.RevisionDate)
+		}
+	}
 	for _, item := range c.Plaintext.Items[1:] {
 		if len(item.Passkeys) != 0 || item.OrganizationID != "" {
 			t.Errorf("plaintext item %s: %+v", item.ID, item)
@@ -82,15 +88,15 @@ func TestParseIntact(t *testing.T) {
 	}
 
 	wantList := []capture.ListedItem{
-		{ID: ct.ItemPasskeyLogin, AttachmentIDs: []string{ct.AttachmentFirst, ct.AttachmentSecond}},
-		{ID: ct.ItemPlainLogin},
-		{ID: ct.ItemNote},
+		{ID: ct.ItemPasskeyLogin, RevisionDate: ct.RevisionDate, AttachmentIDs: []string{ct.AttachmentFirst, ct.AttachmentSecond}},
+		{ID: ct.ItemPlainLogin, RevisionDate: ct.RevisionDate},
+		{ID: ct.ItemNote, RevisionDate: ct.RevisionDate},
 	}
 	if !reflect.DeepEqual(c.List.Items, wantList) {
 		t.Errorf("listed items:\n got %+v\nwant %+v", c.List.Items, wantList)
 	}
 	wantArchived := []capture.ListedItem{
-		{ID: ct.ItemArchivedLogin, AttachmentIDs: []string{ct.AttachmentArchived}},
+		{ID: ct.ItemArchivedLogin, RevisionDate: ct.RevisionDate, AttachmentIDs: []string{ct.AttachmentArchived}},
 	}
 	if !reflect.DeepEqual(c.ArchivedList.Items, wantArchived) {
 		t.Errorf("archived listed items:\n got %+v\nwant %+v", c.ArchivedList.Items, wantArchived)
@@ -106,13 +112,15 @@ func TestParseIntact(t *testing.T) {
 }
 
 // The model keeps no decrypted value beyond what the passkey checks need.
+// RevisionDate is item metadata in clear in every document, also in the
+// encrypted export.
 func TestModelHoldsNoOtherDecryptedField(t *testing.T) {
 	allowed := map[string][]string{
-		"PlaintextItem": {"ID", "OrganizationID", "Passkeys"},
+		"PlaintextItem": {"ID", "OrganizationID", "RevisionDate", "Passkeys"},
 		"Passkey": {"CredentialID", "KeyType", "KeyAlgorithm", "KeyCurve", "KeyValue", "Counter",
 			"HasRPID", "HasDiscoverable", "HasCreationDate", "InvalidFields"},
-		"ListedItem":    {"ID", "OrganizationID", "AttachmentIDs"},
-		"EncryptedItem": {"ID", "Type", "OrganizationID", "Format", "PasskeyCount"},
+		"ListedItem":    {"ID", "OrganizationID", "RevisionDate", "AttachmentIDs"},
+		"EncryptedItem": {"ID", "Type", "OrganizationID", "RevisionDate", "Format", "PasskeyCount"},
 		// FileNames is the one decrypted value kept outside the passkey
 		// checks, for the manifest only (design D5 of capture-collection).
 		"ItemList": {"Items", "DuplicateIDs", "DuplicateAttachments", "FileNames"},
@@ -752,8 +760,8 @@ func TestParseAttachmentFileNames(t *testing.T) {
 }
 
 // One function decides which attachments are expected (design D6 of
-// capture-collection).
-func TestPersonalAttachments(t *testing.T) {
+// capture-collection and of organization-export).
+func TestScopedAttachments(t *testing.T) {
 	ref := func(item, attachment string) capture.AttachmentRef {
 		return capture.AttachmentRef{ItemID: item, AttachmentID: attachment}
 	}
@@ -762,12 +770,14 @@ func TestPersonalAttachments(t *testing.T) {
 	}
 	personal := capture.ListedItem{ID: "item-b", AttachmentIDs: []string{"att-2", "att-1"}}
 	organization := capture.ListedItem{ID: "item-org", OrganizationID: "org-1", AttachmentIDs: []string{"att-9"}}
+	other := capture.ListedItem{ID: "item-other", OrganizationID: "org-2", AttachmentIDs: []string{"att-8"}}
 	archived := capture.ListedItem{ID: "item-a", AttachmentIDs: []string{"att-3"}}
 
 	for _, tc := range []struct {
-		name  string
-		lists []*capture.ItemList
-		want  []capture.AttachmentRef
+		name   string
+		chosen []string
+		lists  []*capture.ItemList
+		want   []capture.AttachmentRef
 	}{
 		{
 			name:  "pair in both lists",
@@ -775,7 +785,7 @@ func TestPersonalAttachments(t *testing.T) {
 			want:  []capture.AttachmentRef{ref("item-b", "att-2"), ref("item-b", "att-1")},
 		},
 		{
-			name:  "organization item",
+			name:  "organization item not chosen",
 			lists: []*capture.ItemList{list(organization, personal)},
 			want:  []capture.AttachmentRef{ref("item-b", "att-2"), ref("item-b", "att-1")},
 		},
@@ -800,9 +810,29 @@ func TestPersonalAttachments(t *testing.T) {
 			lists: nil,
 			want:  nil,
 		},
+		{
+			name:   "chosen organization in both lists",
+			chosen: []string{"org-1"},
+			lists:  []*capture.ItemList{list(personal, organization, other), list(organization, archived)},
+			want: []capture.AttachmentRef{
+				ref("item-b", "att-2"), ref("item-b", "att-1"), ref("item-org", "att-9"), ref("item-a", "att-3"),
+			},
+		},
+		{
+			name:   "other organization left out",
+			chosen: []string{"org-1"},
+			lists:  []*capture.ItemList{list(other)},
+			want:   nil,
+		},
+		{
+			name:   "two chosen organizations",
+			chosen: []string{"org-2", "org-1"},
+			lists:  []*capture.ItemList{list(organization, other)},
+			want:   []capture.AttachmentRef{ref("item-org", "att-9"), ref("item-other", "att-8")},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := capture.PersonalAttachments(tc.lists...)
+			got := capture.ScopedAttachments(tc.chosen, tc.lists...)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("got %v, want %v", got, tc.want)
 			}
@@ -811,7 +841,7 @@ func TestPersonalAttachments(t *testing.T) {
 
 	t.Run("intact fixture", func(t *testing.T) {
 		c := mustParse(t, ct.Intact(t))
-		got := capture.PersonalAttachments(c.List, c.ArchivedList)
+		got := capture.ScopedAttachments(nil, c.List, c.ArchivedList)
 		want := []capture.AttachmentRef{
 			ref(ct.ItemPasskeyLogin, ct.AttachmentFirst),
 			ref(ct.ItemPasskeyLogin, ct.AttachmentSecond),
@@ -821,4 +851,131 @@ func TestPersonalAttachments(t *testing.T) {
 			t.Errorf("got %v, want %v", got, want)
 		}
 	})
+}
+
+// The parsers keep revisionDate raw and never require it (design D4 of
+// organization-export).
+func TestRevisionDateIsNotRequired(t *testing.T) {
+	for name, value := range map[string]any{"absent": nil, "number": json.Number("5"), "object": map[string]any{}} {
+		t.Run(name, func(t *testing.T) {
+			f := ct.Intact(t)
+			for _, items := range [][]any{f.PlaintextItems(), f.EncryptedItems(), f.ItemList} {
+				item := itemIn(t, items, ct.ItemPlainLogin)
+				if value == nil {
+					delete(item, "revisionDate")
+				} else {
+					item["revisionDate"] = value
+				}
+			}
+			c := mustParse(t, f)
+			for _, got := range []string{
+				encryptedItem(t, c, ct.ItemPlainLogin).RevisionDate,
+				c.Plaintext.Items[1].RevisionDate,
+				c.List.Items[1].RevisionDate,
+			} {
+				if got != "" {
+					t.Errorf("revision date %q, want empty", got)
+				}
+			}
+		})
+	}
+}
+
+const testOrganization = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+
+// organizationDocuments turns the personal exports of the intact fixture
+// into the form of an organization export: collections in place of
+// folders, and every item of the organization.
+func organizationDocuments(t *testing.T) (plain, sealed []byte) {
+	t.Helper()
+	f := ct.Intact(t)
+	for _, doc := range []map[string]any{f.PlaintextExport, f.EncryptedExport} {
+		delete(doc, "folders")
+		doc["collections"] = []any{map[string]any{"id": "c0000000-0000-4000-8000-000000000001", "organizationId": testOrganization, "name": "2.x|y|z"}}
+		for _, raw := range doc["items"].([]any) {
+			item := raw.(map[string]any)
+			item["organizationId"] = testOrganization
+			item["collectionIds"] = []any{"c0000000-0000-4000-8000-000000000001"}
+			delete(item, "folderId")
+		}
+	}
+	return f.PlaintextExportJSON(t), f.EncryptedExportJSON(t)
+}
+
+func TestParseOrganizationExports(t *testing.T) {
+	plain, sealed := organizationDocuments(t)
+	c := capture.Parse(capture.Input{
+		Organizations: []capture.OrganizationInput{{
+			ID: testOrganization, PlaintextExport: plain, EncryptedExport: sealed,
+			DecryptionErrors: capture.OrganizationDecryptionErrors{PlaintextExport: 2},
+		}},
+	})
+	for _, e := range c.Errors {
+		if e.OrganizationID != "" {
+			t.Errorf("organization document rejected: %v", e)
+		}
+	}
+	if len(c.Organizations) != 1 {
+		t.Fatalf("%d organizations", len(c.Organizations))
+	}
+	o := c.Organizations[0]
+	if o.ID != testOrganization || o.Plaintext == nil || o.Encrypted == nil || o.DecryptionErrors.PlaintextExport != 2 {
+		t.Fatalf("organization %+v", o)
+	}
+	if len(o.Plaintext.Items) != 4 || len(o.Encrypted.Items) != 4 {
+		t.Errorf("%d and %d items", len(o.Plaintext.Items), len(o.Encrypted.Items))
+	}
+	for _, item := range o.Encrypted.Items {
+		if item.OrganizationID != testOrganization || item.RevisionDate != ct.RevisionDate || item.Format != capture.FormatLegacy {
+			t.Errorf("encrypted item %+v", item)
+		}
+	}
+	if o.Plaintext.Items[0].OrganizationID != testOrganization || len(o.Plaintext.Items[0].Passkeys) != 2 {
+		t.Errorf("plaintext item %+v", o.Plaintext.Items[0])
+	}
+}
+
+func TestRejectedOrganizationExports(t *testing.T) {
+	plain, sealed := organizationDocuments(t)
+	protected := []byte(`{"encrypted":true,"passwordProtected":true,"salt":"x","kdfType":0,"kdfIterations":600000,"encKeyValidation_DO_NOT_EDIT":"2.x|y|z","data":"2.x|y|z"}`)
+	for _, tc := range []struct {
+		name         string
+		plain, enc   []byte
+		wantDocument capture.Document
+		wantProblem  capture.Problem
+	}{
+		{"password-protected encrypted export", plain, protected, capture.OrganizationEncryptedExportDocument, capture.ProblemPasswordProtected},
+		{"absent encrypted export", plain, nil, capture.OrganizationEncryptedExportDocument, capture.ProblemInvalidJSON},
+		{"absent plaintext export", nil, sealed, capture.OrganizationPlaintextExportDocument, capture.ProblemInvalidJSON},
+		{"encrypted export as plaintext", sealed, sealed, capture.OrganizationPlaintextExportDocument, capture.ProblemMarkedEncrypted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := capture.Parse(capture.Input{Organizations: []capture.OrganizationInput{{ID: testOrganization, PlaintextExport: tc.plain, EncryptedExport: tc.enc}}})
+			var found *capture.DocumentError
+			for _, e := range c.Errors {
+				if e.OrganizationID != "" {
+					if found != nil {
+						t.Errorf("second organization error %v", e)
+					}
+					found = e
+				}
+			}
+			if found == nil || found.Document != tc.wantDocument || found.Problem != tc.wantProblem || found.OrganizationID != testOrganization {
+				t.Fatalf("got %+v", found)
+			}
+			if !strings.Contains(found.Error(), testOrganization) {
+				t.Errorf("error text %q lacks the organization ID", found.Error())
+			}
+			o := c.Organizations[0]
+			if (tc.wantDocument == capture.OrganizationEncryptedExportDocument) != (o.Encrypted == nil) ||
+				(tc.wantDocument == capture.OrganizationPlaintextExportDocument) != (o.Plaintext == nil) {
+				t.Errorf("parsed documents %+v", o)
+			}
+		})
+	}
+	for _, e := range capture.Parse(capture.Input{}).Errors {
+		if e.OrganizationID != "" {
+			t.Errorf("personal document error with an organization: %v", e)
+		}
+	}
 }

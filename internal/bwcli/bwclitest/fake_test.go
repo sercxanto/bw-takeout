@@ -334,3 +334,46 @@ func TestFakeUnknownCommand(t *testing.T) {
 		t.Errorf("exit %d", r.exit)
 	}
 }
+
+// After an answer with LogOut, the fake answers as bw without a session:
+// status is unauthenticated and every other vault command fails, while the
+// version query still answers.
+func TestFakeLogsOutAfterAnAnswer(t *testing.T) {
+	s := bwclitest.Scenario{Commands: map[string]bwclitest.Behavior{
+		bwclitest.OrganizationExport("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"): {Exit: 1, LogOut: true},
+		"status":    {Stdout: `{"status":"unlocked"}`},
+		"--version": {Stdout: "2026.10.1\n"},
+		"*":         {Stdout: "[]"},
+	}}
+	data, work := t.TempDir(), t.TempDir()
+	if err := bwclitest.WriteScenario(data, s); err != nil {
+		t.Fatal(err)
+	}
+	start := func(args ...string) (int, string, string) {
+		cmd := exec.Command(fakePath, args...)
+		cmd.Dir = work
+		cmd.Env = []string{"BITWARDENCLI_APPDATA_DIR=" + data, "BW_NOINTERACTION=true"}
+		if runtime.GOOS == "windows" {
+			cmd.Env = append(cmd.Env, "SystemRoot="+os.Getenv("SystemRoot"))
+		}
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		_ = cmd.Run()
+		return cmd.ProcessState.ExitCode(), stdout.String(), stderr.String()
+	}
+	if code, out, _ := start("list", "items", "--raw"); code != 0 || out != "[]" {
+		t.Fatalf("before the logout: %d %q", code, out)
+	}
+	if code, _, _ := start(strings.Fields(bwclitest.OrganizationExport("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"))...); code != 1 {
+		t.Fatalf("export exit code %d", code)
+	}
+	if code, out, errText := start("list", "items", "--raw"); code != 1 || out != "" || errText != bwclitest.NotLoggedInLine {
+		t.Errorf("after the logout: %d %q %q", code, out, errText)
+	}
+	if code, out, _ := start("status"); code != 0 || out != bwclitest.StatusUnauthenticated {
+		t.Errorf("status after the logout: %d %q", code, out)
+	}
+	if code, out, _ := start("--version"); code != 0 || out != "2026.10.1\n" {
+		t.Errorf("version after the logout: %d %q", code, out)
+	}
+}

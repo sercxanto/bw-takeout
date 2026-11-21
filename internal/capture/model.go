@@ -11,6 +11,12 @@ const (
 	// ArchivedItemListDocument is the output of "bw list items --archived".
 	ArchivedItemListDocument Document = "archived_item_list"
 	DownloadsDocument        Document = "downloads"
+	// OrganizationPlaintextExportDocument and
+	// OrganizationEncryptedExportDocument are the two exports of one chosen
+	// organization (design D4 of organization-export). A DocumentError
+	// about them carries the organization ID.
+	OrganizationPlaintextExportDocument Document = "organization_plaintext_export"
+	OrganizationEncryptedExportDocument Document = "organization_encrypted_export"
 )
 
 // Format is the form in which the encrypted export shows an item (design
@@ -48,6 +54,28 @@ type Input struct {
 	// wrote with each document (design D9 of capture-collection). The zero
 	// value means no lines.
 	DecryptionErrors DecryptionErrors
+	// Organizations holds the documents of each chosen organization, in the
+	// order the organizations were chosen.
+	Organizations []OrganizationInput
+}
+
+// OrganizationInput holds the two exports of one chosen organization, as
+// "bw export --organizationid" wrote them. An absent export is a
+// zero-length input and is rejected like a document that does not parse.
+type OrganizationInput struct {
+	ID              string
+	PlaintextExport []byte
+	EncryptedExport []byte
+	// DecryptionErrors holds the number of decryption error lines of each
+	// export.
+	DecryptionErrors OrganizationDecryptionErrors
+}
+
+// OrganizationDecryptionErrors counts the decryption error lines of the two
+// exports of one organization.
+type OrganizationDecryptionErrors struct {
+	PlaintextExport int
+	EncryptedExport int
 }
 
 // DecryptionErrors counts the decryption error lines of each document. The
@@ -75,6 +103,19 @@ type Capture struct {
 	Errors             []*DocumentError
 	// DecryptionErrors is copied from the input unchanged.
 	DecryptionErrors DecryptionErrors
+	// Organizations holds one entry per chosen organization, in the order
+	// of the input. Their rejected documents are in Errors as well.
+	Organizations []OrganizationCapture
+}
+
+// OrganizationCapture is the parsed form of the two exports of one chosen
+// organization. A rejected export is nil.
+type OrganizationCapture struct {
+	ID        string
+	Plaintext *PlaintextExport
+	Encrypted *EncryptedExport
+	// DecryptionErrors is copied from the input unchanged.
+	DecryptionErrors OrganizationDecryptionErrors
 }
 
 // EncryptedExport is what the account-bound encrypted export shows. It
@@ -90,7 +131,11 @@ type EncryptedItem struct {
 	ID             string
 	Type           int
 	OrganizationID string
-	Format         Format
+	// RevisionDate is the raw revisionDate of the item, or empty when it is
+	// absent or not a string. The parser does not judge it (design D4 of
+	// organization-export).
+	RevisionDate string
+	Format       Format
 	// PasskeyCount is the number of passkeys. It is meaningful only for
 	// FormatLegacy.
 	PasskeyCount int
@@ -107,7 +152,9 @@ type PlaintextExport struct {
 type PlaintextItem struct {
 	ID             string
 	OrganizationID string
-	Passkeys       []Passkey
+	// RevisionDate is the raw revisionDate, as in EncryptedItem.
+	RevisionDate string
+	Passkeys     []Passkey
 }
 
 // Passkey holds the decrypted fields of one passkey that the structure and
@@ -149,7 +196,9 @@ type ListedItem struct {
 	ID string
 	// OrganizationID is empty for a personal item.
 	OrganizationID string
-	AttachmentIDs  []string
+	// RevisionDate is the raw revisionDate, as in EncryptedItem.
+	RevisionDate  string
+	AttachmentIDs []string
 }
 
 // AttachmentRef identifies one attachment by its item ID and attachment ID.

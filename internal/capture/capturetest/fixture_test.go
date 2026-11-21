@@ -258,15 +258,16 @@ func TestIntactAttachments(t *testing.T) {
 	}
 }
 
-func TestSentinelInEverySensitiveField(t *testing.T) {
-	f := Intact(t)
-
+// checkSentinels fails unless every sensitive leaf of f is non-empty and
+// either ciphertext, of a fixed format, or carries the marker.
+func checkSentinels(t *testing.T, f *Fixture) {
+	t.Helper()
 	sawDecrypted := false
 	for _, l := range f.sensitiveLeaves() {
 		if l.value == "" {
 			t.Errorf("%s: %s is empty", l.document, l.key)
 		}
-		if l.document == "encrypted" {
+		if l.document == "encrypted" || l.document == "organization-encrypted" {
 			if l.key != "data" && !strings.HasPrefix(l.value, "2.") {
 				t.Errorf("encrypted export: %s holds a readable value", l.key)
 			}
@@ -286,6 +287,11 @@ func TestSentinelInEverySensitiveField(t *testing.T) {
 	if !sawDecrypted {
 		t.Fatal("no sensitive field found in the decrypted documents")
 	}
+}
+
+func TestSentinelInEverySensitiveField(t *testing.T) {
+	f := Intact(t)
+	checkSentinels(t, f)
 
 	sensitive := f.Sensitive()
 	want := []string{
@@ -375,5 +381,124 @@ func TestCloneKeepsArchivedListBytes(t *testing.T) {
 	}
 	if d := Diff(t, base, f); strings.Join(d, "\n") != "~ archived-bytes" {
 		t.Errorf("diff = %v, want the byte override", d)
+	}
+}
+
+// The organization exports carry sentinels in every sensitive field, and
+// Sensitive returns them (task 4.4 of the change organization-export).
+func TestSentinelInEverySensitiveOrganizationField(t *testing.T) {
+	f := IntactOrganization(t)
+	checkSentinels(t, f)
+	sawOrganization := map[string]bool{}
+	for _, l := range f.sensitiveLeaves() {
+		sawOrganization[l.document] = true
+	}
+	for _, doc := range []string{"organization-plaintext", "organization-encrypted"} {
+		if !sawOrganization[doc] {
+			t.Errorf("no sensitive field in %s", doc)
+		}
+	}
+	o := f.Organization(t, ChosenOrganization)
+	sensitive := map[string]bool{}
+	for _, s := range f.Sensitive() {
+		sensitive[s] = true
+	}
+	for _, w := range []string{
+		sentinel("org-login-password"),
+		sentinel("org-note-notes"),
+		sentinel("collection-name"),
+		passkeysOf(t, o.PlaintextItems(), ItemOrgLogin)[0]["keyValue"].(string),
+		credentialID(3),
+		string(f.Attachments[len(f.Attachments)-1].Content),
+	} {
+		if !sensitive[w] {
+			t.Errorf("Sensitive() lacks %q", w)
+		}
+	}
+	for _, id := range []string{ChosenOrganization, ItemOrgLogin, ItemOrgNote, AttachmentOrgLogin, collectionOf(ChosenOrganization)} {
+		if sensitive[id] {
+			t.Errorf("Sensitive() contains the ID %s", id)
+		}
+	}
+}
+
+// The intact organization fixture adds one organization to the intact
+// fixture: two items in its exports and in the default list, one attachment
+// and their reference.
+func TestIntactOrganization(t *testing.T) {
+	base, f := Intact(t), IntactOrganization(t)
+	want := []string{
+		"+ list[" + ItemOrgLogin + "]", "+ list[" + ItemOrgNote + "]",
+		"+ organization[" + ChosenOrganization + "]",
+		"~ attachments", "~ reference",
+	}
+	want = append(want, passkeyChanges(0, "keyValue")...)
+	want = append(want, passkeyChanges(1, "keyValue")...)
+	sort.Strings(want)
+	if got := Diff(t, base, f); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("diff to the intact fixture:\n got %v\nwant %v", got, want)
+	}
+
+	in := f.Input(t)
+	if len(in.Organizations) != 1 || in.Organizations[0].ID != ChosenOrganization {
+		t.Fatalf("organizations %+v", in.Organizations)
+	}
+	plain := decode(t, in.Organizations[0].PlaintextExport).(map[string]any)
+	sealed := decode(t, in.Organizations[0].EncryptedExport).(map[string]any)
+	if plain["encrypted"] != false || sealed["encrypted"] != true {
+		t.Errorf("encrypted markers %v and %v", plain["encrypted"], sealed["encrypted"])
+	}
+	if _, ok := sealed["encKeyValidation_DO_NOT_EDIT"].(string); !ok {
+		t.Error("encrypted organization export: no key validation field")
+	}
+	for name, doc := range map[string]map[string]any{"plaintext": plain, "encrypted": sealed} {
+		if _, ok := doc["folders"]; ok {
+			t.Errorf("%s organization export has folders", name)
+		}
+		if len(doc["collections"].([]any)) != 1 {
+			t.Errorf("%s organization export: collections %v", name, doc["collections"])
+		}
+		items := doc["items"].([]any)
+		if len(items) != 2 {
+			t.Fatalf("%s organization export: %d items", name, len(items))
+		}
+		for _, raw := range items {
+			item := raw.(map[string]any)
+			if item["organizationId"] != ChosenOrganization || item["revisionDate"] != RevisionDate {
+				t.Errorf("%s organization item %v: organization %v, revision %v", name, item["id"], item["organizationId"], item["revisionDate"])
+			}
+			if _, ok := item["attachments"]; ok {
+				t.Errorf("%s organization export lists attachments", name)
+			}
+		}
+	}
+	if got := len(passkeysOf(t, f.Organization(t, ChosenOrganization).PlaintextItems(), ItemOrgLogin)); got != 1 {
+		t.Errorf("organization login has %d passkeys", got)
+	}
+	listed := itemByID(f.ItemList, ItemOrgLogin)
+	if listed["organizationId"] != ChosenOrganization || len(listed["attachments"].([]any)) != 1 {
+		t.Errorf("listed organization login %v", listed)
+	}
+	last := f.Reference.Items[len(f.Reference.Items)-2:]
+	if last[0].ItemID != ItemOrgLogin || len(last[0].Passkeys) != 1 || len(last[0].Attachments) != 1 || last[1].ItemID != ItemOrgNote {
+		t.Errorf("reference of the organization items %+v", last)
+	}
+}
+
+func TestCloneKeepsOrganizations(t *testing.T) {
+	f := IntactOrganization(t)
+	c := f.Clone()
+	if d := Diff(t, f, c); len(d) != 0 {
+		t.Fatalf("clone differs from its source: %v", d)
+	}
+	o := c.Organization(t, ChosenOrganization)
+	itemByID(o.PlaintextItems(), ItemOrgNote)["name"] = "changed"
+	o.EncryptedExportBytes = []byte{}
+	want := []string{
+		"~ organization[" + ChosenOrganization + "]/encrypted-bytes",
+		"~ organization[" + ChosenOrganization + "]/plaintext/items[" + ItemOrgNote + "]/name",
+	}
+	if got := Diff(t, f, c); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("diff after changing the clone:\n got %v\nwant %v", got, want)
 	}
 }

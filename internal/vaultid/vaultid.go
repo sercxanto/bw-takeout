@@ -1,9 +1,10 @@
-// Package vaultid holds the rules for the two vault IDs that leave the CLI:
-// item IDs and attachment IDs. The archive uses them for entry names and the
-// bw client for arguments, so an ID that passes here can be neither a path
-// nor an option. The package imports only the standard library. See the
-// design of the change archive-generation, decision D3, and of the change
-// bw-process-adapter, decision D5.
+// Package vaultid holds the rules for the vault IDs that leave the CLI:
+// item IDs, attachment IDs and organization IDs. The archive uses them for
+// entry names and the bw client for arguments, so an ID that passes here can
+// be neither a path nor an option. The package imports only the standard
+// library. See the design of the change archive-generation, decision D3, of
+// the change bw-process-adapter, decision D5, and of the change
+// organization-export, decision D1.
 package vaultid
 
 // ValidItemID reports whether id has the UUID form of 8-4-4-4-12
@@ -26,6 +27,12 @@ func ValidItemID(id string) bool {
 		}
 	}
 	return true
+}
+
+// ValidOrganizationID reports whether id has the UUID form of 8-4-4-4-12
+// hexadecimal digits, the rule of item IDs.
+func ValidOrganizationID(id string) bool {
+	return ValidItemID(id)
 }
 
 // ValidAttachmentID reports whether id consists of 1 to 64 ASCII letters

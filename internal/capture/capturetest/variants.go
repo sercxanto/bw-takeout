@@ -74,6 +74,9 @@ type Variant struct {
 	// fixture, in the notation of [Diff].
 	Changes []string
 	apply   func(t testing.TB, f *Fixture)
+	// base builds the intact fixture the variant changes. Nil means
+	// [Intact].
+	base func(t testing.TB) *Fixture
 }
 
 // Apply changes f in place.
@@ -82,19 +85,30 @@ func (v Variant) Apply(t testing.TB, f *Fixture) {
 	v.apply(t, f)
 }
 
+// Base returns a fresh copy of the intact fixture the variant changes:
+// [Intact] for the variants of [Variants] and [IntactOrganization] for
+// those of [OrganizationVariants].
+func (v Variant) Base(t testing.TB) *Fixture {
+	t.Helper()
+	if v.base == nil {
+		return Intact(t)
+	}
+	return v.base(t)
+}
+
 // Build returns a fresh intact fixture with the variant applied.
 func (v Variant) Build(t testing.TB) *Fixture {
 	t.Helper()
-	f := Intact(t)
+	f := v.Base(t)
 	v.apply(t, f)
 	return f
 }
 
-// VariantByName returns the variant with the given name and fails the test
-// when there is none.
+// VariantByName returns the variant with the given name from [Variants]
+// or [OrganizationVariants] and fails the test when there is none.
 func VariantByName(t testing.TB, name string) Variant {
 	t.Helper()
-	for _, v := range Variants() {
+	for _, v := range append(Variants(), OrganizationVariants()...) {
 		if v.Name == name {
 			return v
 		}

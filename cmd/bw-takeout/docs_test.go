@@ -66,7 +66,7 @@ func TestUsagePageMatchesBackupFlags(t *testing.T) {
 	}
 	synopsis, _, _ := strings.Cut(backupUsage, "\n\n")
 	want := flagsIn(synopsis)
-	if len(want) != 5 {
+	if len(want) != 6 {
 		t.Fatalf("usage text names %v", want)
 	}
 	if got := flagsIn(blocks[0]); !slices.Equal(got, want) {
@@ -89,7 +89,8 @@ func TestUsagePageMatchesBackupFlags(t *testing.T) {
 		t.Errorf("flag list of the usage text names %v, synopsis %v", got, want)
 	}
 	// Every flag the usage text names is one the command accepts.
-	args := []string{"--server", "https://vault.example.org", "--target", "t", "--recipients-file", "r", "--bw", "b", "--ca", "c"}
+	args := []string{"--server", "https://vault.example.org", "--target", "t", "--recipients-file", "r", "--bw", "b", "--ca", "c",
+		"--organization", "0c000000-0000-4000-8000-00000000000a"}
 	if backupFlags(args) == nil || !slices.Equal(flagsIn(strings.Join(args, " ")), want) {
 		t.Errorf("the command does not accept %v", want)
 	}

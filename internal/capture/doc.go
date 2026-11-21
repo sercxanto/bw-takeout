@@ -1,7 +1,9 @@
 // Package capture holds the data model of one capture of a personal vault
-// and the parsers that turn the documents the official bw CLI emitted into
-// that model. It starts no process and reads no file. See the design of the
-// change capture-verification, decisions D1, D3 and D4.
+// and of the chosen organizations, and the parsers that turn the documents
+// the official bw CLI emitted into that model. It starts no process and
+// reads no file. See the design of the change capture-verification,
+// decisions D1, D3 and D4, and of the change organization-export, decision
+// D4.
 //
 // # Evidence level
 //
@@ -192,8 +194,10 @@
 // check reads it, and it never identifies an attachment. The first
 // occurrence of an ID pair wins, and a name that is absent or not a string
 // is empty without rejecting the list (design D5 of capture-collection).
-// [PersonalAttachments] decides which attachments are expected, for the
-// download plan and for the verification alike (design D6).
+// [ScopedAttachments] decides which attachments are expected, for the
+// download plan and for the verification alike: those of personal items and
+// of items of the chosen organizations (design D6 of capture-collection and
+// of organization-export).
 //
 // Filters ([listCiphers]): the list reads the same decrypted views as the
 // plaintext export, so partial items are missing from it
@@ -229,6 +233,44 @@
 //
 // Not observed live: an account that may not archive, the trash, and an
 // archived item with an attachment.
+//
+// # Organization exports
+//
+// Produced by "bw export --organizationid <id>" with "--format json" and
+// "--format encrypted_json", once per chosen organization. [Input] holds
+// them in [OrganizationInput], and [Capture] the parsed form in
+// [OrganizationCapture], in the order the organizations were chosen. From
+// code reading of the bundle and the spike of 21 November 2026
+// (docs/research/organization-export-spike-2026-11-21.md):
+//
+//   - Both forms are fetched from the server on every call and do not read
+//     the local snapshot. The whole organization is exported, also
+//     collections the account is not assigned to.
+//   - The top-level form is that of the personal exports, with collections
+//     in place of folders. The plaintext form has encrypted false,
+//     collections and items. The encrypted form has encrypted true,
+//     encKeyValidation_DO_NOT_EDIT, collections and items, with values
+//     sealed with the organization key and an item key per item.
+//   - Every item carries organizationId, collectionIds and revisionDate,
+//     and no attachments. Deleted items are left out.
+//
+// [ParseOrganizationPlaintextExport] and [ParseOrganizationEncryptedExport]
+// apply the rules of the personal parsers, which read neither folders nor
+// collections. A rejection is a [DocumentError] with the document
+// organization_plaintext_export or organization_encrypted_export and the
+// organization ID. An absent export is a zero-length input and is rejected
+// as invalid JSON.
+//
+// Not observed: blob items and passkeys in an organization export, and
+// decryption error lines on one.
+//
+// # Revision dates
+//
+// [PlaintextItem], [EncryptedItem] and [ListedItem] keep the raw
+// revisionDate string, which every document writes in clear. A value that
+// is absent or not a string is kept as empty and never rejects a document,
+// so that personal documents are judged as before. The verification parses
+// the value where it compares revisions, for the chosen organizations only.
 //
 // # Attachment download
 //

@@ -3,9 +3,10 @@
 // the generation was published with. See the design of the change
 // archive-generation, decisions D4 and D5.
 //
-// The manifest holds IDs, sizes, hashes and attachment file names. File names
-// are vault content, so a manifest is only ever stored inside the encryption
-// and never printed.
+// The manifest holds IDs, sizes, hashes, attachment file names and the names
+// of the chosen organizations. File names and organization names are vault
+// content, so a manifest is only ever stored inside the encryption and never
+// printed.
 package manifest
 
 import (
@@ -14,6 +15,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"bw-takeout/internal/vaultid"
 )
 
 // FormatName is the fixed value of the format key.
@@ -39,6 +42,10 @@ type Manifest struct {
 	Tool    Tool
 	BW      BW
 	Counts  Counts
+	// Organizations lists the chosen organizations in the order they were
+	// chosen. It is empty without one, and the key is required in format
+	// version 1 (design D7 of organization-export).
+	Organizations []Organization
 	// Verification is the serialized verification result, kept byte for
 	// byte. It must be a JSON object without surrounding white space.
 	Verification json.RawMessage
@@ -70,6 +77,17 @@ type Counts struct {
 	Items int `json:"items"`
 	// Attachments is the number of attachment entries.
 	Attachments int `json:"attachments"`
+}
+
+// Organization is one chosen organization.
+type Organization struct {
+	// ID has the UUID form.
+	ID string `json:"id"`
+	// Name is the name the organization list gave, or empty. It is vault
+	// content.
+	Name string `json:"name"`
+	// Items is the number of items in its plaintext organization export.
+	Items int `json:"items"`
 }
 
 // Entry describes one archive entry other than the manifest.
@@ -112,9 +130,16 @@ func Marshal(m *Manifest) ([]byte, error) {
 	if err := validEntries(m.Entries); err != nil {
 		return nil, err
 	}
+	if err := validOrganizations(m.Organizations); err != nil {
+		return nil, err
+	}
 	entries := m.Entries
 	if entries == nil {
 		entries = []Entry{}
+	}
+	orgs := m.Organizations
+	if orgs == nil {
+		orgs = []Organization{}
 	}
 	fields := []struct {
 		key   string
@@ -127,6 +152,7 @@ func Marshal(m *Manifest) ([]byte, error) {
 		{"tool", m.Tool},
 		{"bw", m.BW},
 		{"counts", m.Counts},
+		{"organizations", orgs},
 		{"verification", nil},
 		{"entries", entries},
 	}
@@ -160,6 +186,7 @@ type wire struct {
 	Tool          Tool            `json:"tool"`
 	BW            BW              `json:"bw"`
 	Counts        Counts          `json:"counts"`
+	Organizations *[]Organization `json:"organizations"`
 	Verification  json.RawMessage `json:"verification"`
 	Entries       []Entry         `json:"entries"`
 }
@@ -192,14 +219,24 @@ func Parse(data []byte) (*Manifest, error) {
 	if err := validEntries(w.Entries); err != nil {
 		return nil, err
 	}
+	// A manifest of the layout before organizations has no such key. It is
+	// refused rather than read as empty, because format version 1 was
+	// redefined before any release (design D7 of organization-export).
+	if w.Organizations == nil {
+		return nil, invalid("organizations is missing")
+	}
+	if err := validOrganizations(*w.Organizations); err != nil {
+		return nil, err
+	}
 	return &Manifest{
-		Created:      created.UTC(),
-		Source:       w.Source,
-		Tool:         w.Tool,
-		BW:           w.BW,
-		Counts:       w.Counts,
-		Verification: w.Verification,
-		Entries:      w.Entries,
+		Created:       created.UTC(),
+		Source:        w.Source,
+		Tool:          w.Tool,
+		BW:            w.BW,
+		Counts:        w.Counts,
+		Organizations: *w.Organizations,
+		Verification:  w.Verification,
+		Entries:       w.Entries,
 	}, nil
 }
 
@@ -230,6 +267,25 @@ func validEntries(entries []Entry) error {
 		}
 		if !isSHA256(e.SHA256) {
 			return invalid("entry %q has no lowercase hex SHA-256", e.Path)
+		}
+	}
+	return nil
+}
+
+// validOrganizations requires a UUID ID, no ID twice and a count that is
+// not negative. A message names the position or the ID, never the name.
+func validOrganizations(orgs []Organization) error {
+	seen := make(map[string]bool, len(orgs))
+	for i, o := range orgs {
+		if !vaultid.ValidOrganizationID(o.ID) {
+			return invalid("organization %d has no ID of UUID form", i)
+		}
+		if seen[o.ID] {
+			return invalid("organization %s is listed more than once", o.ID)
+		}
+		seen[o.ID] = true
+		if o.Items < 0 {
+			return invalid("organization %s has a negative item count", o.ID)
 		}
 	}
 	return nil

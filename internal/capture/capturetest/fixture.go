@@ -70,9 +70,11 @@ const (
 
 const (
 	creationDate = "2026-01-02T03:04:05.000Z"
-	revisionDate = "2026-02-03T04:05:06.000Z"
 	archivedDate = "2026-03-04T05:06:07.000Z"
 )
+
+// RevisionDate is the revisionDate of every item of the intact fixtures.
+const RevisionDate = "2026-02-03T04:05:06.000Z"
 
 // Fixture is one synthetic capture: the four documents, the bytes a
 // successful download of each attachment returns, and the reference
@@ -93,6 +95,10 @@ type Fixture struct {
 	// taken to have written with each document. [Fixture.Input] passes it
 	// on unchanged.
 	DecryptionErrors capture.DecryptionErrors
+	// Organizations holds the exports of each chosen organization, in the
+	// order they were chosen. [Intact] has none; [IntactOrganization] has
+	// one.
+	Organizations []OrganizationFixture
 }
 
 // Attachment is the content of one attachment, identified by ID pair.
@@ -125,6 +131,9 @@ func (f *Fixture) Input(t testing.TB) capture.Input {
 		ItemList:         f.ItemListJSON(t),
 		ArchivedItemList: f.ArchivedItemListJSON(t),
 		DecryptionErrors: f.DecryptionErrors,
+	}
+	for i := range f.Organizations {
+		in.Organizations = append(in.Organizations, f.Organizations[i].input(t))
 	}
 	for _, a := range f.Attachments {
 		sum := sha256.Sum256(a.Content)
@@ -203,15 +212,17 @@ func Intact(t testing.TB) *Fixture {
 			ref.Passkeys = append(ref.Passkeys, p.reference(t))
 		}
 		for _, a := range s.attachments {
-			sum := sha256.Sum256(a.content)
-			ref.Attachments = append(ref.Attachments, ReferenceAttachment{
-				AttachmentID: a.id, SHA256: hex.EncodeToString(sum[:]), Size: int64(len(a.content)),
-			})
+			ref.Attachments = append(ref.Attachments, referenceAttachment(a))
 			f.Attachments = append(f.Attachments, Attachment{ItemID: s.id, AttachmentID: a.id, Content: a.content})
 		}
 		f.Reference.Items = append(f.Reference.Items, ref)
 	}
 	return f
+}
+
+func referenceAttachment(a attachmentSpec) ReferenceAttachment {
+	sum := sha256.Sum256(a.content)
+	return ReferenceAttachment{AttachmentID: a.id, SHA256: hex.EncodeToString(sum[:]), Size: int64(len(a.content))}
 }
 
 // PlaintextItems returns the items array of the plaintext export.
@@ -267,6 +278,9 @@ func (f *Fixture) Clone() *Fixture {
 	}
 	if f.ArchivedItemListBytes != nil {
 		c.ArchivedItemListBytes = append([]byte{}, f.ArchivedItemListBytes...)
+	}
+	for _, o := range f.Organizations {
+		c.Organizations = append(c.Organizations, o.clone())
 	}
 	for _, a := range f.Attachments {
 		a.Content = append([]byte(nil), a.Content...)
@@ -336,6 +350,10 @@ func (f *Fixture) sensitiveLeaves() []leaf {
 	collectLeaves("list", "", f.ItemList, safeDecryptedKeys, &out)
 	collectLeaves("archived", "", f.ArchivedItemList, safeDecryptedKeys, &out)
 	collectLeaves("encrypted", "", f.EncryptedExport, safeEncryptedKeys, &out)
+	for _, o := range f.Organizations {
+		collectLeaves("organization-plaintext", "", o.PlaintextExport, safeDecryptedKeys, &out)
+		collectLeaves("organization-encrypted", "", o.EncryptedExport, safeEncryptedKeys, &out)
+	}
 	return out
 }
 
@@ -476,7 +494,7 @@ func plainItem(s itemSpec) map[string]any {
 			"linkedId": nil,
 		}},
 		"creationDate": creationDate,
-		"revisionDate": revisionDate,
+		"revisionDate": RevisionDate,
 	}
 	setOptional(m, s)
 	switch s.typ {
@@ -530,7 +548,7 @@ func listItem(s itemSpec) map[string]any {
 	m["object"] = "item"
 	m["collectionIds"] = []any{}
 	if s.organizationID != "" {
-		m["collectionIds"] = []any{"c011ec71-0000-4000-8000-" + s.organizationID[len(s.organizationID)-12:]}
+		m["collectionIds"] = []any{collectionOf(s.organizationID)}
 	}
 	attachments := []any{}
 	for _, a := range s.attachments {
@@ -570,7 +588,7 @@ func encryptedItem(s itemSpec) map[string]any {
 			"linkedId": nil,
 		}},
 		"creationDate": creationDate,
-		"revisionDate": revisionDate,
+		"revisionDate": RevisionDate,
 	}
 	setOptional(m, s)
 	switch s.typ {

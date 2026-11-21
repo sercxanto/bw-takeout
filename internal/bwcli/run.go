@@ -61,9 +61,7 @@ func (c *Client) classifyExit(ctx context.Context, cmd command, premium bool) Cl
 func (c *Client) start(ctx context.Context, cmd command) (outcome, bool, error) {
 	premium := false
 	fail := func(class Class, exitCode int) (outcome, bool, error) {
-		e := failure(cmd.op, class, exitCode)
-		e.ItemID, e.AttachmentID = cmd.itemID, cmd.attachmentID
-		return outcome{}, premium, e
+		return outcome{}, premium, cmd.failure(class, exitCode)
 	}
 	if ctx.Err() != nil {
 		return fail(ClassCancelled, NoExitCode)

@@ -49,8 +49,8 @@ func (w *Writer) line(format string, args ...any) {
 	fmt.Fprintf(w.stdout, format+"\n", args...)
 }
 
-// Setup writes the lines that name bw, the server, the target and the
-// number of recipients.
+// Setup writes the lines that name bw, the server, the target, the number
+// of recipients and the chosen organizations.
 func (w *Writer) Setup(s run.Setup) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -68,6 +68,15 @@ func (w *Writer) setup(s run.Setup) {
 	w.line("Server:      %s", clean(s.Server))
 	w.line("Target:      %s", clean(s.Target))
 	w.line("Recipients:  %d", s.Recipients)
+	// Omitted without a chosen organization, so that such a report keeps
+	// its lines (design D10 of organization-export).
+	if len(s.Organizations) > 0 {
+		ids := make([]string, len(s.Organizations))
+		for i, id := range s.Organizations {
+			ids[i] = clean(id)
+		}
+		w.line("Organizations: %s", strings.Join(ids, ", "))
+	}
 	w.line("Crash dumps: %s", CrashDumps(s.CrashDumps))
 }
 

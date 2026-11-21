@@ -3,10 +3,12 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"bw-takeout/internal/archive/archivetest"
+	"bw-takeout/internal/bwcli/bwclitest"
 )
 
 // sandbox is the environment of a backup command run: a program search
@@ -122,5 +124,67 @@ func TestUsageNamesBothSubcommands(t *testing.T) {
 	o := runCommand(t, nil)
 	if o.code != exitUsage || !strings.Contains(o.stderr, "usage: bw-takeout backup") || !strings.Contains(o.stderr, "usage: bw-takeout verify") {
 		t.Fatal(o)
+	}
+}
+
+// Requirement: Organizations are chosen by flag.
+
+const (
+	flagOrgA = "0c000000-0000-4000-8000-00000000000a"
+	flagOrgB = "0c000000-0000-4000-8000-00000000000b"
+)
+
+func TestTwoOrganizations(t *testing.T) {
+	cfg := backupFlags([]string{"--server", "https://vault.example.org", "--target", "t", "--recipients-file", "r",
+		"--organization", strings.ToUpper(flagOrgB), "--organization", flagOrgA})
+	if cfg == nil {
+		t.Fatal("flags refused")
+	}
+	if !slices.Equal(cfg.Organizations, []string{flagOrgB, flagOrgA}) {
+		t.Errorf("organizations %q, want both in the order given and lowercase", cfg.Organizations)
+	}
+}
+
+// fakeBW builds the fake bw, so that a usage error is shown to start no
+// bw process: the fake records each start in the data directory of a
+// profile, and no profile may exist.
+func fakeBW(t *testing.T) string {
+	t.Helper()
+	path, err := bwclitest.Build(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestOrganizationIDNotAUUID(t *testing.T) {
+	s := newSandbox(t)
+	bw := fakeBW(t)
+	for _, id := range []string{"../x", "-" + flagOrgA[1:], "", flagOrgA[:35], "--server"} {
+		o := runCommand(t, s.env, s.args("--server", "https://vault.example.org", "--bw", bw, "--organization", id)...)
+		if o.code != exitUsage || o.stdout != "" || !strings.Contains(o.stderr, "usage: bw-takeout backup") {
+			t.Fatalf("%q: %v", id, o)
+		}
+	}
+	s.wantNoProfile(t)
+}
+
+func TestSameOrganizationTwice(t *testing.T) {
+	s := newSandbox(t)
+	bw := fakeBW(t)
+	for _, second := range []string{flagOrgA, strings.ToUpper(flagOrgA)} {
+		o := runCommand(t, s.env, s.args("--server", "https://vault.example.org", "--bw", bw,
+			"--organization", flagOrgA, "--organization", flagOrgB, "--organization", second)...)
+		if o.code != exitUsage || o.stdout != "" || !strings.Contains(o.stderr, "usage: bw-takeout backup") {
+			t.Fatalf("%s: %v", second, o)
+		}
+	}
+	s.wantNoProfile(t)
+}
+
+func TestNoOrganizationFlag(t *testing.T) {
+	cfg := backupFlags([]string{"--server", "https://vault.example.org", "--target", "t", "--recipients-file", "r"})
+	if cfg == nil || cfg.Organizations != nil {
+		t.Fatalf("config %+v", cfg)
 	}
 }

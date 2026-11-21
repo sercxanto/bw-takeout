@@ -52,7 +52,6 @@ const (
 	ItemFormatUnrecognized         Reason = "item_format_unrecognized"
 	ListedItemMissingFromExport    Reason = "listed_item_missing_from_export"
 	ExportedItemNotListed          Reason = "exported_item_not_listed"
-	OrganizationItemsExcluded      Reason = "organization_items_excluded"
 	// ItemOrganizationMismatch: both exports hold the item as a personal
 	// item, but the item list shows it as an organization item.
 	ItemOrganizationMismatch Reason = "item_organization_mismatch"
@@ -69,6 +68,21 @@ const (
 	// decrypted did not pass. Unverified, with the document and the number
 	// of lines (design D9 of capture-collection).
 	DocumentDecryptionErrors Reason = "document_decryption_errors"
+)
+
+// Reason codes for the chosen organizations (design D5 of the change
+// organization-export).
+const (
+	// OrganizationItemMismatch: an item of an organization export does not
+	// carry the ID of that organization, or the item lists show it with
+	// another organization ID or as a personal item. Failed.
+	OrganizationItemMismatch Reason = "organization_item_mismatch"
+	// OrganizationChangedDuringCapture: an item of a chosen organization has
+	// different revision dates in its two exports, or in its plaintext
+	// export and the item lists. The exports are separate reads from the
+	// server, so the organization changed during the run. Failed; running
+	// the backup again is the remedy.
+	OrganizationChangedDuringCapture Reason = "organization_changed_during_capture"
 )
 
 // Reason codes for passkeys.
@@ -92,7 +106,8 @@ const (
 	AttachmentDownloadNotExpected Reason = "attachment_download_not_expected"
 	AttachmentEmpty               Reason = "attachment_empty"
 	// AttachmentDownloadOutOfScope: a download result for an attachment
-	// that the item list shows on an organization item. A warning.
+	// that the item list shows on an item of an organization that is not
+	// chosen. A warning.
 	AttachmentDownloadOutOfScope Reason = "attachment_download_out_of_scope"
 	// AttachmentDecryptionErrors: the CLI wrote decryption error lines
 	// with a successful download. A warning with the number of lines,
@@ -135,21 +150,43 @@ const (
 	// LimitAttachmentContent: without a reference inventory, the content
 	// of a downloaded attachment is not compared with anything.
 	LimitAttachmentContent Limit = "attachment_content_not_checked"
+	// LimitOrganizationExportsSeparateReads: each organization export is a
+	// read from the server of its own, separate from the local snapshot and
+	// from the other export. A change between the reads shows up only for
+	// items whose revision date changed. Part of every result with a
+	// chosen organization (design D5 of organization-export).
+	LimitOrganizationExportsSeparateReads Limit = "organization_exports_separate_server_reads"
 )
 
-// ScopeCode names the scope every verdict refers to.
+// ScopeCode names the scope of a verdict without a chosen organization.
 const ScopeCode = "personal_items_in_captured_snapshot"
 
-// ScopeStatement says in words what a verdict covers.
+// ScopeStatement says in words what a verdict without a chosen organization
+// covers.
 const ScopeStatement = "The verdict covers the personal items in the local snapshot the CLI " +
 	"exported during this capture. It does not cover items on the server that the snapshot " +
 	"does not hold, organization items, deleted items, or items the CLI leaves out of every " +
 	"document."
 
+// ScopeCodeWithOrganizations names the scope of a verdict with at least one
+// chosen organization.
+const ScopeCodeWithOrganizations = "personal_and_chosen_organization_items"
+
+// ScopeStatementWithOrganizations says in words what a verdict with chosen
+// organizations covers. The organizations are listed by ID in the scope.
+const ScopeStatementWithOrganizations = "The verdict covers the personal items in the local " +
+	"snapshot the CLI exported during this capture and, for each chosen organization, the items " +
+	"of its organization exports, which the CLI read from the server. It does not cover items on " +
+	"the server that the snapshot does not hold, items of organizations that were not chosen, " +
+	"deleted items, or items the CLI leaves out of every document."
+
 // Scope states what a verdict refers to.
 type Scope struct {
 	Code      string `json:"code"`
 	Statement string `json:"statement"`
+	// Organizations lists the chosen organizations by ID, in the order they
+	// were chosen. It is absent without one.
+	Organizations []string `json:"organizations,omitempty"`
 }
 
 // Result is the outcome of one verification. It holds IDs, positions,
@@ -170,7 +207,10 @@ type Finding struct {
 	// Document names the input the finding refers to, when it refers to
 	// one document.
 	Document string `json:"document,omitempty"`
-	ItemID   string `json:"item_id,omitempty"`
+	// OrganizationID names the chosen organization a finding about its
+	// exports or its items refers to.
+	OrganizationID string `json:"organization_id,omitempty"`
+	ItemID         string `json:"item_id,omitempty"`
 	// AttachmentID is set together with ItemID.
 	AttachmentID string `json:"attachment_id,omitempty"`
 	// Passkey is the zero-based position of the passkey within its item in
@@ -183,14 +223,6 @@ type Finding struct {
 	// Count is the number of items a warning summarizes, or the number of
 	// decryption error lines a finding reports.
 	Count *int `json:"count,omitempty"`
-	// Organizations breaks Count down per organization ID.
-	Organizations []OrganizationCount `json:"organizations,omitempty"`
-}
-
-// OrganizationCount is the number of items of one organization.
-type OrganizationCount struct {
-	OrganizationID string `json:"organization_id"`
-	Count          int    `json:"count"`
 }
 
 // Reasons returns every reason code.
@@ -202,9 +234,10 @@ func Reasons() []Reason {
 		DuplicateItemID, ItemMissingFromPlaintextExport,
 		ItemMissingFromEncryptedExport, ItemFormatUnrecognized,
 		ListedItemMissingFromExport, ExportedItemNotListed,
-		OrganizationItemsExcluded, ItemOrganizationMismatch,
+		ItemOrganizationMismatch,
 		ListedItemDiffersBetweenLists, ArchiveFilterNotApplied,
 		DocumentDecryptionErrors,
+		OrganizationItemMismatch, OrganizationChangedDuringCapture,
 		PasskeyCountMismatch, PasskeyCountUnverifiable, PasskeyFieldMissing,
 		PasskeyFieldInvalid, PasskeyKeyInvalid, PasskeyKeyFormUnknown,
 		PasskeyCounterInvalid,
@@ -235,8 +268,8 @@ func verdictOf(findings []Finding) Verdict {
 }
 
 // JSON serializes the result deterministically: findings and warnings are
-// sorted by item ID, attachment ID and reason code, and the standing limits
-// by code. Two results with equal content give byte-identical output.
+// sorted by organization ID, item ID, attachment ID and reason code, and
+// the standing limits by code. Two results with equal content give byte-identical output.
 func (r *Result) JSON() ([]byte, error) {
 	c := *r
 	c.Findings = sortedFindings(r.Findings)
@@ -253,6 +286,9 @@ func sortedFindings(in []Finding) []Finding {
 }
 
 func lessFinding(a, b Finding) bool {
+	if a.OrganizationID != b.OrganizationID {
+		return a.OrganizationID < b.OrganizationID
+	}
 	if a.ItemID != b.ItemID {
 		return a.ItemID < b.ItemID
 	}

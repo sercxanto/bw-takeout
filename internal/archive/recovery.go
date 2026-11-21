@@ -5,9 +5,9 @@ package archive
 const RecoveryText = `BW-TAKEOUT GENERATION
 ===========================
 
-This archive holds one backup of a personal Bitwarden vault, made with the
-official Bitwarden CLI (bw) and stored by bw-takeout. It can be opened
-without bw-takeout.
+This archive holds one backup of a personal Bitwarden vault, and of the
+organizations chosen for it, made with the official Bitwarden CLI (bw) and
+stored by bw-takeout. It can be opened without bw-takeout.
 
 
 LAYOUT
@@ -39,17 +39,36 @@ documents/items.archived.json
     archive filter; both entries then describe the same item. The list is
     "[]" when the vault holds no archived item.
 
+documents/organizations/<organization-id>/export.json
+    Only for an organization chosen for this backup. The plaintext JSON
+    export of the whole organization from "bw export --organizationid",
+    byte for byte as bw wrote it. It contains every password, note, field
+    and passkey of the organization's items in clear text, and its
+    collections. It can be read directly, and imported into an
+    organization of Bitwarden or Vaultwarden. The directory is the ID of
+    the organization; its name is in manifest.json.
+
+documents/organizations/<organization-id>/export.encrypted.json
+    The encrypted export of the same organization. It is sealed with the
+    organization key, not with a key of the account. It can only be
+    opened by importing it into that organization with the account of a
+    member. It is kept as evidence of what the server returned.
+
 attachments/<item-id>/<attachment-id>
     The content of one attachment, unchanged. The directory is the ID of
     the item the attachment belongs to, the file is the ID of the
-    attachment. Look up the item ID in documents/export.json to find the
-    item. The original file name is in manifest.json.
+    attachment. Look up the item ID in documents/export.json, or in the
+    plaintext export of an organization, to find the item. The original
+    file name is in manifest.json.
 
 manifest.json
     The last entry. It states when and from which server and account the
     backup was made, which program versions made it, the size and SHA-256
     of every other entry, and for attachments the item ID, attachment ID
-    and original file name. Under "verification" it holds the completeness
+    and original file name. Under "organizations" it lists each chosen
+    organization with its ID, its name and the number of items in its
+    plaintext export; the list is empty when no organization was chosen.
+    Under "verification" it holds the completeness
     verdict computed when the backup was made: "verified", or
     "unverified" with the findings that kept it from being verified.
 

@@ -16,9 +16,9 @@ import (
 // Every variant differs from the intact fixture in the places it declares
 // and nowhere else.
 func TestVariantsDifferOnlyInTheIntendedPlace(t *testing.T) {
-	for _, v := range Variants() {
+	for _, v := range append(Variants(), OrganizationVariants()...) {
 		t.Run(v.Name, func(t *testing.T) {
-			base := Intact(t)
+			base := v.Base(t)
 			changed := base.Clone()
 			v.Apply(t, changed)
 
@@ -40,13 +40,15 @@ func TestVariantsDifferOnlyInTheIntendedPlace(t *testing.T) {
 			changed.EncryptedExportJSON(t)
 			changed.ItemListJSON(t)
 			changed.ArchivedItemListJSON(t)
+			changed.Input(t)
 		})
 	}
 }
 
 // The variants cover every failure case that task 2.3 of the change
-// capture-verification, design D7 of the change archived-item-list and
-// design D9 of the change capture-collection name.
+// capture-verification, design D7 of the change archived-item-list, design
+// D9 of the change capture-collection and design D13 of the change
+// organization-export name.
 func TestVariantsCoverTheNamedCases(t *testing.T) {
 	want := []string{
 		MissingItem, DuplicateID, OnePasskeyMissing, AllPasskeysDropped,
@@ -57,9 +59,16 @@ func TestVariantsCoverTheNamedCases(t *testing.T) {
 		ListsDisagreeOnAttachments, ListsDisagreeOnOrganization,
 		ArchivedListDuplicateID, ArchivedListInvalidJSON, ArchivedListAbsent,
 		ArchivedAttachmentDownloadMissing, DecryptionErrorLines,
+		// Design D13 of the change organization-export.
+		OrgItemMissingFromPlaintextExport, OrgExportHoldsOtherOrganization,
+		OrgItemListedAsPersonal, OrgRevisionDiffersBetweenExports,
+		OrgRevisionDiffersFromList, OrgListedItemNotExported,
+		OrgExportedItemNotListed, OrgBlobLoginItem, OrgEmptyPasskeyKey,
+		OrgPasswordProtectedExport, OrgDocumentAbsent, OrgDecryptionErrorLines,
+		OrgAttachmentDownloadMissing, OrgNotChosenItems,
 	}
 	seen := map[string]bool{}
-	for _, v := range Variants() {
+	for _, v := range append(Variants(), OrganizationVariants()...) {
 		if seen[v.Name] {
 			t.Errorf("variant %s is defined twice", v.Name)
 		}

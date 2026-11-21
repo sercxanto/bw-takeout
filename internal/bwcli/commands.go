@@ -15,6 +15,17 @@ type command struct {
 	// itemID and attachmentID are set for a download and name it in a
 	// failure. They are validated before the command is built.
 	itemID, attachmentID string
+	// organizationID is set for an organization export and names it in a
+	// failure. It is validated before the command is built.
+	organizationID string
+}
+
+// failure returns a failure of the command that carries its IDs.
+func (cmd command) failure(class Class, exitCode int) *Error {
+	e := failure(cmd.op, class, exitCode)
+	e.ItemID, e.AttachmentID = cmd.itemID, cmd.attachmentID
+	e.OrganizationID = cmd.organizationID
+	return e
 }
 
 func (c *Client) cmdVersion() command {
@@ -47,6 +58,28 @@ func (c *Client) cmdListItems() command {
 
 func (c *Client) cmdListArchived() command {
 	return command{op: OpListArchived, args: []string{"list", "items", "--archived", "--raw"}, timeout: c.cfg.Timeouts.Long, session: true, vault: true}
+}
+
+func (c *Client) cmdListOrganizations() command {
+	return command{op: OpListOrganizations, args: []string{"list", "organizations", "--raw"}, timeout: c.cfg.Timeouts.Long, session: true, vault: true}
+}
+
+func (c *Client) cmdExportOrganizationJSON(id string) command {
+	return command{
+		op:      OpExportOrganizationJSON,
+		args:    []string{"export", "--organizationid", id, "--format", "json", "--raw"},
+		timeout: c.cfg.Timeouts.Long, session: true, vault: true,
+		organizationID: id,
+	}
+}
+
+func (c *Client) cmdExportOrganizationEncrypted(id string) command {
+	return command{
+		op:      OpExportOrganizationEncrypted,
+		args:    []string{"export", "--organizationid", id, "--format", "encrypted_json", "--raw"},
+		timeout: c.cfg.Timeouts.Long, session: true, vault: true,
+		organizationID: id,
+	}
 }
 
 func (c *Client) cmdAttachment(itemID, attachmentID string) command {

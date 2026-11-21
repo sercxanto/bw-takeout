@@ -10,11 +10,13 @@ import (
 
 	"bw-takeout/internal/archive"
 	"bw-takeout/internal/archive/archivetest"
+	"bw-takeout/internal/capture/capturetest"
 )
 
 // TestRecoveryWithStandardTools decrypts an archive with the age command and
 // unpacks it with the tar command, then compares every file with the
-// captured bytes (design D12). It writes synthetic plaintext to a test
+// captured bytes (design D12), the documents of a chosen organization
+// included (design D7 of organization-export). It writes synthetic plaintext to a test
 // directory, the only test that does so on purpose.
 func TestRecoveryWithStandardTools(t *testing.T) {
 	agePath, err := exec.LookPath("age")
@@ -25,7 +27,8 @@ func TestRecoveryWithStandardTools(t *testing.T) {
 	if err != nil {
 		t.Skip("skipped: the tar command is not in the search path")
 	}
-	f, id, _, data := intactArchive(t)
+	f := capturetest.IntactOrganization(t)
+	id, data := organizationArchive(t, f)
 	dir := t.TempDir()
 	identity := filepath.Join(dir, "identity.txt")
 	if err := os.WriteFile(identity, []byte(id.String()+"\n"), 0o600); err != nil {
@@ -67,6 +70,16 @@ func TestRecoveryWithStandardTools(t *testing.T) {
 	}
 	for _, a := range f.Attachments {
 		want[archive.AttachmentPath(a.ItemID, a.AttachmentID)] = a.Content
+	}
+	if len(docs.Organizations) != 1 {
+		t.Fatalf("precondition: %d organizations", len(docs.Organizations))
+	}
+	for _, o := range docs.Organizations {
+		want[archive.OrganizationPlaintextExportPath(o.ID)] = o.PlaintextExport
+		want[archive.OrganizationEncryptedExportPath(o.ID)] = o.EncryptedExport
+	}
+	if len(names) != len(want)+1 {
+		t.Errorf("tar lists %d entries, want %d and the manifest", len(names), len(want))
 	}
 	for name, content := range want {
 		got, err := os.ReadFile(filepath.Join(out, filepath.FromSlash(name)))

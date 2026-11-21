@@ -22,6 +22,9 @@ const (
 	mList      = "list_items"
 	mArchived  = "list_archived_items"
 	mAttach    = "attachment"
+	mOrgs      = "list_organizations"
+	mOrgExport = "export_organization_json"
+	mOrgSealed = "export_organization_encrypted_json"
 )
 
 // answer is one queued result of a vault call. Data is copied on every
@@ -31,6 +34,7 @@ type answer struct {
 	data   []byte
 	count  int
 	status bwcli.Status
+	orgs   []bwcli.Organization
 	err    error
 	// before runs when the call is made, before the answer is returned.
 	before func()
@@ -40,11 +44,15 @@ type answer struct {
 type call struct {
 	method               string
 	itemID, attachmentID string
+	organizationID       string
 }
 
 func (c call) String() string {
-	if c.method == mAttach {
+	switch {
+	case c.method == mAttach:
 		return c.method + " " + c.itemID + "/" + c.attachmentID
+	case c.organizationID != "":
+		return c.method + " " + c.organizationID
 	}
 	return c.method
 }
@@ -118,6 +126,19 @@ func (v *memVault) ListArchivedItems(ctx context.Context) (bwcli.Output, error) 
 
 func (v *memVault) Attachment(ctx context.Context, itemID, attachmentID string) (bwcli.Output, error) {
 	return v.output(call{method: mAttach, itemID: itemID, attachmentID: attachmentID})
+}
+
+func (v *memVault) ListOrganizations(ctx context.Context) ([]bwcli.Organization, error) {
+	a := v.next(call{method: mOrgs})
+	return a.orgs, a.err
+}
+
+func (v *memVault) ExportOrganizationJSON(ctx context.Context, organizationID string) (bwcli.Output, error) {
+	return v.output(call{method: mOrgExport, organizationID: organizationID})
+}
+
+func (v *memVault) ExportOrganizationEncryptedJSON(ctx context.Context, organizationID string) (bwcli.Output, error) {
+	return v.output(call{method: mOrgSealed, organizationID: organizationID})
 }
 
 // leftover fails when queued answers were not used.

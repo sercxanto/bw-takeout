@@ -20,7 +20,9 @@ Decryption error lines that the CLI writes with a captured document show that a 
 
 The second inventory is the account-bound encrypted JSON export ([ADR 0001](0001-official-cli.md) limits the sources to the unmodified CLI). It is the only public CLI output produced before the decrypt step where the omission happens. Item IDs and, where the item format shows them, passkey counts are compared with the plaintext export. Attachments are accounted for by item ID and attachment ID.
 
-Every result states its scope: the personal items in the local snapshot the CLI exported during this capture. Every result lists the checks that were not possible, among them that completeness against the server is never checked.
+Every result states its scope: the personal items in the local snapshot the CLI exported during this capture and, for each chosen organization by its ID, the items of its organization exports. Every result lists the checks that were not possible, among them that completeness against the server is never checked. A result with a chosen organization also lists that the organization exports are separate reads from the server (decided on 21 November 2026 in the change organization-export).
+
+The plaintext and the encrypted organization export of each chosen organization are compared with each other by the same rules as the personal exports. Each item must also belong to its organization and carry the same revision date in both exports and in the item lists, because each export is a server read of its own. Findings about an organization carry its ID and count toward the one verdict of the capture. There is no separate verdict per organization (decided on 21 November 2026 in the change organization-export, see [ADR 0008](0008-organization-export.md)).
 
 ## Alternatives
 
@@ -33,7 +35,8 @@ Every result states its scope: the personal items in the local snapshot the CLI 
 
 - Items whose passkey count the encrypted export does not show, such as blob-format login items, end unverified. If blob items are the norm for new accounts, most real captures will be unverified until a better source exists.
 - Verified never means server-complete. An omission in a step that both exports share stays invisible.
+- A chosen organization that changes during a run fails the capture, and the user runs the backup again. A change that leaves every revision date as it was stays invisible, because the organization exports are not taken from the snapshot.
 - Without an independent reference inventory, a passkey swapped for another valid one and a well-formed but wrong key pass.
 - The meaning of the three verdicts becomes a user-facing promise. Changing it later needs a superseding ADR.
 
-The rules in detail are in the design of the change capture-verification.
+The rules in detail are in the design of the change capture-verification, and for organizations in the design of the change organization-export.

@@ -56,6 +56,9 @@ const (
 	ProblemManifestPath   = "is listed in the manifest with a kind or IDs that do not match its name"
 	ProblemRequired       = "is required by the format but not listed in the manifest"
 	ProblemNotFirst       = "is not the first entry of the archive"
+	// ProblemOrganization: an organization document of an organization
+	// that the organization list of the manifest does not hold.
+	ProblemOrganization = "belongs to an organization the manifest does not list"
 )
 
 type seenEntry struct {
@@ -83,6 +86,7 @@ func Read(src io.Reader, identities []age.Identity, visit func(path string, cont
 	seen := map[string]seenEntry{}
 	var order []string
 	var export bytes.Buffer
+	orgExports := map[string]*bytes.Buffer{}
 	var m *manifest.Manifest
 	for {
 		hdr, err := tr.Next()
@@ -105,7 +109,8 @@ func Read(src io.Reader, identities []age.Identity, visit func(path string, cont
 			}
 			continue
 		}
-		if _, _, _, ok := kindOf(hdr.Name); !ok {
+		name, ok := kindOf(hdr.Name)
+		if !ok {
 			return nil, &EntryError{Path: hdr.Name, Problem: ProblemUnexpectedName}
 		}
 		if _, dup := seen[hdr.Name]; dup {
@@ -113,9 +118,14 @@ func Read(src io.Reader, identities []age.Identity, visit func(path string, cont
 		}
 		h := sha256.New()
 		var dst io.Writer = h
-		if hdr.Name == PlaintextExportPath {
+		switch {
+		case hdr.Name == PlaintextExportPath:
 			// Kept in memory to count its items after its hash is confirmed.
 			dst = io.MultiWriter(h, &export)
+		case name.organizationID != "" && hdr.Name == OrganizationPlaintextExportPath(name.organizationID):
+			b := &bytes.Buffer{}
+			orgExports[name.organizationID] = b
+			dst = io.MultiWriter(h, b)
 		}
 		if visit != nil {
 			if err := visit(hdr.Name, io.TeeReader(tr, dst)); err != nil {
@@ -143,7 +153,28 @@ func Read(src io.Reader, identities []age.Identity, visit func(path string, cont
 	if err := compareItems(m, export.Bytes()); err != nil {
 		return nil, err
 	}
+	for _, o := range m.Organizations {
+		if err := compareOrganizationItems(o, orgExports[o.ID].Bytes()); err != nil {
+			return nil, err
+		}
+	}
 	return m, nil
+}
+
+// compareOrganizationItems checks the item count the manifest states for an
+// organization against its plaintext organization export, which compare has
+// already matched with the manifest. The error names the organization ID,
+// never its name.
+func compareOrganizationItems(o manifest.Organization, export []byte) error {
+	path := OrganizationPlaintextExportPath(o.ID)
+	plain, err := capture.ParseOrganizationPlaintextExport(o.ID, export)
+	if err != nil {
+		return fmt.Errorf("%w: %s cannot be read, so the items of organization %s cannot be counted", ErrStructure, path, o.ID)
+	}
+	if len(plain.Items) != o.Items {
+		return fmt.Errorf("%w: the manifest counts %d items for organization %s and %s holds %d", ErrStructure, o.Items, o.ID, path, len(plain.Items))
+	}
+	return nil
 }
 
 // compareItems checks the item count of the manifest against the plaintext
@@ -206,17 +237,25 @@ func drainZeros(r io.Reader) error {
 // deviation, sorted by entry name.
 func compare(m *manifest.Manifest, seen map[string]seenEntry, order []string) error {
 	var problems []*EntryError
+	chosen := map[string]bool{}
+	for _, o := range m.Organizations {
+		chosen[o.ID] = true
+	}
 	listed := map[string]bool{}
 	attachments := 0
 	for _, e := range m.Entries {
 		listed[e.Path] = true
-		kind, itemID, attachmentID, ok := kindOf(e.Path)
-		if !ok || kind != e.Kind || itemID != e.ItemID || attachmentID != e.AttachmentID ||
-			(kind != manifest.KindAttachment && e.FileName != "") {
+		name, ok := kindOf(e.Path)
+		if !ok || name.kind != e.Kind || name.itemID != e.ItemID || name.attachmentID != e.AttachmentID ||
+			(name.kind != manifest.KindAttachment && e.FileName != "") {
 			problems = append(problems, &EntryError{Path: e.Path, Problem: ProblemManifestPath})
 			continue
 		}
-		if kind == manifest.KindAttachment {
+		if name.organizationID != "" && !chosen[name.organizationID] {
+			problems = append(problems, &EntryError{Path: e.Path, Problem: ProblemOrganization})
+			continue
+		}
+		if name.kind == manifest.KindAttachment {
 			attachments++
 		}
 		got, ok := seen[e.Path]
@@ -228,6 +267,12 @@ func compare(m *manifest.Manifest, seen map[string]seenEntry, order []string) er
 		}
 	}
 	for _, name := range order {
+		if n, _ := kindOf(name); n.organizationID != "" && !chosen[n.organizationID] {
+			if !listed[name] {
+				problems = append(problems, &EntryError{Path: name, Problem: ProblemOrganization})
+			}
+			continue
+		}
 		if !listed[name] {
 			problems = append(problems, &EntryError{Path: name, Problem: ProblemNotListed})
 		}
@@ -235,7 +280,11 @@ func compare(m *manifest.Manifest, seen map[string]seenEntry, order []string) er
 	if _, present := seen[RecoveryPath]; present && order[0] != RecoveryPath {
 		problems = append(problems, &EntryError{Path: RecoveryPath, Problem: ProblemNotFirst})
 	}
-	for _, name := range []string{RecoveryPath, PlaintextExportPath, EncryptedExportPath, ItemListPath, ArchivedItemListPath} {
+	required := []string{RecoveryPath, PlaintextExportPath, EncryptedExportPath, ItemListPath, ArchivedItemListPath}
+	for _, o := range m.Organizations {
+		required = append(required, OrganizationPlaintextExportPath(o.ID), OrganizationEncryptedExportPath(o.ID))
+	}
+	for _, name := range required {
 		if _, present := seen[name]; !listed[name] && !present {
 			problems = append(problems, &EntryError{Path: name, Problem: ProblemRequired})
 		}

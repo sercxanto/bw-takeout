@@ -48,3 +48,22 @@ func TestInvalidIDs(t *testing.T) {
 		t.Error("item ID with a non-hexadecimal digit accepted")
 	}
 }
+
+func TestOrganizationIDs(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		id   string
+		ok   bool
+	}{
+		{"lowercase", item, true},
+		{"uppercase", strings.ToUpper(item), true},
+		{"leading dash", "-" + item[1:], false},
+		{"parent reference", "../x", false},
+		{"empty", "", false},
+		{"35 characters", item[:35], false},
+	} {
+		if got := vaultid.ValidOrganizationID(tc.id); got != tc.ok {
+			t.Errorf("%s: got %v, want %v", tc.name, got, tc.ok)
+		}
+	}
+}

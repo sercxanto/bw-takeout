@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"bw-takeout/internal/capture"
 )
@@ -28,36 +29,100 @@ var documentReasons = map[capture.Problem]Reason{
 
 // Verify judges one capture. The reference inventory is optional. Verify
 // reads nothing but its arguments and changes neither of them.
+//
+// The chosen organizations are those of c.Organizations. Their checks run
+// after the personal ones, inside the one verdict (design D5 of the change
+// organization-export).
 func Verify(c *capture.Capture, ref *capture.Reference) *Result {
-	v := &verifier{c: c}
+	v := &verifier{c: c, inScope: map[string]bool{"": true}}
+	for _, o := range c.Organizations {
+		v.chosen = append(v.chosen, o.ID)
+		v.inScope[o.ID] = true
+	}
 	// The lines are reported whatever else the capture shows, also when a
 	// document was rejected.
 	v.decryptionErrors()
-	if len(c.Errors) > 0 {
-		// Without all four documents no comparison is meaningful.
-		for _, e := range c.Errors {
-			reason, ok := documentReasons[e.Problem]
-			if !ok {
-				reason = DocumentWrongForm
-			}
-			v.add(Finding{Severity: SeverityFailed, Reason: reason, Document: string(e.Document), ItemID: e.ItemID})
+	personalRejected := false
+	for _, e := range c.Errors {
+		reason, ok := documentReasons[e.Problem]
+		if !ok {
+			reason = DocumentWrongForm
 		}
+		v.add(Finding{Severity: SeverityFailed, Reason: reason, Document: string(e.Document),
+			OrganizationID: e.OrganizationID, ItemID: e.ItemID})
+		if e.OrganizationID == "" {
+			personalRejected = true
+		}
+	}
+	if personalRejected {
+		// Without all four documents no comparison is meaningful.
 		return v.result(ref != nil)
 	}
 
 	v.index()
 	v.duplicates()
-	v.identity()
-	v.formats()
-	v.passkeys()
+	v.identity(v.own)
+	v.formats(v.own)
+	v.passkeys(v.own)
 	v.coverage()
 	v.attachments()
-	v.organizations()
 	v.archiveFilter()
+	for _, o := range c.Organizations {
+		// A rejected organization document is reported above, and its
+		// organization is skipped from the comparisons (step 1).
+		if o.Plaintext == nil || o.Encrypted == nil {
+			continue
+		}
+		p := newExportPair(o.ID, capture.OrganizationPlaintextExportDocument, capture.OrganizationEncryptedExportDocument,
+			o.Plaintext, o.Encrypted)
+		v.orgs = append(v.orgs, p)
+		v.exportDuplicates(p)
+		v.identity(p)
+		v.formats(p)
+		v.passkeys(p)
+		v.membership(p)
+		v.revisions(p)
+		v.matchLists(p)
+	}
 	if ref != nil {
 		v.reference(ref)
 	}
 	return v.result(ref != nil)
+}
+
+// exportPair is the plaintext and the encrypted export of one scope: the
+// personal vault, with an empty organization ID, or one chosen
+// organization. The checks that both scopes share take a pair, so that they
+// apply the same rules (design D5 of organization-export, step 2).
+type exportPair struct {
+	org              string
+	plainDoc, encDoc capture.Document
+	plain            *capture.PlaintextExport
+	enc              *capture.EncryptedExport
+	plaintext        map[string]capture.PlaintextItem
+	encrypted        map[string]capture.EncryptedItem
+	plaintextOrder   []string
+	encryptedOrder   []string
+}
+
+// newExportPair indexes the first occurrence of each ID. Duplicates are
+// reported separately.
+func newExportPair(org string, plainDoc, encDoc capture.Document, plain *capture.PlaintextExport, enc *capture.EncryptedExport) *exportPair {
+	p := &exportPair{org: org, plainDoc: plainDoc, encDoc: encDoc, plain: plain, enc: enc,
+		plaintext: map[string]capture.PlaintextItem{}, encrypted: map[string]capture.EncryptedItem{}}
+	for _, item := range enc.Items {
+		if _, ok := p.encrypted[item.ID]; !ok {
+			p.encrypted[item.ID] = item
+			p.encryptedOrder = append(p.encryptedOrder, item.ID)
+		}
+	}
+	for _, item := range plain.Items {
+		if _, ok := p.plaintext[item.ID]; !ok {
+			p.plaintext[item.ID] = item
+			p.plaintextOrder = append(p.plaintextOrder, item.ID)
+		}
+	}
+	return p
 }
 
 type verifier struct {
@@ -65,9 +130,15 @@ type verifier struct {
 	findings []Finding
 	warnings []Finding
 
-	// First occurrence of each ID. Duplicates are reported separately.
-	encrypted map[string]capture.EncryptedItem
-	plaintext map[string]capture.PlaintextItem
+	// chosen lists the chosen organizations in order. inScope holds them
+	// and the empty ID of personal items.
+	chosen  []string
+	inScope map[string]bool
+
+	// own is the pair of personal exports, orgs the pairs of the chosen
+	// organizations whose documents were accepted.
+	own  *exportPair
+	orgs []*exportPair
 	// listed combines the default and the archived item list (design D2 of
 	// archived-item-list). An ID in both lists enters once, from the
 	// default list. listedDoc names the list each entry came from.
@@ -75,17 +146,15 @@ type verifier struct {
 	listedDoc map[string]capture.Document
 	// shared lists, in order, the item IDs that both lists show.
 	shared []string
-	// personal holds, per item ID, the attachment IDs of every personal
-	// entry of the item in both lists, in the order of
-	// capture.PersonalAttachments. Every per-item view of attachments reads
-	// it (design D6 of capture-collection).
-	personal  map[string][]string
+	// scoped holds, per item ID, the attachment IDs of every entry in scope
+	// of the item in both lists, in the order of capture.ScopedAttachments.
+	// Every per-item view of attachments reads it (design D6 of
+	// capture-collection and of organization-export).
+	scoped    map[string][]string
 	downloads map[capture.AttachmentRef]capture.Download
 
-	encryptedOrder []string
-	plaintextOrder []string
-	listedOrder    []string
-	downloadOrder  []capture.AttachmentRef
+	listedOrder   []string
+	downloadOrder []capture.AttachmentRef
 }
 
 func (v *verifier) add(f Finding) {
@@ -101,9 +170,15 @@ func (v *verifier) result(withReference bool) *Result {
 	if !withReference {
 		limits = append(limits, LimitAttachmentInventory, LimitCredentialIdentity, LimitAttachmentContent)
 	}
+	scope := Scope{Code: ScopeCode, Statement: ScopeStatement}
+	if len(v.chosen) > 0 {
+		scope = Scope{Code: ScopeCodeWithOrganizations, Statement: ScopeStatementWithOrganizations,
+			Organizations: append([]string(nil), v.chosen...)}
+		limits = append(limits, LimitOrganizationExportsSeparateReads)
+	}
 	r := &Result{
 		Verdict:        verdictOf(v.findings),
-		Scope:          Scope{Code: ScopeCode, Statement: ScopeStatement},
+		Scope:          scope,
 		StandingLimits: limits,
 		Findings:       sortedFindings(v.findings),
 		Warnings:       sortedFindings(v.warnings),
@@ -113,20 +188,7 @@ func (v *verifier) result(withReference bool) *Result {
 }
 
 func (v *verifier) index() {
-	v.encrypted = map[string]capture.EncryptedItem{}
-	for _, item := range v.c.Encrypted.Items {
-		if _, ok := v.encrypted[item.ID]; !ok {
-			v.encrypted[item.ID] = item
-			v.encryptedOrder = append(v.encryptedOrder, item.ID)
-		}
-	}
-	v.plaintext = map[string]capture.PlaintextItem{}
-	for _, item := range v.c.Plaintext.Items {
-		if _, ok := v.plaintext[item.ID]; !ok {
-			v.plaintext[item.ID] = item
-			v.plaintextOrder = append(v.plaintextOrder, item.ID)
-		}
-	}
+	v.own = newExportPair("", capture.PlaintextExportDocument, capture.EncryptedExportDocument, v.c.Plaintext, v.c.Encrypted)
 	v.listed = map[string]capture.ListedItem{}
 	v.listedDoc = map[string]capture.Document{}
 	for _, item := range v.c.List.Items {
@@ -154,9 +216,9 @@ func (v *verifier) index() {
 			}
 		}
 	}
-	v.personal = map[string][]string{}
-	for _, ref := range capture.PersonalAttachments(v.c.List, v.c.ArchivedList) {
-		v.personal[ref.ItemID] = append(v.personal[ref.ItemID], ref.AttachmentID)
+	v.scoped = map[string][]string{}
+	for _, ref := range capture.ScopedAttachments(v.chosen, v.c.List, v.c.ArchivedList) {
+		v.scoped[ref.ItemID] = append(v.scoped[ref.ItemID], ref.AttachmentID)
 	}
 	v.downloads = map[capture.AttachmentRef]capture.Download{}
 	for _, d := range v.c.Downloads {
@@ -194,11 +256,10 @@ func sameListing(a, b capture.ListedItem) bool {
 }
 
 // duplicates reports every ID and ID pair that occurs more than once in one
-// input.
+// personal input.
 func (v *verifier) duplicates() {
+	v.exportDuplicates(v.own)
 	for doc, ids := range map[capture.Document][]string{
-		capture.PlaintextExportDocument:  v.c.Plaintext.DuplicateIDs,
-		capture.EncryptedExportDocument:  v.c.Encrypted.DuplicateIDs,
 		capture.ItemListDocument:         v.c.List.DuplicateIDs,
 		capture.ArchivedItemListDocument: v.c.ArchivedList.DuplicateIDs,
 	} {
@@ -221,45 +282,59 @@ func (v *verifier) duplicates() {
 	}
 }
 
-// identity compares the item IDs of the two exports in both directions
-// (design D5).
-func (v *verifier) identity() {
-	for _, id := range v.encryptedOrder {
-		if _, ok := v.plaintext[id]; !ok {
-			v.add(Finding{Severity: SeverityFailed, Reason: ItemMissingFromPlaintextExport,
-				Document: string(capture.PlaintextExportDocument), ItemID: id})
+// exportDuplicates reports every item ID that occurs more than once in one
+// export of the pair.
+func (v *verifier) exportDuplicates(p *exportPair) {
+	for _, d := range []struct {
+		doc capture.Document
+		ids []string
+	}{{p.plainDoc, p.plain.DuplicateIDs}, {p.encDoc, p.enc.DuplicateIDs}} {
+		for _, id := range d.ids {
+			v.add(Finding{Severity: SeverityFailed, Reason: DuplicateItemID, Document: string(d.doc),
+				OrganizationID: p.org, ItemID: id})
 		}
 	}
-	for _, id := range v.plaintextOrder {
-		if _, ok := v.encrypted[id]; !ok {
+}
+
+// identity compares the item IDs of the two exports in both directions
+// (design D5).
+func (v *verifier) identity(p *exportPair) {
+	for _, id := range p.encryptedOrder {
+		if _, ok := p.plaintext[id]; !ok {
+			v.add(Finding{Severity: SeverityFailed, Reason: ItemMissingFromPlaintextExport,
+				Document: string(p.plainDoc), OrganizationID: p.org, ItemID: id})
+		}
+	}
+	for _, id := range p.plaintextOrder {
+		if _, ok := p.encrypted[id]; !ok {
 			v.add(Finding{Severity: SeverityFailed, Reason: ItemMissingFromEncryptedExport,
-				Document: string(capture.EncryptedExportDocument), ItemID: id})
+				Document: string(p.encDoc), OrganizationID: p.org, ItemID: id})
 		}
 	}
 }
 
 // formats compares passkey counts where the encrypted export shows them and
 // reports every item where it does not (design D4).
-func (v *verifier) formats() {
-	for _, id := range v.encryptedOrder {
-		item := v.encrypted[id]
+func (v *verifier) formats(p *exportPair) {
+	for _, id := range p.encryptedOrder {
+		item := p.encrypted[id]
 		switch item.Format {
 		case capture.FormatLegacy:
-			plain, ok := v.plaintext[id]
+			plain, ok := p.plaintext[id]
 			if !ok {
 				continue
 			}
 			if found := len(plain.Passkeys); found != item.PasskeyCount {
-				v.add(Finding{Severity: SeverityFailed, Reason: PasskeyCountMismatch, ItemID: id,
+				v.add(Finding{Severity: SeverityFailed, Reason: PasskeyCountMismatch, OrganizationID: p.org, ItemID: id,
 					Expected: intp(item.PasskeyCount), Found: intp(found)})
 			}
 		case capture.FormatBlob:
 			if item.Type == capture.TypeLogin {
-				v.add(Finding{Severity: SeverityUnverified, Reason: PasskeyCountUnverifiable, ItemID: id})
+				v.add(Finding{Severity: SeverityUnverified, Reason: PasskeyCountUnverifiable, OrganizationID: p.org, ItemID: id})
 			}
 		default:
 			v.add(Finding{Severity: SeverityUnverified, Reason: ItemFormatUnrecognized,
-				Document: string(capture.EncryptedExportDocument), ItemID: id})
+				Document: string(p.encDoc), OrganizationID: p.org, ItemID: id})
 		}
 	}
 }
@@ -273,17 +348,17 @@ const (
 
 // passkeys checks the structure of every passkey in the plaintext export
 // (design D6).
-func (v *verifier) passkeys() {
-	for _, id := range v.plaintextOrder {
-		for i, p := range v.plaintext[id].Passkeys {
-			v.passkey(id, i, p)
+func (v *verifier) passkeys(pair *exportPair) {
+	for _, id := range pair.plaintextOrder {
+		for i, p := range pair.plaintext[id].Passkeys {
+			v.passkey(pair.org, id, i, p)
 		}
 	}
 }
 
-func (v *verifier) passkey(itemID string, position int, p capture.Passkey) {
+func (v *verifier) passkey(org, itemID string, position int, p capture.Passkey) {
 	failed := func(reason Reason, field string) {
-		v.add(Finding{Severity: SeverityFailed, Reason: reason, ItemID: itemID, Passkey: intp(position), Field: field})
+		v.add(Finding{Severity: SeverityFailed, Reason: reason, OrganizationID: org, ItemID: itemID, Passkey: intp(position), Field: field})
 	}
 	invalid := map[string]bool{}
 	for _, field := range p.InvalidFields {
@@ -320,7 +395,7 @@ func (v *verifier) passkey(itemID string, position int, p capture.Passkey) {
 		return
 	}
 	if p.KeyType != knownKeyType || p.KeyAlgorithm != knownKeyAlgorithm || p.KeyCurve != knownKeyCurve {
-		v.add(Finding{Severity: SeverityUnverified, Reason: PasskeyKeyFormUnknown, ItemID: itemID, Passkey: intp(position)})
+		v.add(Finding{Severity: SeverityUnverified, Reason: PasskeyKeyFormUnknown, OrganizationID: org, ItemID: itemID, Passkey: intp(position)})
 		return
 	}
 	if p.KeyValue != "" && !isP256Key(p.KeyValue) {
@@ -355,18 +430,19 @@ func isP256Key(keyValue string) bool {
 }
 
 // coverage compares the personal items of both item lists with the
-// plaintext export (design D8).
+// plaintext export (design D8). Items of chosen organizations are matched by
+// matchLists, and items of other organizations are outside the scope.
 func (v *verifier) coverage() {
 	for _, id := range v.listedOrder {
 		if v.listed[id].OrganizationID != "" {
 			continue
 		}
-		if _, ok := v.plaintext[id]; !ok {
+		if _, ok := v.own.plaintext[id]; !ok {
 			v.add(Finding{Severity: SeverityFailed, Reason: ListedItemMissingFromExport,
 				Document: string(capture.PlaintextExportDocument), ItemID: id})
 		}
 	}
-	for _, id := range v.plaintextOrder {
+	for _, id := range v.own.plaintextOrder {
 		item, ok := v.listed[id]
 		switch {
 		case !ok:
@@ -374,21 +450,22 @@ func (v *verifier) coverage() {
 			// document (design D2 of archived-item-list).
 			v.add(Finding{Severity: SeverityUnverified, Reason: ExportedItemNotListed, ItemID: id})
 		case item.OrganizationID != "":
-			// The exports leave organization items out, so the documents
-			// disagree about the same snapshot (design D5, D8).
+			// The personal exports leave organization items out, so the
+			// documents disagree about the same snapshot (design D5, D8).
 			v.add(Finding{Severity: SeverityFailed, Reason: ItemOrganizationMismatch,
 				Document: string(v.listedDoc[id]), ItemID: id})
 		}
 	}
 }
 
-// attachments accounts for every attachment of a personal item by ID pair
-// (design D7). The expected set comes from capture.PersonalAttachments, the
-// function the collection plans its downloads with (design D6 of
-// capture-collection).
+// attachments accounts for every attachment in scope by ID pair (design
+// D7): those of personal items and of items of the chosen organizations.
+// The expected set comes from capture.ScopedAttachments, the function the
+// collection plans its downloads with (design D6 of capture-collection and
+// of organization-export).
 func (v *verifier) attachments() {
 	expected := map[capture.AttachmentRef]bool{}
-	for _, ref := range capture.PersonalAttachments(v.c.List, v.c.ArchivedList) {
+	for _, ref := range capture.ScopedAttachments(v.chosen, v.c.List, v.c.ArchivedList) {
 		expected[ref] = true
 		d, ok := v.downloads[ref]
 		if !ok {
@@ -409,7 +486,7 @@ func (v *verifier) attachments() {
 			continue
 		}
 		f := attachmentFinding(SeverityFailed, AttachmentDownloadNotExpected, ref)
-		if v.organizationAttachment(ref) {
+		if v.outOfScopeAttachment(ref) {
 			f.Severity, f.Reason = SeverityWarning, AttachmentDownloadOutOfScope
 		}
 		f.Document = string(capture.DownloadsDocument)
@@ -438,6 +515,20 @@ func (v *verifier) decryptionErrors() {
 				Document: string(doc.document), Count: intp(doc.count)})
 		}
 	}
+	for _, o := range v.c.Organizations {
+		for _, doc := range []struct {
+			document capture.Document
+			count    int
+		}{
+			{capture.OrganizationPlaintextExportDocument, o.DecryptionErrors.PlaintextExport},
+			{capture.OrganizationEncryptedExportDocument, o.DecryptionErrors.EncryptedExport},
+		} {
+			if doc.count > 0 {
+				v.add(Finding{Severity: SeverityUnverified, Reason: DocumentDecryptionErrors,
+					Document: string(doc.document), OrganizationID: o.ID, Count: intp(doc.count)})
+			}
+		}
+	}
 	seen := map[capture.AttachmentRef]bool{}
 	for _, d := range v.c.Downloads {
 		if seen[d.Ref()] {
@@ -452,13 +543,13 @@ func (v *verifier) decryptionErrors() {
 	}
 }
 
-// organizationAttachment reports whether an entry of either item list shows
-// the attachment on an organization item. Every entry counts, as in
-// capture.PersonalAttachments.
-func (v *verifier) organizationAttachment(ref capture.AttachmentRef) bool {
+// outOfScopeAttachment reports whether an entry of either item list shows
+// the attachment on an item of an organization that is not chosen. Every
+// entry counts, as in capture.ScopedAttachments.
+func (v *verifier) outOfScopeAttachment(ref capture.AttachmentRef) bool {
 	for _, list := range []*capture.ItemList{v.c.List, v.c.ArchivedList} {
 		for _, item := range list.Items {
-			if item.ID != ref.ItemID || item.OrganizationID == "" {
+			if item.ID != ref.ItemID || v.inScope[item.OrganizationID] {
 				continue
 			}
 			for _, id := range item.AttachmentIDs {
@@ -485,28 +576,121 @@ func validDownload(d capture.Download) bool {
 	return err == nil
 }
 
-// organizations counts the organization items of both item lists per
-// organization ID, each item once. They are excluded from every other check.
-func (v *verifier) organizations() {
-	perOrg := map[string]int{}
-	total := 0
-	for _, id := range v.listedOrder {
-		if org := v.listed[id].OrganizationID; org != "" {
-			perOrg[org]++
-			total++
+// membership reports every item of an organization export that does not
+// carry the ID of its organization, and every such item that the item lists
+// show with another organization ID or as a personal item (design D5 of
+// organization-export, step 3).
+func (v *verifier) membership(p *exportPair) {
+	for _, d := range []struct {
+		doc   capture.Document
+		order []string
+		org   func(id string) string
+	}{
+		{p.plainDoc, p.plaintextOrder, func(id string) string { return p.plaintext[id].OrganizationID }},
+		{p.encDoc, p.encryptedOrder, func(id string) string { return p.encrypted[id].OrganizationID }},
+	} {
+		for _, id := range d.order {
+			if d.org(id) != p.org {
+				v.add(Finding{Severity: SeverityFailed, Reason: OrganizationItemMismatch,
+					Document: string(d.doc), OrganizationID: p.org, ItemID: id})
+			}
 		}
 	}
-	if total == 0 {
-		return
+	for _, id := range p.ids() {
+		if item, ok := v.listed[id]; ok && item.OrganizationID != p.org {
+			v.add(Finding{Severity: SeverityFailed, Reason: OrganizationItemMismatch,
+				Document: string(v.listedDoc[id]), OrganizationID: p.org, ItemID: id})
+		}
 	}
-	counts := make([]OrganizationCount, 0, len(perOrg))
-	for org, n := range perOrg {
-		counts = append(counts, OrganizationCount{OrganizationID: org, Count: n})
+}
+
+// ids returns the item IDs of both exports of the pair, each once, those of
+// the plaintext export first.
+func (p *exportPair) ids() []string {
+	out := append([]string(nil), p.plaintextOrder...)
+	for _, id := range p.encryptedOrder {
+		if _, ok := p.plaintext[id]; !ok {
+			out = append(out, id)
+		}
 	}
-	sort.Slice(counts, func(i, j int) bool { return counts[i].OrganizationID < counts[j].OrganizationID })
-	// The count spans both lists, so the warning names no single document.
-	v.add(Finding{Severity: SeverityWarning, Reason: OrganizationItemsExcluded,
-		Count: intp(total), Organizations: counts})
+	return out
+}
+
+// revisions requires a revision date on every item of both organization
+// exports and compares the two dates of every item ID that both hold
+// (design D5 of organization-export, step 4). The two exports are separate
+// reads from the server, so a difference means that the organization
+// changed between them.
+func (v *verifier) revisions(p *exportPair) {
+	plain := map[string]time.Time{}
+	for _, id := range p.plaintextOrder {
+		if t, ok := revision(p.plaintext[id].RevisionDate); ok {
+			plain[id] = t
+		} else {
+			v.add(Finding{Severity: SeverityFailed, Reason: DocumentMalformedItem,
+				Document: string(p.plainDoc), OrganizationID: p.org, ItemID: id})
+		}
+	}
+	for _, id := range p.encryptedOrder {
+		sealed, ok := revision(p.encrypted[id].RevisionDate)
+		if !ok {
+			v.add(Finding{Severity: SeverityFailed, Reason: DocumentMalformedItem,
+				Document: string(p.encDoc), OrganizationID: p.org, ItemID: id})
+			continue
+		}
+		if t, ok := plain[id]; ok && !t.Equal(sealed) {
+			v.add(Finding{Severity: SeverityFailed, Reason: OrganizationChangedDuringCapture,
+				OrganizationID: p.org, ItemID: id})
+		}
+	}
+}
+
+// matchLists compares the items both item lists show for the organization,
+// each once, with its plaintext export (design D5 of organization-export,
+// step 5). The item lists come from the snapshot and the export from a
+// later read of the server.
+func (v *verifier) matchLists(p *exportPair) {
+	for _, id := range v.listedOrder {
+		listed := v.listed[id]
+		if listed.OrganizationID != p.org {
+			continue
+		}
+		plain, ok := p.plaintext[id]
+		if !ok {
+			v.add(Finding{Severity: SeverityFailed, Reason: ListedItemMissingFromExport,
+				Document: string(p.plainDoc), OrganizationID: p.org, ItemID: id})
+			continue
+		}
+		listedAt, ok := revision(listed.RevisionDate)
+		if !ok {
+			v.add(Finding{Severity: SeverityFailed, Reason: DocumentMalformedItem,
+				Document: string(v.listedDoc[id]), OrganizationID: p.org, ItemID: id})
+			continue
+		}
+		// A missing date on the export item is reported by revisions.
+		if exportedAt, ok := revision(plain.RevisionDate); ok && !listedAt.Equal(exportedAt) {
+			v.add(Finding{Severity: SeverityFailed, Reason: OrganizationChangedDuringCapture,
+				OrganizationID: p.org, ItemID: id})
+		}
+	}
+	for _, id := range p.plaintextOrder {
+		if _, ok := v.listed[id]; !ok {
+			// Its attachments are unknown, because only the item lists name
+			// them.
+			v.add(Finding{Severity: SeverityUnverified, Reason: ExportedItemNotListed,
+				OrganizationID: p.org, ItemID: id})
+		}
+	}
+}
+
+// revision parses a revision date as RFC 3339 at millisecond precision,
+// the precision the server stores.
+func revision(raw string) (time.Time, bool) {
+	t, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t.UTC().Truncate(time.Millisecond), true
 }
 
 // archiveFilter reports that the CLI did not apply --archived when both
@@ -520,12 +704,25 @@ func (v *verifier) archiveFilter() {
 }
 
 // reference compares the capture with a reference inventory (design D9).
-// Every difference fails, except a passkey counter that grew.
+// Every difference fails, except a passkey counter that grew. The capture
+// side is the union of the personal plaintext export and the plaintext
+// exports of the chosen organizations; item IDs are unique across a vault
+// (design D5 of organization-export).
 func (v *verifier) reference(ref *capture.Reference) {
+	plaintext := map[string]capture.PlaintextItem{}
+	var order []string
+	for _, p := range append([]*exportPair{v.own}, v.orgs...) {
+		for _, id := range p.plaintextOrder {
+			if _, ok := plaintext[id]; !ok {
+				plaintext[id] = p.plaintext[id]
+				order = append(order, id)
+			}
+		}
+	}
 	known := map[string]capture.ReferenceItem{}
 	for _, item := range ref.Items {
 		known[item.ItemID] = item
-		plain, ok := v.plaintext[item.ItemID]
+		plain, ok := plaintext[item.ItemID]
 		if !ok {
 			v.add(Finding{Severity: SeverityFailed, Reason: ReferenceItemMissing, ItemID: item.ItemID})
 			continue
@@ -533,7 +730,7 @@ func (v *verifier) reference(ref *capture.Reference) {
 		v.referencePasskeys(item, plain)
 		v.referenceAttachments(item)
 	}
-	for _, id := range v.plaintextOrder {
+	for _, id := range order {
 		if _, ok := known[id]; !ok {
 			v.add(Finding{Severity: SeverityFailed, Reason: ReferenceItemNotExpected, ItemID: id})
 		}
@@ -590,7 +787,7 @@ func keyFingerprint(keyValue string) string {
 // missing download is already reported by the attachment accounting.
 func (v *verifier) referenceAttachments(item capture.ReferenceItem) {
 	listed := map[string]bool{}
-	for _, id := range v.personal[item.ItemID] {
+	for _, id := range v.scoped[item.ItemID] {
 		listed[id] = true
 	}
 	expected := map[string]bool{}
@@ -609,7 +806,7 @@ func (v *verifier) referenceAttachments(item capture.ReferenceItem) {
 			v.add(attachmentFinding(SeverityFailed, ReferenceAttachmentMismatch, ref))
 		}
 	}
-	for _, id := range v.personal[item.ItemID] {
+	for _, id := range v.scoped[item.ItemID] {
 		if !expected[id] {
 			v.add(attachmentFinding(SeverityFailed, ReferenceAttachmentNotExpected,
 				capture.AttachmentRef{ItemID: item.ItemID, AttachmentID: id}))

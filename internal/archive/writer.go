@@ -15,15 +15,27 @@ import (
 
 	"bw-takeout/internal/capture"
 	"bw-takeout/internal/manifest"
+	"bw-takeout/internal/vaultid"
 )
 
-// Documents are the four captured documents, byte for byte as captured.
-// Each is required. An empty archived item list is the two bytes "[]".
+// Documents are the four captured documents and the documents of the
+// chosen organizations, byte for byte as captured. Each is required. An
+// empty archived item list is the two bytes "[]".
 type Documents struct {
 	PlaintextExport  []byte
 	EncryptedExport  []byte
 	ItemList         []byte
 	ArchivedItemList []byte
+	// Organizations holds the two exports of each chosen organization, in
+	// the order they were chosen (design D7 of organization-export).
+	Organizations []OrganizationDocuments
+}
+
+// OrganizationDocuments are the two exports of one chosen organization.
+type OrganizationDocuments struct {
+	ID              string
+	PlaintextExport []byte
+	EncryptedExport []byte
 }
 
 // ErrDocumentAbsent is wrapped by the refusal of a captured document that
@@ -50,6 +62,11 @@ type Meta struct {
 	// Verification is the serialized verification result. It is embedded
 	// byte for byte.
 	Verification json.RawMessage
+	// OrganizationNames maps each chosen organization ID to the name the
+	// organization list gave. A missing name is stored as empty. The names
+	// go into the encrypted manifest only (design D8 of
+	// organization-export).
+	OrganizationNames map[string]string
 }
 
 // ErrWriterFailed is returned by every call after a call of the same writer
@@ -65,6 +82,9 @@ type Writer struct {
 	tw      *tar.Writer
 	created time.Time
 	items   int
+	// orgs holds the chosen organizations in order, with the item count
+	// of each plaintext organization export.
+	orgs    []manifest.Organization
 	entries []manifest.Entry
 	seen    map[string]bool
 	err     error
@@ -72,9 +92,11 @@ type Writer struct {
 }
 
 // NewWriter checks the recipients and the documents, starts the
-// encryption, and writes the recovery instructions and the four documents.
-// Without a valid recipient, or with a zero-length document, it fails
-// before writing anything to dst.
+// encryption, and writes the recovery instructions, the four documents and
+// the documents of each chosen organization in the order given. Without a
+// valid recipient, with a zero-length document, or with an organization ID
+// that is not a UUID or is given twice, it fails before writing anything to
+// dst.
 func NewWriter(dst io.Writer, recipients []string, created time.Time, docs Documents) (*Writer, error) {
 	rs, err := ParseRecipients(recipients)
 	if err != nil {
@@ -94,6 +116,34 @@ func NewWriter(dst io.Writer, recipients []string, created time.Time, docs Docum
 			return nil, fmt.Errorf("%w: %s", ErrDocumentAbsent, d.path)
 		}
 	}
+	orgs := make([]manifest.Organization, 0, len(docs.Organizations))
+	seen := map[string]bool{}
+	for i, o := range docs.Organizations {
+		if !vaultid.ValidOrganizationID(o.ID) {
+			return nil, fmt.Errorf("organization %d refused: its ID is not a UUID", i+1)
+		}
+		if seen[o.ID] {
+			return nil, fmt.Errorf("organization %s refused: it is given twice", o.ID)
+		}
+		seen[o.ID] = true
+		for _, d := range []struct {
+			path    string
+			content []byte
+		}{
+			{OrganizationPlaintextExportPath(o.ID), o.PlaintextExport},
+			{OrganizationEncryptedExportPath(o.ID), o.EncryptedExport},
+		} {
+			if len(d.content) == 0 {
+				return nil, fmt.Errorf("%w: %s", ErrDocumentAbsent, d.path)
+			}
+			documents = append(documents, d)
+		}
+		orgPlain, err := capture.ParseOrganizationPlaintextExport(o.ID, o.PlaintextExport)
+		if err != nil {
+			return nil, fmt.Errorf("plaintext export of organization %s cannot be read, so its items cannot be counted", o.ID)
+		}
+		orgs = append(orgs, manifest.Organization{ID: o.ID, Items: len(orgPlain.Items)})
+	}
 	plain, err := capture.ParsePlaintextExport(docs.PlaintextExport)
 	if err != nil {
 		return nil, errors.New("plaintext export cannot be read, so its items cannot be counted")
@@ -107,6 +157,7 @@ func NewWriter(dst io.Writer, recipients []string, created time.Time, docs Docum
 		tw:      tar.NewWriter(enc),
 		created: created.UTC().Truncate(time.Second),
 		items:   len(plain.Items),
+		orgs:    orgs,
 		seen:    map[string]bool{},
 	}
 	if err := w.entry(manifest.Entry{Path: RecoveryPath, Kind: manifest.KindRecovery}, []byte(RecoveryText)); err != nil {
@@ -165,14 +216,20 @@ func (w *Writer) finish(meta Meta) error {
 			attachments++
 		}
 	}
+	orgs := make([]manifest.Organization, len(w.orgs))
+	for i, o := range w.orgs {
+		o.Name = meta.OrganizationNames[o.ID]
+		orgs[i] = o
+	}
 	data, err := manifest.Marshal(&manifest.Manifest{
-		Created:      w.created,
-		Source:       meta.Source,
-		Tool:         meta.Tool,
-		BW:           meta.BW,
-		Counts:       manifest.Counts{Items: w.items, Attachments: attachments},
-		Verification: meta.Verification,
-		Entries:      w.entries,
+		Created:       w.created,
+		Source:        meta.Source,
+		Tool:          meta.Tool,
+		BW:            meta.BW,
+		Counts:        manifest.Counts{Items: w.items, Attachments: attachments},
+		Organizations: orgs,
+		Verification:  meta.Verification,
+		Entries:       w.entries,
 	})
 	if err != nil {
 		return w.fail(err)
