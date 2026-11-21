@@ -65,15 +65,27 @@ type terminalRun struct {
 	Prompts  []string
 }
 
+// answerFunc returns the text to type at a prompt, or an error. The reader
+// calls it once, when the prompt first appears, so that an answer such as a
+// TOTP code is computed at that moment (design D3).
+type answerFunc func() (string, error)
+
+// fixed is the answer function for a text that is known in advance.
+func fixed(text string) answerFunc {
+	return func() (string, error) { return text, nil }
+}
+
 // runWithPrompts starts cmd with the secondary side of a fresh
 // pseudo-terminal as standard input, standard error and controlling
 // terminal, and standard output to a buffer. A reader on the primary side
-// answers each known prompt once with its answer and a carriage return. An
-// unknown prompt or no exit within limit ends the command and fails.
+// answers each known prompt once with the text of its answer function and a
+// carriage return. An unknown prompt, an answer function that returns an
+// error or no exit within limit ends the command and fails.
 //
 // The terminal text is kept in memory only. An error names the prompts
-// seen, never the text or an answer, because bw echoes the address there.
-func runWithPrompts(cmd *exec.Cmd, answers map[string]string, limit time.Duration) (*terminalRun, error) {
+// seen, never the text or an answer, because bw echoes the address there. An
+// error of an answer function is not shown either, only the prompt.
+func runWithPrompts(cmd *exec.Cmd, answers map[string]answerFunc, limit time.Duration) (*terminalRun, error) {
 	primary, secondary, err := openPTY()
 	if err != nil {
 		return nil, err
@@ -133,7 +145,7 @@ func runWithPrompts(cmd *exec.Cmd, answers map[string]string, limit time.Duratio
 		matches := promptPattern.FindAllStringSubmatch(text, -1)
 		for ; handled < len(matches); handled++ {
 			name := matches[handled][1]
-			answer, known := answers[name]
+			answerOf, known := answers[name]
 			if !known {
 				run.Prompts = append(run.Prompts, name)
 				failure = fmt.Errorf("unknown prompt %q", name)
@@ -146,6 +158,11 @@ func runWithPrompts(cmd *exec.Cmd, answers map[string]string, limit time.Duratio
 			}
 			run.Prompts = append(run.Prompts, name)
 			answered[name] = true
+			answer, err := answerOf()
+			if err != nil {
+				failure = fmt.Errorf("the answer to %q failed", name)
+				return
+			}
 			if _, err := primary.Write([]byte(answer + "\r")); err != nil {
 				failure = fmt.Errorf("answer to %q: %w", name, err)
 				return

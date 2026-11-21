@@ -33,9 +33,13 @@ func seededServer(t *testing.T) (*vaultServer, *account, *inventory) {
 // TestIntactVaultIsVerified is the intact scenario of design D8.
 func TestIntactVaultIsVerified(t *testing.T) {
 	s, a, inv := seededServer(t)
-	r := runBackup(t, s, a)
+	enableTwoStepChecked(t, s, a)
+	r := runBackup(t, s, a, twoStepAnswers(t, a))
 	t.Logf("report:\n%s", r.redacted(a))
 
+	if got, want := promptNames(r.Prompts), "Email address, Master password, "+codePrompt; got != want {
+		t.Fatalf("bw showed the prompts %q, want %q in this order", got, want)
+	}
 	if r.ExitCode != 0 {
 		t.Fatalf("exit status %d, want 0", r.ExitCode)
 	}
@@ -105,9 +109,12 @@ func TestTamperedPasskeyFails(t *testing.T) {
 	if err := api.tamperPasskey(inv.PasskeyItem); err != nil {
 		t.Fatal(err)
 	}
-	r := runBackup(t, s, a)
+	r := runBackup(t, s, a, nil)
 	t.Logf("report:\n%s", r.redacted(a))
 
+	if got, want := promptNames(r.Prompts), "Email address, Master password"; got != want {
+		t.Fatalf("bw showed the prompts %q, want only %q (no two-step login)", got, want)
+	}
 	if r.ExitCode != 1 {
 		t.Fatalf("exit status %d, want 1", r.ExitCode)
 	}
