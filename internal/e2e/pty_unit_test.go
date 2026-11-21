@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"errors"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -49,7 +50,7 @@ func childCommand(t *testing.T, mode string) *exec.Cmd {
 	return cmd
 }
 
-var childAnswers = map[string]string{"Email address": childEmail, "Master password": childPassword}
+var childAnswers = map[string]answerFunc{"Email address": fixed(childEmail), "Master password": fixed(childPassword)}
 
 func TestPromptsAnswered(t *testing.T) {
 	run, err := runWithPrompts(childCommand(t, "known"), childAnswers, 30*time.Second)
@@ -64,13 +65,72 @@ func TestPromptsAnswered(t *testing.T) {
 	}
 }
 
+const childCode = "424242"
+
+// TestCodeAnswerComputedWhenPromptAppears checks design D3: the answer
+// function of the third prompt runs once, only after the first two prompts
+// were answered, and its text arrives in the child.
+func TestCodeAnswerComputedWhenPromptAppears(t *testing.T) {
+	var order []string
+	note := func(name string, a answerFunc) answerFunc {
+		return func() (string, error) {
+			order = append(order, name)
+			return a()
+		}
+	}
+	answers := map[string]answerFunc{
+		"Email address":       note("email", fixed(childEmail)),
+		"Master password":     note("password", fixed(childPassword)),
+		"Two-step login code": note("code", fixed(childCode)),
+	}
+	cmd := childCommand(t, "code")
+	cmd.Env = append(cmd.Env, "WANT_CODE="+childCode)
+	run, err := runWithPrompts(cmd, answers, 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.ExitCode != 0 || strings.TrimSpace(string(run.Stdout)) != "true true true" {
+		t.Fatalf("exit %d, stdout %q", run.ExitCode, run.Stdout)
+	}
+	if got := strings.Join(order, ","); got != "email,password,code" {
+		t.Fatalf("answer functions ran in the order %q, want each once: email,password,code", got)
+	}
+	if got := strings.Join(run.Prompts, ","); got != "Email address,Master password,Two-step login code" {
+		t.Fatalf("prompts %v", run.Prompts)
+	}
+}
+
+// TestFailedAnswerNamesOnlyThePrompt checks that an error of an answer
+// function fails the run and that the message holds the prompt but neither
+// the error text nor any answer.
+func TestFailedAnswerNamesOnlyThePrompt(t *testing.T) {
+	answers := map[string]answerFunc{
+		"Email address":       fixed(childEmail),
+		"Master password":     fixed(childPassword),
+		"Two-step login code": func() (string, error) { return "", errors.New("secret-text-of-the-error") },
+	}
+	_, err := runWithPrompts(childCommand(t, "code"), answers, 30*time.Second)
+	if err == nil {
+		t.Fatal("a failing answer function did not fail the run")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "Two-step login code") {
+		t.Fatalf("message does not name the prompt: %s", msg)
+	}
+	for _, secret := range []string{childEmail, childPassword, "secret-text-of-the-error"} {
+		if strings.Contains(msg, secret) {
+			t.Fatalf("the message holds %q", secret)
+		}
+	}
+}
+
 func TestUnknownPromptFails(t *testing.T) {
 	_, err := runWithPrompts(childCommand(t, "unknown"), childAnswers, 30*time.Second)
 	if err == nil {
 		t.Fatal("an unknown prompt did not fail")
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "Two-step login code") || !strings.Contains(msg, "Email address") {
+	if !strings.Contains(msg, "Security question") || !strings.Contains(msg, "Email address") {
 		t.Fatalf("message does not name the prompts: %s", msg)
 	}
 	if strings.Contains(msg, childEmail) || strings.Contains(msg, childPassword) {

@@ -30,10 +30,17 @@ type backupRun struct {
 }
 
 // runBackup runs the built bw-takeout backup against the server with the
-// account's answers at the prompts of bw (design D6). The age identity is
+// answers at the prompts of bw (design D6), by default the address and the
+// password of the account (design D3). The age identity is
 // generated for the run, and the profile location is isolated under a
 // temporary XDG_CACHE_HOME.
-func runBackup(t *testing.T, s *vaultServer, a *account) *backupRun {
+func runBackup(t *testing.T, s *vaultServer, a *account, answers map[string]answerFunc) *backupRun {
+	t.Helper()
+	return runBackupLimit(t, s, a, answers, backupLimit)
+}
+
+// runBackupLimit is runBackup with its own time limit.
+func runBackupLimit(t *testing.T, s *vaultServer, a *account, answers map[string]answerFunc, limit time.Duration) *backupRun {
 	t.Helper()
 	root := t.TempDir()
 	r := &backupRun{
@@ -72,11 +79,14 @@ func runBackup(t *testing.T, s *vaultServer, a *account) *backupRun {
 		"HOME=" + home,
 		"XDG_CACHE_HOME=" + r.Cache,
 	}
+	if answers == nil {
+		answers = map[string]answerFunc{
+			"Email address":   fixed(a.Email),
+			"Master password": fixed(a.Password),
+		}
+	}
 	start := time.Now()
-	term, err := runWithPrompts(cmd, map[string]string{
-		"Email address":   a.Email,
-		"Master password": a.Password,
-	}, backupLimit)
+	term, err := runWithPrompts(cmd, answers, limit)
 	r.Duration = time.Since(start)
 	if term != nil {
 		r.Prompts = term.Prompts

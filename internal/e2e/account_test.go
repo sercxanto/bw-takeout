@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 // account is one synthetic account. The password exists in memory only
@@ -23,6 +24,15 @@ type account struct {
 	Email    string
 	Password string
 	keys     *accountKeys
+
+	// Two-step login, set by enableTwoStep (design D2, D3). The secret
+	// exists in memory only. lastStep is the last step whose code the
+	// server accepted or that the test typed, 0 before any.
+	totpSecret []byte
+	lastStep   uint64
+	// now is the clock of the account, time.Now when nil. A unit test
+	// sets a fixed one.
+	now func() time.Time
 }
 
 // newAccount creates a random address under example.invalid and a random
@@ -134,22 +144,9 @@ func (a *account) login(client *http.Client, base string) (*apiSession, error) {
 	if a.keys == nil {
 		return nil, errors.New("the account is not registered")
 	}
-	device := make([]byte, 16)
-	if _, err := rand.Read(device); err != nil {
+	form, err := a.grantForm()
+	if err != nil {
 		return nil, err
-	}
-	device[6] = device[6]&0x0f | 0x40
-	device[8] = device[8]&0x3f | 0x80
-	h := hex.EncodeToString(device)
-	form := url.Values{
-		"grant_type":       {"password"},
-		"username":         {a.Email},
-		"password":         {a.keys.PasswordHash},
-		"scope":            {"api offline_access"},
-		"client_id":        {"cli"},
-		"deviceIdentifier": {h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]},
-		"deviceName":       {"bw-takeout-e2e"},
-		"deviceType":       {"25"},
 	}
 	resp, err := client.PostForm(base+"/identity/connect/token", form)
 	if err != nil {
@@ -180,6 +177,28 @@ func (a *account) login(client *http.Client, base string) (*apiSession, error) {
 	}
 	s.userID = profile.ID
 	return s, nil
+}
+
+// grantForm is the password grant with device fields of its own and no
+// two-step fields.
+func (a *account) grantForm() (url.Values, error) {
+	device := make([]byte, 16)
+	if _, err := rand.Read(device); err != nil {
+		return nil, err
+	}
+	device[6] = device[6]&0x0f | 0x40
+	device[8] = device[8]&0x3f | 0x80
+	h := hex.EncodeToString(device)
+	return url.Values{
+		"grant_type":       {"password"},
+		"username":         {a.Email},
+		"password":         {a.keys.PasswordHash},
+		"scope":            {"api offline_access"},
+		"client_id":        {"cli"},
+		"deviceIdentifier": {h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]},
+		"deviceName":       {"bw-takeout-e2e"},
+		"deviceType":       {"25"},
+	}, nil
 }
 
 // do sends one API request with the access token. in and out are JSON
