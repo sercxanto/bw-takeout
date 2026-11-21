@@ -58,10 +58,16 @@ func checkCommon(t *testing.T, text string) int {
 			t.Errorf("runner without versioned label: %s", line)
 		}
 	}
-	for _, need := range []string{"permissions:\n  contents: read\n", "persist-credentials: false", "cache: false"} {
+	for _, need := range []string{"permissions:\n  contents: read\n", "persist-credentials: false"} {
 		if !strings.Contains(text, need) {
 			t.Errorf("missing %q", need)
 		}
+	}
+	// The Go cache of setup-go stays off, so that no run restores a cache
+	// another run wrote. A workflow without setup-go has nothing to turn
+	// off.
+	if strings.Contains(text, "actions/setup-go@") && !strings.Contains(text, "cache: false") {
+		t.Error(`missing "cache: false" for setup-go`)
 	}
 	if strings.Contains(text, "secrets.") || strings.Contains(text, "pull_request_target") {
 		t.Error("the workflow names a secret or pull_request_target")
@@ -118,6 +124,57 @@ func TestWorkflowStructure(t *testing.T) {
 	if !regexp.MustCompile(`(?m)^      - name: Test with race detector\n        if: runner\.os == 'Linux'$`).MatchString(ci) {
 		t.Error("race step in ci.yml is not limited to Linux")
 	}
+
+	t.Run("vaultwarden.yml", func(t *testing.T) { checkVaultwarden(t, readWorkflow(t, "vaultwarden.yml")) })
+}
+
+// checkVaultwarden checks the workflow of the Vaultwarden tests: it starts
+// by hand only, holds the common checks, and runs in the dev container
+// image instead of setting up Go on the runner.
+func checkVaultwarden(t *testing.T, text string) {
+	t.Helper()
+	if n := checkCommon(t, text); n != 1 {
+		t.Errorf("%d uses lines, want only the checkout", n)
+	}
+	if got := triggers(text); strings.Join(got, " ") != "workflow_dispatch" {
+		t.Errorf("triggers %v, want only workflow_dispatch", got)
+	}
+	if strings.Contains(text, "actions/setup-go") {
+		t.Error("the workflow sets up Go on the runner")
+	}
+	for _, need := range []string{"docker build -t bw-takeout-dev .devcontainer", "go test -count=1 -tags vaultwarden -v ./internal/e2e/", "timeout-minutes: 30"} {
+		if !strings.Contains(text, need) {
+			t.Errorf("missing %q", need)
+		}
+	}
+	for _, never := range []string{"upload-artifact", "actions/cache"} {
+		if strings.Contains(text, never) {
+			t.Errorf("the workflow uses %s", never)
+		}
+	}
+}
+
+// triggers returns the events under the top-level key on:, as the keys
+// indented by two spaces.
+func triggers(text string) []string {
+	var out []string
+	in := false
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		indent := len(line) - len(strings.TrimLeft(line, " "))
+		if indent == 0 {
+			in = trimmed == "on:"
+			continue
+		}
+		if in && indent == 2 {
+			name, _, _ := strings.Cut(trimmed, ":")
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // The test matrix runs on changes to Go code and its inputs. Both triggers
@@ -146,7 +203,7 @@ func TestChecksRunOnEveryChange(t *testing.T) {
 	}
 	// The key-material step is found by its message. Naming one of its
 	// patterns here would make the search find this file.
-	for _, need := range []string{"gofmt -l .", "go mod tidy -diff", "git grep --untracked", "Key material found in the repository."} {
+	for _, need := range []string{"gofmt -l .", "go vet -tags vaultwarden ./...", "go mod tidy -diff", "git grep --untracked", "Key material found in the repository."} {
 		if !strings.Contains(text, need) {
 			t.Errorf("checks.yml lacks %q", need)
 		}

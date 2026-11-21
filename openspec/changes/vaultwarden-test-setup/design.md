@@ -38,6 +38,8 @@ The suite lives in `internal/e2e`. Every file is a `_test.go` file and starts wi
 
 The tag needs one guard: code that no regular run compiles can rot. `checks.yml` therefore runs `go vet -tags vaultwarden ./...` (D10).
 
+Review of 21 November 2026, R3: the prompt child of the pseudo-terminal tests was written as a source file into a temporary directory inside the package during the run, so an interrupted run could leave an untagged `package main` that `go vet ./...` would compile. It now lives in `internal/e2e/testdata/promptchild/` with the same build constraint and is built from there with the tag. `TestPackageFilesAreTaggedTests` checks that every Go file outside `testdata` is a tagged test file.
+
 ### D2: The server is fetched and checked in Go
 
 A helper in the test package fetches the pinned image index from the Docker Hub registry with an anonymous pull token. It checks the SHA-256 of every blob against its digest, selects the manifest for `linux/<GOARCH>`, and compares it with a table in the code:
@@ -68,6 +70,8 @@ The helper creates a random address under `example.invalid` and a random passwor
 This is a second implementation of part of the Bitwarden key derivation, which [ADR 0001](../../../docs/decisions/0001-official-cli.md) avoids for the product. It stays outside that decision for three reasons. The helper is test code that the program never links (D1). It produces server-side input and no result the product relies on. And an error in it cannot produce a false success: `bw` would fail to log in or to unlock, which fails the test loudly. The ADR stays unchanged.
 
 The helper has unit tests of its own: the EncString form, that the wrapped keys decrypt again with the derived keys, and the request body fields. It also has a known-answer test of the PBKDF2 and HKDF steps for a fixed address and password. The expected values for that test come from the [Bitwarden help article on encryption](https://bitwarden.com/help/bitwarden-security-white-paper/) or another published source, and the test names that source. If no published vector is found, the test is limited to the round trip and the design records that.
+
+Apply of 21 November 2026: the known-answer vectors are the unit tests of the Bitwarden SDK, `bitwarden/sdk-internal` at commit `c5c08aebe8830f3c0fa54348b63f895137f2b827` (`test_master_key_derive_pbkdf2`, `test_stretch_kdf_key` and `test_password_hash_pbkdf2` in `crates/bitwarden-crypto`). The test names them. The registration body uses the field `emailVerificationToken`, because `token` is an alias of the organization invite token in Vaultwarden 1.37.4.
 
 *Alternatives considered:* driving the web vault with a headless browser, which needs Node packages and a browser and depends on the markup of the web vault. A committed database with an account registered once by hand, which is an opaque file in a public repository with keys the key-material check would have to exempt, and which is bound to one schema version.
 
@@ -113,12 +117,19 @@ Before the tampered backup runs, the test checks that the change is on the serve
 
 The live probe predicts that `bw` keeps the item and drops its passkey. If the run shows another failed finding instead, for example the whole item missing from the plaintext export, the test is not loosened in place. The implementer records the observation in the research note and asks the maintainer, because it changes what the setup claims to reproduce.
 
+Apply of 21 November 2026: the tampered run showed the predicted finding `failed passkey_count_mismatch` with `expected=1 found=0` as the only failed finding, and in addition `unverified document_decryption_errors` with `count=3` for the plaintext export, the item list and the archived item list. These follow from the decryption error lines of `bw` and do not contradict D8. The test requires the passkey finding to be the only failed one.
+
+Review of 21 November 2026, R2: the empty profile location of both scenarios must also exist. The run creates the location and leaves it in place, so a missing location would mean that the run did not use the isolated `XDG_CACHE_HOME`, and an empty check would pass for the wrong reason. `TestProfileLocationMustExistAndBeEmpty` covers the helper.
+
 ### D9: Output and secret hygiene
 
 - The password, the session key, the access token and the age identity exist only in memory and in temporary files with mode 0600 that the test removes.
 - The password reaches the seed `bw` through an environment variable, never as an argument. The product gets it only through the pseudo-terminal.
 - No output of `bw` is printed. The test logs IDs, counts, exit statuses, verdicts and the report, which holds no vault content ([backup-run spec](../../../openspec/specs/backup-run/spec.md), "Report holds no vault content and no bw text").
 - The key-material check of `checks.yml` must keep passing: keys are generated at run time, and the source holds no PEM headers or encoded key prefixes.
+- Apply of 21 November 2026: the report names the account, and the address in it is what was typed at the prompt, so the test logs the report with the address replaced by `<address>`. `TestMain` copies the test log on its way to standard output and searches it after the run for every recorded password, address and session key and for any text of the session key form. A hit fails the run and names only the kind of value. This is the final check of task 5.3.
+- Review of 21 November 2026, R1: the output of a failed `bw-takeout verify` names the account as well, so the intact scenario logs it with the address replaced, like the backup report. `TestRedactAddressInVerifyOutput` covers the helper; the path itself runs only when `verify` fails against a live generation.
+- Review of 21 November 2026, R4: `architecture.md` and `getting-started.md` name the new package and the new step of `Checks`. The second review round of the same day found two documentation gaps on the testing page, fixed as R5 (the rerun after the fixes) and R6 (the description of `TestPackageFilesAreTaggedTests`), and the second security review had no finding. The first security review had no finding. Its two observations were taken as stated: the log check finds a leak only after the log was written, which with synthetic values on a discarded server exposes nothing real, and `verify` inherits the test environment, which holds no secret.
 
 ### D10: Workflows
 

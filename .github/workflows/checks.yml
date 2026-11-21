@@ -48,6 +48,11 @@ jobs:
             exit 1
           fi
 
+      # The Vaultwarden tests are behind a build tag that no regular run
+      # compiles, so vet them here on every change.
+      - name: Vet the Vaultwarden tests
+        run: go vet -tags vaultwarden ./...
+
       - name: Module tidiness
         run: go mod tidy -diff
 

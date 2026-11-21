@@ -1,0 +1,56 @@
+name: Vaultwarden
+
+# End-to-end tests of bw-takeout against a live Vaultwarden server with a
+# synthetic account, see docs/development/testing.md. Started by hand only:
+# no push, pull request or schedule triggers it, so it never blocks a merge.
+#
+# External contacts: Docker Hub, to fetch the pinned Vaultwarden image by
+# digest, and https://api.bitwarden.com, once for each fresh bw profile.
+# The job needs no secrets and uploads nothing: no artifacts, no caches.
+#
+# The suite runs inside the dev container image, so CI tests the same bw,
+# Go and age as the dev container, on Linux amd64. Pins as in ci.yml, see
+# docs/development/integrations.md.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vaultwarden-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  vaultwarden:
+    name: vaultwarden (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build the dev container image
+        run: docker build -t bw-takeout-dev .devcontainer
+
+      # The runner's user and group own the checkout. The image has no
+      # entry for them, so HOME and the Go caches point to writable
+      # directories under /tmp.
+      - name: Vaultwarden tests
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --volume "$PWD:/workspace" \
+            --workdir /workspace \
+            --env HOME=/tmp/home \
+            --env GOCACHE=/tmp/gocache \
+            --env GOMODCACHE=/tmp/gomodcache \
+            bw-takeout-dev \
+            bash -c 'mkdir -p "$HOME" "$GOCACHE" "$GOMODCACHE" && go test -count=1 -tags vaultwarden -v ./internal/e2e/'
