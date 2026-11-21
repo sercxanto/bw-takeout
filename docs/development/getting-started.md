@@ -28,9 +28,21 @@ BW_TAKEOUT_REAL_BW="$(command -v bw)" go test -count=1 -run TestRealBW -v ./inte
 
 Each of them contacts Bitwarden Cloud once with an anonymous configuration request, so run them only when that is acceptable. See [bw process and profile tests](testing.md#bw-process-and-profile-tests).
 
+### Tests against Vaultwarden
+
+The end-to-end tests in `internal/e2e` run the built command against a local Vaultwarden server with a synthetic account, with no person at the terminal. They are behind the build tag `vaultwarden` and run on Linux only:
+
+```sh
+go test -count=1 -tags vaultwarden -v ./internal/e2e/
+```
+
+A run takes about four minutes. It fetches the pinned Vaultwarden image from Docker Hub into `.local/vaultwarden-cache/` and contacts Bitwarden Cloud once for each fresh `bw` profile. See [Vaultwarden tests](testing.md#vaultwarden-tests).
+
 ## CI results
 
-Once the repository is on GitHub, the workflow `CI` runs the tests on Linux amd64, macOS arm64 and Windows amd64 for a pull request and a push to `main`, but only when Go code, `go.mod`, `go.sum`, `.github/expected-skips.txt` or the workflow itself changed. The race tests run on the Linux runner only. The workflow `Checks` runs formatting, module tidiness and the key-material search on one Linux runner for every pull request and push to `main`, whatever changed. To test a branch without a pull request, start `CI` by hand with **Run workflow**, which ignores the path filter. Open the run under the **Actions** tab. The job `test` has one run per platform. Its summary lists every skipped test with its reason, and the run fails on a skip that is not expected for that platform, see the [skip report](testing.md#skip-report) and the [test strategy](testing.md). The pins of the workflow are in [integrations](integrations.md#continuous-integration).
+Once the repository is on GitHub, the workflow `CI` runs the tests on Linux amd64, macOS arm64 and Windows amd64 for a pull request and a push to `main`, but only when Go code, `go.mod`, `go.sum`, `.github/expected-skips.txt` or the workflow itself changed. The race tests run on the Linux runner only. The workflow `Checks` runs formatting, `go vet -tags vaultwarden ./...` for the [Vaultwarden tests](#tests-against-vaultwarden), module tidiness and the key-material search on one Linux runner for every pull request and push to `main`, whatever changed. To test a branch without a pull request, start `CI` by hand with **Run workflow**, which ignores the path filter. Open the run under the **Actions** tab. The job `test` has one run per platform. Its summary lists every skipped test with its reason, and the run fails on a skip that is not expected for that platform, see the [skip report](testing.md#skip-report) and the [test strategy](testing.md). The pins of the workflow are in [integrations](integrations.md#continuous-integration).
+
+The workflow `Vaultwarden` runs the tests against Vaultwarden on Linux amd64. It never starts on its own: open **Actions**, choose **Vaultwarden** and start it with **Run workflow** on the branch or the release commit. It is required before a release, see [releases](releases.md).
 
 ## Building and running the command
 

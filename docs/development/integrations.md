@@ -30,7 +30,22 @@ The `bw` client of this project runs any `bw` version and produces no message ab
 | 2026.10.1 (official single-file program, `bw-macos-arm64`) | macOS 26.7.3 arm64 | Manual login exercise from a Go parent against Vaultwarden 1.37.4 in the dev container: successful login, wrong password and interrupt at the password prompt ([login exercise](../research/login-exercise-2026-11-15.md)) |
 | 2026.10.1 | Windows | Not run |
 
+The automated [Vaultwarden tests](testing.md#vaultwarden-tests) ran against 2026.10.1 from npm on Linux arm64 in the dev container on 21 November 2026: an interactive login through `bw-takeout backup` at a pseudo-terminal, an intact vault and a tampered passkey against Vaultwarden 1.37.4. They run in the same dev container image on Linux amd64 through `vaultwarden.yml`, which has not run yet.
+
 Bitwarden Cloud with an account is untested for every version.
+
+## Vaultwarden test server
+
+The Vaultwarden tests and the manual exercises use Vaultwarden 1.37.4, the image `docker.io/vaultwarden/server:1.37.4-alpine`, pinned by its image index digest `sha256:19ea2b669945d842dadc3d500f2d6a795866a003330f59a47b9634658bae98bb`. The index fixes the manifests and every blob. The table in `internal/e2e/fetch_test.go` repeats the manifest and the SHA-256 of the server binary per architecture, so that a mismatch is named:
+
+| Architecture | Manifest | Server binary SHA-256 |
+|---|---|---|
+| arm64 | `sha256:c82bc74bb0a88821fd3fbce48e7867e8aca4e492e512970a309d02a629ab91d4` | `ae658947f85964e934d7673d9cab4c0edbce8e6167422d6ff3b10008e125421d` |
+| amd64 | `sha256:7d90670a4e2531e752f014e58f7283b9d197847b6f073bf84e99598f49d80ffd` | `392bc9afa7de1821e372a6d93369c87c1070644c68e26057017a2bf1b9cac3be` |
+
+The arm64 binary ran in the dev container. The amd64 binary was hashed in the [spike of 21 November 2026](../research/vaultwarden-registration-spike-2026-11-21.md) and has not run yet.
+
+To update Vaultwarden, fetch the index of the new release tag and its manifests as in step 1 of the [manual login exercise](testing.md#manual-login-exercise), unpack `vaultwarden` for each architecture, record its SHA-256 and check `vaultwarden --version` where it can run. Then replace the index digest, the version and both rows in `fetch_test.go`, in this page and in the manual exercise together, and run the Vaultwarden tests in the dev container and through `vaultwarden.yml`. A release can change the registration API or the prompts of the server, so the update is a reviewed change of its own.
 
 ## Continuous integration
 
@@ -45,3 +60,5 @@ Bitwarden Cloud with an account is untested for every version.
 | age CLI | `filippo.io/age/cmd/age@v1.3.2` | `go install`, the same version as the Dockerfile |
 
 To update an action, resolve the commit of the new release tag with `git ls-remote https://github.com/actions/<name> 'refs/tags/<tag>' 'refs/tags/<tag>^{}'`, taking the peeled entry when both appear, and replace SHA and comment together. A versioned runner label fixes the operating system version, and it changes only by a commit. GitHub still updates the software preinstalled in the runner image without a commit, so a run can change result without one. Go and age are installed by the workflow and are not affected. The workflow has read-only access, uses no secrets and no cache, and runs on `pull_request`, never on `pull_request_target`. Results and the skip report are described in the [test strategy](testing.md#skip-report).
+
+`.github/workflows/vaultwarden.yml` runs the [Vaultwarden tests](testing.md#vaultwarden-tests). Its only trigger is `workflow_dispatch`, so it starts by hand and never blocks a merge. It has one job on `ubuntu-24.04` with a limit of 30 minutes. It checks out with the same pinned `actions/checkout` as the other workflows, builds the dev container image from `.devcontainer`, and runs the suite inside it with the runner's user and group and with `HOME`, `GOCACHE` and `GOMODCACHE` under `/tmp`. It does not use `setup-go`. Go, Node, `bw` and age come from the pins of the Dockerfile, the Vaultwarden server from the [pins above](#vaultwarden-test-server). The job contacts Docker Hub and `https://api.bitwarden.com`, uses no secrets and no cache, and uploads nothing. `checks.yml` runs `go vet -tags vaultwarden ./...`, so the tagged code is checked on every change.

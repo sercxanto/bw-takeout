@@ -4,7 +4,7 @@ A successful CLI export can deliver decryptable partial inventories while items 
 
 ## What a Verdict Can and Cannot Detect
 
-Every capture is judged failed, unverified or verified ([ADR 0004](../decisions/0004-completeness-verdict.md)). `bw-takeout backup` runs the verification on every capture. Its rules are tested with synthetic data only. No live capture backs them yet.
+Every capture is judged failed, unverified or verified ([ADR 0004](../decisions/0004-completeness-verdict.md)). `bw-takeout backup` runs the verification on every capture. Its rules are tested with synthetic data, and since 21 November 2026 by two automated runs against a Vaultwarden server with a synthetic account: an intact vault and a passkey whose key was replaced on the server ([Vaultwarden tests](../development/testing.md#vaultwarden-tests)). Bitwarden Cloud has not been tested.
 
 The verification reads two item lists: the default list of `bw list items` and the list of archived items from `bw list items --archived`. It treats them as one listing. An item that both lists show is accepted when both entries name the same attachments and the same organization.
 
@@ -48,7 +48,7 @@ It does not show:
 
 ## Using bw
 
-The program starts the official `bw` program. The handling of it is tested against a stand-in for `bw`, and without a login against `bw` 2026.10.1 on Linux. The points below come from reading the code of `bw` 2026.10.1 and from runs without a login, see the [code notes](../research/bw-cli-code-notes-2026-11-15.md).
+The program starts the official `bw` program. The handling of it is tested against a stand-in for `bw`, without a login against `bw` 2026.10.1 on Linux, and with a login against `bw` 2026.10.1 and a Vaultwarden server on Linux. The points below come from reading the code of `bw` 2026.10.1 and from runs without a login, see the [code notes](../research/bw-cli-code-notes-2026-11-15.md).
 
 - **One device entry per run.** Each run uses a fresh CLI profile, and each fresh profile registers as a new device. The server keeps one device entry per run with a successful login. In a manual exercise against Vaultwarden, runs whose login failed left no visible entry. `bw` offers no command that removes it, and the logout does not remove it. Whether Bitwarden Cloud limits device entries, throttles repeated logins or sends a message for each new device is unknown.
 - **Contact with Bitwarden Cloud also for a self-hosted server.** The first start of a fresh profile requests configuration from `https://api.bitwarden.com`, before the server address of your own server is set. This request carries no account data. It cannot be avoided with the public commands of `bw`.

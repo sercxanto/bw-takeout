@@ -193,7 +193,7 @@ The fake can drift from the real `bw`. The tests `TestRealBW…` in `internal/bw
 BW_TAKEOUT_REAL_BW="$(command -v bw)" go test -count=1 -run TestRealBW -v ./internal/bwcli/
 ```
 
-They are not offline. Each test creates a fresh profile, and the first start of a fresh profile sends one anonymous configuration request to `https://api.bitwarden.com` (finding 12 of the code notes). `bw` has no switch to turn this off. CI does not run them, because CI has no `bw`. Cases with a login wait for an automated Vaultwarden test setup.
+They are not offline. Each test creates a fresh profile, and the first start of a fresh profile sends one anonymous configuration request to `https://api.bitwarden.com` (finding 12 of the code notes). `bw` has no switch to turn this off. CI does not run them, because CI has no `bw`. Cases with a login run in the [Vaultwarden tests](#vaultwarden-tests): the interactive login through the built `bw-takeout backup`, with the address and the password typed at a pseudo-terminal. The login failure cases of bw-process-adapter against a server are not automated yet.
 
 | Test | Real behavior checked | Fake behavior it corresponds to |
 |---|---|---|
@@ -645,6 +645,64 @@ Not run, 19 November 2026. No such host was available during apply. The dev cont
 In the dev container on Debian 12, Linux 6.8 aarch64, with Go 1.27.3: `gofmt -l .` printed nothing, `go vet ./...` passed for Linux, `GOOS=darwin` and `GOOS=windows`, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed in all packages with only expected skips, and `go test -race ./...` passed. `openspec validate memory-hardening --strict` passed. The change added the expected skips `TestRealLimitHelper`, `TestCrashDumpHelper` and, on Linux and macOS, `TestRunOnWindows`, and for Windows `TestBWInheritsTheLimit` and `TestLimitSetBeforeTheFirstBWProcess`, each with its reason in `.github/expected-skips.txt`. The review fixes of the same day added `TestRunProcessNotDumpable`, skipped on macOS and Windows. After the review fixes R1 to R3, all of these checks ran again with the same result. `cmd/bw-takeout` was built for `darwin/arm64` and `windows/amd64`. `ulimit -c` of the shell was `unlimited` before and after the tests. Evidence level: mock, with the real system calls on Linux.
 
 Not run in the dev container: the tests on macOS, Windows and Linux amd64, the [manual check of a pipe handler](#manual-check-of-a-pipe-handler), and any backup against the real `bw`.
+
+## Vaultwarden Tests
+
+The change vaultwarden-test-setup adds the package `internal/e2e`, an end-to-end suite that runs the built `bw-takeout` against a live Vaultwarden server with a synthetic account. No person is needed. Every file is a test file behind the build tag `vaultwarden` and builds on Linux only, so `go test ./...`, `go vet ./...` and the skip report do not see the package. `checks.yml` runs `go vet -tags vaultwarden ./...` on every change, so that the tagged code still compiles.
+
+Run it in the dev container from the repository root:
+
+```sh
+go test -count=1 -tags vaultwarden -v ./internal/e2e/
+```
+
+The suite needs the dev container (Go, the npm `bw` and network access) and nothing else. A run contacts Docker Hub to fetch the pinned Vaultwarden image, and `https://api.bitwarden.com` once for each fresh `bw` profile (finding 12 of the [code notes](../research/bw-cli-code-notes-2026-11-15.md)). The workflow `vaultwarden.yml` runs the same command in the dev container image on Linux amd64, started by hand ([integration notes](integrations.md#continuous-integration)).
+
+**What the suite does.** It fetches the image index by its pinned digest from the Docker Hub registry with an anonymous token, checks the SHA-256 of every blob it downloads, selects the manifest of the running architecture and compares it and the server binary with the table in `fetch_test.go` ([pins](integrations.md#vaultwarden-test-server)). Only the file `vaultwarden` is unpacked. Downloads are cached by digest under `.local/vaultwarden-cache/sha256/` and checked again on every use, so a damaged file is fetched anew. Remove the directory to force a new download. Each scenario then starts its own server on loopback with TLS, a certificate created in Go and the web vault off, registers an account over the HTTP API with keys the test derives itself, seeds the vault through the official `bw` in a separate seed profile, and runs `bw-takeout backup` under a pseudo-terminal whose reader answers the prompts `Email address` and `Master password`.
+
+| Test | What it asserts |
+|---|---|
+| `TestFetch…` | On a test registry: the binary of each architecture is unpacked; a blob with a wrong digest fails and is not cached; a manifest or a binary that differs from the table fails with a message naming the architecture; an unknown architecture fails without a request; a damaged cache is fetched anew; a valid cache needs no request |
+| `TestVaultwardenFromDockerHub` | The binary from Docker Hub, or the cache, has the SHA-256 of the table for the running architecture |
+| `TestServerStartsAndStops` | `/alive` answers over TLS with the test certificate; after the stop the process is gone and the port is free |
+| `TestEncStringForm`, `TestAccountKeysDecryptWithDerivedKeys` | The EncString has the form `2.<iv>\|<ct>\|<mac>` with a 16-byte IV, a wrong MAC key fails, and the wrapped user key and private key decrypt with the derived keys |
+| `TestKnownAnswer…` | PBKDF2, HKDF and the master password hash give the values of the unit tests of the Bitwarden SDK (`bitwarden/sdk-internal`, commit `c5c08aeb`) |
+| `TestRegistrationRequestBody`, `TestRegistrationOnServer` | The fields of both registration calls, no field holds the password, and both calls succeed on the server |
+| `TestCipherPutReplacesKeyValue` | Vaultwarden accepts a `PUT` of a cipher with a replaced `keyValue`, and a second `GET` returns the new value |
+| `TestSeedVault` | The seed `bw` shows 2 items in `list items`, 1 in `list items --archived`, 3 items with 1 passkey in the plaintext export, and the seed profile and the import file are gone afterwards |
+| `TestPrompts…`, `TestUnknownPromptFails`, `TestPromptTimeLimitFails` | With a child program built in the test: both prompts are answered; an unknown prompt and the time limit fail; the message names the prompts but no answer |
+| `TestRedactAddressInVerifyOutput`, `TestProfileLocationMustExistAndBeEmpty`, `TestPackageFilesAreTaggedTests` | Review fixes of 21 November 2026: the address in the output of `verify` is replaced before it is logged; the profile location must exist and be empty after a run; every Go file of the package outside `testdata` is a test file with the build constraint. The pseudo-terminal tests build the prompt child from `testdata/promptchild` |
+| `TestLogCheckFindsRecordedValues` | The log check finds a recorded value and text of the session key form and names only their kind |
+| `TestIntactVaultIsVerified` | Exit status 0, the verdict `verified`, exactly one generation in the target and no partial one, `bw-takeout verify` exits with 0, the generation holds both seeded attachments with their SHA-256, the archived item's attachment among them, and one passkey with the seeded credential ID, and the profile location is empty |
+| `TestTamperedPasskeyFails` | After the encrypted `keyValue` of the passkey is replaced through the API with a well-formed ciphertext under a foreign key: exit status 1, `Generation:  none published, the verdict is failed`, the finding `failed passkey_count_mismatch` for the passkey item with `expected=1 found=0` as the only failed finding, an empty target and an empty profile location |
+
+**Output hygiene.** The password, the addresses and the seed session key live in memory and in temporary files with mode 0600. `TestMain` copies the test log on its way to standard output and searches it after the run for every recorded password, address and session key and for any text of the session key form, which also covers the session key of the product that the test never sees. A hit fails the run and names only the kind of value. No output of `bw` is printed. The report is logged with the address replaced by `<address>`, because the report names the account.
+
+**Evidence level:** automated end-to-end, Vaultwarden only. It is the first test of the verdict rules against a live capture whose inventory is known from outside the CLI.
+
+**Not covered:** macOS and Windows (Vaultwarden publishes Linux images only), Bitwarden Cloud, two-step login, blob-format items (`bw` 2026.10.1 wrote legacy items against Vaultwarden), a lapsed premium and the archive filter (Vaultwarden 1.37.4 reports premium for every user), a deleted or corrupted attachment file on the server, the login failure cases of bw-process-adapter, an interrupt during a live backup, and organizations. The [manual login exercise](#manual-login-exercise) and the [manual backup exercise](#manual-backup-exercise) stay for macOS, two-step login and the interrupt cases.
+
+### Vaultwarden Test Run of 21 November 2026
+
+In the dev container on Debian 12.15, Linux 6.8 aarch64, with Go 1.27.3, `bw` 2026.10.1 in the npm layout (SHA-256 of `bw.js` `8a443d1190643330826e8cc0b27381fba5af5a06c6c3d7c7254033913a51ee9b`) and Vaultwarden 1.37.4 for linux/arm64 (binary SHA-256 `ae658947f85964e934d7673d9cab4c0edbce8e6167422d6ff3b10008e125421d`), `go test -count=1 -tags vaultwarden -v ./internal/e2e/` passed all 23 tests in 3 minutes 36 seconds, with the image already in the cache. The first fetch, before that run, downloaded the index, the arm64 manifest and the top layer only and took under 3 seconds.
+
+- Seeding through `bw` took about 45 seconds per server, most of it the start of Node for each of the 13 commands. Each backup took 36 to 37 seconds, and the logout 2.6 seconds.
+- `bw` showed the prompts `Email address` and `Master password`, in that order, as design D6 expected.
+- Intact vault: exit status 0, `verified`, 0 findings, 2 of 2 attachments ok, both with the seeded SHA-256, the archived item's attachment among them, the passkey with the seeded credential ID in the plaintext export, `verify` passed, the profile location was empty.
+- Tampered passkey: exit status 1, verdict `failed`, and four findings: `failed passkey_count_mismatch` for the passkey item with `expected=1 found=0`, and `unverified document_decryption_errors` with `count=3` for the plaintext export, the item list and the archived item list. The count of 3 lines matches the three error lines per command of the [live probe](../research/vaultwarden-live-probe-2026-11-14.md). `bw` kept the item and dropped its passkey, as the live probe predicted. The target and the profile location were empty.
+- The log check found none of the 16 recorded values and no text of the session key form in the log, and a search of the saved log for `@example.invalid` found nothing. With the password logged on purpose in one test, the log check failed the run and named the kind `password`. With the expected SHA-256 of one attachment changed on purpose, `TestIntactVaultIsVerified` failed and named the entry. Both changes were reverted.
+- The CI step of design D10 was reproduced in the dev container: with `HOME`, `GOCACHE` and `GOMODCACHE` set to empty directories under `/tmp` and an empty `.local/vaultwarden-cache/`, the suite passed in 225 seconds, including the download of the image from Docker Hub. The run in Docker on the runner is the workflow follow-up.
+- The [limitations](../user/limitations.md) said that no live capture backed the verdict rules and that `bw` was tested without a login only. Both runs contradict that, so the two sentences were updated. No other statement there was contradicted.
+
+Not run: Linux amd64 at run time (the workflow follow-up), Bitwarden Cloud and the cases listed above. Evidence level: automated end-to-end, Vaultwarden only.
+
+### Test Run of 21 November 2026, vaultwarden-test-setup
+
+In the dev container on Debian 12.15, Linux 6.8 aarch64, with Go 1.27.3: `gofmt -l .` printed nothing, `go vet ./...` passed for Linux, `GOOS=darwin` and `GOOS=windows`, `go vet -tags vaultwarden ./...` passed, `go mod tidy -diff` showed no change, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed in all packages with only expected skips, `go test -race ./...` passed, `go test -count=1 -tags vaultwarden ./internal/e2e/` passed in 215 seconds, the key-material search of `checks.yml` found nothing, and `openspec validate vaultwarden-test-setup --strict` passed. The change added no skip, and `.github/expected-skips.txt` was not changed. `TestWorkflowStructure` failed with a `pull_request` trigger added to `vaultwarden.yml` on purpose, and passed again after the revert. Evidence level: mock for the regular suite, automated end-to-end against Vaultwarden for `internal/e2e`.
+
+After the review fixes R1 to R4 of the same day, which added three tests, all of these checks ran again with the same result, and `go test -count=1 -tags vaultwarden -v ./internal/e2e/` passed all 26 tests in 213 seconds with the log check clean. The counts of 23 tests above are from the runs before the review fixes.
+
+Not run in the dev container: the workflow `vaultwarden.yml` on the runner, and the tests on macOS, Windows and Linux amd64.
 
 ## Skip Report
 
