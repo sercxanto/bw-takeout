@@ -163,53 +163,54 @@ func TestRedactionCheckDetectsALeak(t *testing.T) {
 }
 
 // What each reason code must refer to.
-type needs struct{ document, item, attachment, passkey, counts bool }
+type needs struct{ document, item, attachment, passkey, counts, organization bool }
 
 var reasonNeeds = map[verify.Reason]needs{
-	verify.DocumentInvalidJSON:             {document: true},
-	verify.DocumentWrongForm:               {document: true},
-	verify.DocumentMarkedEncrypted:         {document: true},
-	verify.DocumentNotMarkedEncrypted:      {document: true},
-	verify.DocumentPasswordProtected:       {document: true},
-	verify.DocumentNotAccountBound:         {document: true},
-	verify.DocumentResponseEnvelope:        {document: true},
-	verify.DocumentMalformedItem:           {document: true},
-	verify.DuplicateItemID:                 {document: true, item: true},
-	verify.ItemMissingFromPlaintextExport:  {document: true, item: true},
-	verify.ItemMissingFromEncryptedExport:  {document: true, item: true},
-	verify.ItemFormatUnrecognized:          {document: true, item: true},
-	verify.ListedItemMissingFromExport:     {document: true, item: true},
-	verify.ExportedItemNotListed:           {item: true},
-	verify.OrganizationItemsExcluded:       {counts: true},
-	verify.ItemOrganizationMismatch:        {document: true, item: true},
-	verify.ListedItemDiffersBetweenLists:   {item: true},
-	verify.ArchiveFilterNotApplied:         {counts: true},
-	verify.DocumentDecryptionErrors:        {document: true, counts: true},
-	verify.AttachmentDecryptionErrors:      {item: true, attachment: true, counts: true},
-	verify.AttachmentDownloadOutOfScope:    {document: true, item: true, attachment: true},
-	verify.PasskeyCountMismatch:            {item: true, counts: true},
-	verify.PasskeyCountUnverifiable:        {item: true},
-	verify.PasskeyFieldMissing:             {item: true, passkey: true},
-	verify.PasskeyFieldInvalid:             {item: true, passkey: true},
-	verify.PasskeyKeyInvalid:               {item: true, passkey: true},
-	verify.PasskeyKeyFormUnknown:           {item: true, passkey: true},
-	verify.PasskeyCounterInvalid:           {item: true, passkey: true},
-	verify.DuplicateAttachmentID:           {document: true, item: true, attachment: true},
-	verify.DuplicateDownloadResult:         {document: true, item: true, attachment: true},
-	verify.AttachmentDownloadFailed:        {item: true, attachment: true},
-	verify.AttachmentDownloadMissing:       {item: true, attachment: true},
-	verify.AttachmentDownloadInvalid:       {item: true, attachment: true},
-	verify.AttachmentDownloadNotExpected:   {document: true, item: true, attachment: true},
-	verify.AttachmentEmpty:                 {item: true, attachment: true},
-	verify.ReferenceItemMissing:            {item: true},
-	verify.ReferenceItemNotExpected:        {item: true},
-	verify.ReferencePasskeyMissing:         {item: true},
-	verify.ReferencePasskeyNotExpected:     {item: true, passkey: true},
-	verify.ReferencePasskeyKeyMismatch:     {item: true, passkey: true},
-	verify.ReferencePasskeyCounterMismatch: {item: true, passkey: true},
-	verify.ReferenceAttachmentMissing:      {item: true, attachment: true},
-	verify.ReferenceAttachmentNotExpected:  {item: true, attachment: true},
-	verify.ReferenceAttachmentMismatch:     {item: true, attachment: true},
+	verify.DocumentInvalidJSON:              {document: true},
+	verify.DocumentWrongForm:                {document: true},
+	verify.DocumentMarkedEncrypted:          {document: true},
+	verify.DocumentNotMarkedEncrypted:       {document: true},
+	verify.DocumentPasswordProtected:        {document: true},
+	verify.DocumentNotAccountBound:          {document: true},
+	verify.DocumentResponseEnvelope:         {document: true},
+	verify.DocumentMalformedItem:            {document: true},
+	verify.DuplicateItemID:                  {document: true, item: true},
+	verify.ItemMissingFromPlaintextExport:   {document: true, item: true},
+	verify.ItemMissingFromEncryptedExport:   {document: true, item: true},
+	verify.ItemFormatUnrecognized:           {document: true, item: true},
+	verify.ListedItemMissingFromExport:      {document: true, item: true},
+	verify.ExportedItemNotListed:            {item: true},
+	verify.ItemOrganizationMismatch:         {document: true, item: true},
+	verify.OrganizationItemMismatch:         {document: true, item: true, organization: true},
+	verify.OrganizationChangedDuringCapture: {item: true, organization: true},
+	verify.ListedItemDiffersBetweenLists:    {item: true},
+	verify.ArchiveFilterNotApplied:          {counts: true},
+	verify.DocumentDecryptionErrors:         {document: true, counts: true},
+	verify.AttachmentDecryptionErrors:       {item: true, attachment: true, counts: true},
+	verify.AttachmentDownloadOutOfScope:     {document: true, item: true, attachment: true},
+	verify.PasskeyCountMismatch:             {item: true, counts: true},
+	verify.PasskeyCountUnverifiable:         {item: true},
+	verify.PasskeyFieldMissing:              {item: true, passkey: true},
+	verify.PasskeyFieldInvalid:              {item: true, passkey: true},
+	verify.PasskeyKeyInvalid:                {item: true, passkey: true},
+	verify.PasskeyKeyFormUnknown:            {item: true, passkey: true},
+	verify.PasskeyCounterInvalid:            {item: true, passkey: true},
+	verify.DuplicateAttachmentID:            {document: true, item: true, attachment: true},
+	verify.DuplicateDownloadResult:          {document: true, item: true, attachment: true},
+	verify.AttachmentDownloadFailed:         {item: true, attachment: true},
+	verify.AttachmentDownloadMissing:        {item: true, attachment: true},
+	verify.AttachmentDownloadInvalid:        {item: true, attachment: true},
+	verify.AttachmentDownloadNotExpected:    {document: true, item: true, attachment: true},
+	verify.AttachmentEmpty:                  {item: true, attachment: true},
+	verify.ReferenceItemMissing:             {item: true},
+	verify.ReferenceItemNotExpected:         {item: true},
+	verify.ReferencePasskeyMissing:          {item: true},
+	verify.ReferencePasskeyNotExpected:      {item: true, passkey: true},
+	verify.ReferencePasskeyKeyMismatch:      {item: true, passkey: true},
+	verify.ReferencePasskeyCounterMismatch:  {item: true, passkey: true},
+	verify.ReferenceAttachmentMissing:       {item: true, attachment: true},
+	verify.ReferenceAttachmentNotExpected:   {item: true, attachment: true},
+	verify.ReferenceAttachmentMismatch:      {item: true, attachment: true},
 }
 
 func TestEveryReasonHasNeeds(t *testing.T) {
@@ -264,11 +265,17 @@ func TestFindingForAMissingPasskey(t *testing.T) {
 					n := reasonNeeds[f.Reason]
 					if n.document && f.Document == "" || n.item && f.ItemID == "" ||
 						n.attachment && f.AttachmentID == "" || n.passkey && f.Passkey == nil ||
-						n.counts && f.Count == nil && (f.Expected == nil || f.Found == nil) {
+						n.counts && f.Count == nil && (f.Expected == nil || f.Found == nil) ||
+						n.organization && f.OrganizationID == "" {
 						t.Errorf("%s: finding lacks a reference it needs: %+v", f.Reason, f)
 					}
 					if f.AttachmentID != "" && f.ItemID == "" {
 						t.Errorf("%s: attachment ID without item ID", f.Reason)
+					}
+					// A finding about an organization document names its
+					// organization (requirement "Attributable findings").
+					if strings.HasPrefix(f.Document, "organization_") && f.OrganizationID == "" {
+						t.Errorf("%s: organization document without organization ID: %+v", f.Reason, f)
 					}
 				}
 				for _, f := range r.Findings {

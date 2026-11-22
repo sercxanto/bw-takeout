@@ -3,6 +3,7 @@ package verify_test
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"bw-takeout/internal/capture"
@@ -53,13 +54,17 @@ func TestVerdictPrecedence(t *testing.T) {
 	}
 }
 
-// Warnings do not change the verdict: an empty attachment and organization
-// items produce warnings, and the capture stays verified.
+// Warnings do not change the verdict: an empty attachment and a download of
+// an organization that is not chosen produce warnings, and the capture stays
+// verified.
 func TestWarningsDoNotChangeTheVerdict(t *testing.T) {
 	f := variant(t, ct.OrganizationItems)
 	in := f.Input(t)
 	i := downloadIndex(t, in, ct.AttachmentFirst)
 	in.Downloads[i].SHA256, in.Downloads[i].Size = hashOf(nil), 0
+	in.Downloads = append(in.Downloads, capture.Download{
+		ItemID: ct.ItemOrgFirstA, AttachmentID: ct.AttachmentOrg, SHA256: hashOf([]byte("x")), Size: 1,
+	})
 	r := runInput(t, f, in, false)
 	wantVerdict(t, r, verify.Verified)
 	if len(r.Warnings) != 2 {
@@ -104,15 +109,23 @@ func TestEveryResultNamesScopeAndServerLimit(t *testing.T) {
 			f, in := fr.build(t)
 			for _, withReference := range []bool{false, true} {
 				r := runInput(t, f, in, withReference)
-				if r.Scope.Code != verify.ScopeCode {
-					t.Errorf("scope %q", r.Scope.Code)
+				wantCode, wantLimit := verify.ScopeCode, false
+				if len(in.Organizations) > 0 {
+					wantCode, wantLimit = verify.ScopeCodeWithOrganizations, true
 				}
-				hasServerLimit := false
+				if r.Scope.Code != wantCode {
+					t.Errorf("scope %q, want %q", r.Scope.Code, wantCode)
+				}
+				hasServerLimit, hasOrganizationLimit := false, false
 				for _, l := range r.StandingLimits {
 					hasServerLimit = hasServerLimit || l == verify.LimitServerCompleteness
+					hasOrganizationLimit = hasOrganizationLimit || l == verify.LimitOrganizationExportsSeparateReads
 				}
 				if !hasServerLimit {
 					t.Errorf("standing limits %v lack %s", r.StandingLimits, verify.LimitServerCompleteness)
+				}
+				if hasOrganizationLimit != wantLimit {
+					t.Errorf("standing limits %v: organization limit %v, want %v", r.StandingLimits, hasOrganizationLimit, wantLimit)
 				}
 			}
 		})
@@ -555,21 +568,19 @@ func TestExportedItemNotListed(t *testing.T) {
 	wantReasons(t, r, verify.ExportedItemNotListed)
 }
 
-// Requirement: Organization items stay visible.
+// Requirement: Organization items outside the scope.
 
-func TestOrganizationItemsPresent(t *testing.T) {
+func TestItemsOfOrganizationsThatAreNotChosen(t *testing.T) {
 	r := run(t, variant(t, ct.OrganizationItems), false)
 	wantVerdict(t, r, verify.Verified)
-	got := only(t, r, verify.OrganizationItemsExcluded)
-	want := []verify.OrganizationCount{
-		{OrganizationID: ct.OrganizationFirst, Count: 2},
-		{OrganizationID: ct.OrganizationSecond, Count: 1},
+	if len(r.Findings) != 0 || len(r.Warnings) != 0 {
+		t.Errorf("items of organizations that are not chosen produced findings or warnings: %s", dump(t, r))
 	}
-	if got.Severity != verify.SeverityWarning || intValue(t, got.Count) != 3 || !reflect.DeepEqual(got.Organizations, want) {
-		t.Errorf("warning = %+v", got)
-	}
-	if len(r.Findings) != 0 {
-		t.Errorf("organization items produced findings: %s", dump(t, r))
+	out := dump(t, r)
+	for _, id := range []string{ct.OrganizationFirst, ct.OrganizationSecond, ct.ItemOrgFirstA, ct.ItemOrgFirstB, ct.ItemOrgSecondA} {
+		if strings.Contains(out, id) {
+			t.Errorf("result refers to %s", id)
+		}
 	}
 }
 
@@ -582,7 +593,9 @@ func TestExportedItemListedAsOrganizationItem(t *testing.T) {
 	}
 	// The item is reported as a contradiction, not as unlisted or missing.
 	wantReasons(t, r, verify.ItemOrganizationMismatch)
-	only(t, r, verify.OrganizationItemsExcluded)
+	if len(r.Warnings) != 0 {
+		t.Errorf("warnings: %s", dump(t, r))
+	}
 }
 
 // listNoteAsOrganizationItem lets the item list show the secure note as an

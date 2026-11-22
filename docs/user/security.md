@@ -60,9 +60,17 @@ Each profile is a directory `profile-<time>-<random>` with a data directory and 
 
 On Windows no access control lists are set for the profile.
 
+## Organizations
+
+A run with `--organization` stores the whole organization in the archive: the plaintext organization export holds every password, note, field and passkey key of every item of that organization in clear text, also of collections the backing-up account is not assigned to, and the attachments of the items the account sees. Anyone who can open the archive can read all of it, so the archive needs the protection the organization's data needs, and the recipients decide who can read the organization's vault. The encrypted organization export is sealed with the organization key and can only be opened inside that organization. The name of each organization is stored in the encrypted manifest only. The report, the verification result and `bw-takeout verify` print its ID, never its name.
+
+The backing-up account must be an owner or admin of each chosen organization. These roles give the account access to the whole organization, and its session key in the environment of each `bw` process grants that access while the run lasts. Use an account whose credentials you protect accordingly. A run refuses every other role before it requests an organization export, because on Vaultwarden the export of an account without the permission was answered with 401 and `bw` then logged itself out.
+
+Each organization export is recorded by `bw` as an event `Organization_ClientExportedVault` in the organization's event log, visible to its owners and admins. Every run with `--organization` therefore leaves one or two such events per organization. This is the behavior of `bw` and cannot be avoided with its public commands. Tell the other admins of the organization that the backup does this, so that the events are not taken for an unexplained export.
+
 ## What Is Visible Without a Key
 
-Item names, attachment file names, IDs and all vault content are inside the encryption. The directory name of a generation shows its creation time and whether it is partial or unverified. The size of the archive file is visible.
+Item names, attachment file names, organization names, IDs and all vault content are inside the encryption. The directory name of a generation shows its creation time and whether it is partial or unverified. The size of the archive file is visible.
 
 ## No Proof of Origin
 

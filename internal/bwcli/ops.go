@@ -155,6 +155,27 @@ func (c *Client) ListArchivedItems(ctx context.Context) (Output, error) {
 	return c.runDocument(ctx, c.cmdListArchived())
 }
 
+// ExportOrganizationJSON returns the plaintext JSON export of one
+// organization as bw wrote it. bw fetches it from the server on every call
+// (design D9 of the change organization-export). The ID must have the UUID
+// form; another form is refused before a process is started.
+func (c *Client) ExportOrganizationJSON(ctx context.Context, organizationID string) (Output, error) {
+	if !vaultid.ValidOrganizationID(organizationID) {
+		return Output{}, failure(OpExportOrganizationJSON, ClassInvalidArgument, NoExitCode)
+	}
+	return c.runDocument(ctx, c.cmdExportOrganizationJSON(organizationID))
+}
+
+// ExportOrganizationEncryptedJSON returns the encrypted JSON export of one
+// organization, sealed with the organization key, as bw wrote it. The ID
+// rule is that of ExportOrganizationJSON.
+func (c *Client) ExportOrganizationEncryptedJSON(ctx context.Context, organizationID string) (Output, error) {
+	if !vaultid.ValidOrganizationID(organizationID) {
+		return Output{}, failure(OpExportOrganizationEncrypted, ClassInvalidArgument, NoExitCode)
+	}
+	return c.runDocument(ctx, c.cmdExportOrganizationEncrypted(organizationID))
+}
+
 // Attachment returns the content of one attachment, requested by item ID
 // and attachment ID. Both IDs must have the form the archive accepts;
 // another form is refused before a process is started. The content can be
@@ -192,7 +213,7 @@ func (c *Client) runDocument(ctx context.Context, cmd command) (Output, error) {
 		return Output{}, err
 	}
 	if len(bytes.TrimSpace(out.stdout)) == 0 {
-		return Output{}, failure(cmd.op, ClassOutput, 0)
+		return Output{}, cmd.failure(ClassOutput, 0)
 	}
 	return Output{Data: out.stdout, DecryptionErrors: out.decryptionErrors}, nil
 }

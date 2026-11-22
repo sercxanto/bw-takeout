@@ -1,7 +1,6 @@
 package verify_test
 
 import (
-	"reflect"
 	"testing"
 
 	"bw-takeout/internal/capture"
@@ -126,27 +125,21 @@ func TestArchivedItemListCannotBeParsed(t *testing.T) {
 	}
 }
 
-func TestOrganizationItemInBothLists(t *testing.T) {
+// An item of an organization that is not chosen in both lists counts as a
+// shared item and produces no other warning.
+func TestUnchosenOrganizationItemInBothLists(t *testing.T) {
 	f := variant(t, ct.OrganizationItems)
 	f.ArchivedItemList = append(f.ArchivedItemList, listEntry(t, f.ItemList, ct.ItemOrgFirstB))
 	r := run(t, f, false)
 	wantVerdict(t, r, verify.Verified)
-	got := only(t, r, verify.OrganizationItemsExcluded)
-	want := []verify.OrganizationCount{
-		{OrganizationID: ct.OrganizationFirst, Count: 2},
-		{OrganizationID: ct.OrganizationSecond, Count: 1},
-	}
-	if intValue(t, got.Count) != 3 || !reflect.DeepEqual(got.Organizations, want) || got.Document != "" {
-		t.Errorf("warning = %+v", got)
-	}
-	if intValue(t, only(t, r, verify.ArchiveFilterNotApplied).Count) != 1 {
+	if intValue(t, only(t, r, verify.ArchiveFilterNotApplied).Count) != 1 || len(r.Warnings) != 1 {
 		t.Errorf("result: %s", dump(t, r))
 	}
 }
 
-// An organization item that only the archived list shows is counted, and
-// an exported item that the archived list shows as an organization item is
-// reported against the archived list.
+// An exported item that only the archived list shows, as an item of an
+// organization that is not chosen, is reported against the archived list,
+// and the download of its attachment is out of scope.
 func TestOrganizationItemOnlyInTheArchivedList(t *testing.T) {
 	f := ct.Intact(t)
 	f.ArchivedItemList[0].(map[string]any)["organizationId"] = ct.OrganizationFirst
@@ -157,7 +150,7 @@ func TestOrganizationItemOnlyInTheArchivedList(t *testing.T) {
 	if got.ItemID != ct.ItemArchivedLogin || got.Document != string(capture.ArchivedItemListDocument) {
 		t.Errorf("finding = %+v", got)
 	}
-	if intValue(t, only(t, r, verify.OrganizationItemsExcluded).Count) != 1 {
+	if w := only(t, r, verify.AttachmentDownloadOutOfScope); w.ItemID != ct.ItemArchivedLogin || len(r.Warnings) != 1 {
 		t.Errorf("result: %s", dump(t, r))
 	}
 }
@@ -305,7 +298,7 @@ func TestArchiveFilterWarningLeavesTheVerdict(t *testing.T) {
 
 // An item that the default list shows as an organization item and the
 // archived list as a personal item with its attachments. The attachment
-// checks read every entry, as capture.PersonalAttachments does, so the
+// checks read every entry, as capture.ScopedAttachments does, so the
 // personal attachments count as listed for the reference and an attachment
 // of the organization entry stays out of scope (design D6 of
 // capture-collection).
@@ -340,5 +333,32 @@ func TestItemListedAsOrganizationAndPersonalItem(t *testing.T) {
 	got := only(t, r, verify.AttachmentDownloadOutOfScope)
 	if got.AttachmentID != ct.AttachmentOrg || got.Severity != verify.SeverityWarning {
 		t.Errorf("warning = %+v", got)
+	}
+}
+
+// The lists are checked as documents also for an item of an organization
+// that is not chosen (requirement "Item lists are checked as documents in
+// every scope", review of 21 November 2026).
+func TestUnchosenOrganizationItemThatDiffersBetweenTheLists(t *testing.T) {
+	f := variant(t, ct.OrganizationItems)
+	item := listEntry(t, f.ItemList, ct.ItemOrgFirstA)
+	item["attachments"] = []any{}
+	f.ArchivedItemList = append(f.ArchivedItemList, item)
+	r := run(t, f, false)
+	wantVerdict(t, r, verify.Failed)
+	if got := only(t, r, verify.ListedItemDiffersBetweenLists); got.ItemID != ct.ItemOrgFirstA {
+		t.Errorf("finding = %+v", got)
+	}
+	wantReasons(t, r, verify.ListedItemDiffersBetweenLists)
+}
+
+func TestUnchosenOrganizationItemTwiceInOneList(t *testing.T) {
+	f := variant(t, ct.OrganizationItems)
+	f.ItemList = append(f.ItemList, listEntry(t, f.ItemList, ct.ItemOrgFirstB))
+	r := run(t, f, false)
+	wantVerdict(t, r, verify.Failed)
+	got := only(t, r, verify.DuplicateItemID)
+	if got.ItemID != ct.ItemOrgFirstB || got.Document != string(capture.ItemListDocument) {
+		t.Errorf("finding = %+v", got)
 	}
 }

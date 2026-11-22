@@ -107,6 +107,10 @@ func fakeScenario(t *testing.T, f *ct.Fixture) bwclitest.Scenario {
 	for _, a := range f.Attachments {
 		s.Commands[attachmentCommand(a.ItemID, a.AttachmentID)] = bwclitest.Behavior{Stdout: string(a.Content)}
 	}
+	for _, o := range in.Organizations {
+		s.Commands[bwclitest.OrganizationExport(o.ID)] = bwclitest.Behavior{Stdout: string(o.PlaintextExport)}
+		s.Commands[bwclitest.OrganizationEncryptedExport(o.ID)] = bwclitest.Behavior{Stdout: string(o.EncryptedExport)}
+	}
 	return s
 }
 
@@ -199,9 +203,10 @@ func (h *harness) run() outcome {
 			return nil, err
 		}
 		return aw.Finish(archive.Meta{
-			Source:       snap.Source,
-			Tool:         manifest.Tool{Name: "bw-takeout", Version: "test"},
-			Verification: o.verification,
+			Source:            snap.Source,
+			Tool:              manifest.Tool{Name: "bw-takeout", Version: "test"},
+			Verification:      o.verification,
+			OrganizationNames: snap.OrganizationNames(),
 		})
 	})
 	return o

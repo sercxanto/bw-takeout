@@ -7,5 +7,6 @@
 - proposed · [Archive format and generation layout](0005-archive-format.md)
 - proposed · [Secret boundary around the bw process](0006-secret-boundary.md)
 - proposed · [Handling of bw versions](0007-bw-versions.md)
+- proposed · [Organization backup through the organization export](0008-organization-export.md)
 
 New or superseding decisions follow the criteria in [CONTRIBUTING](../../CONTRIBUTING.md).

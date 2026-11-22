@@ -1,7 +1,7 @@
 // Command bw-takeout backs up a personal Bitwarden vault with the
 // official CLI and checks a backup offline:
 //
-//	bw-takeout backup --server <https-url> --target <dir> --recipients-file <file> [--bw <path>] [--ca <file>]
+//	bw-takeout backup --server <https-url> --target <dir> --recipients-file <file> [--bw <path>] [--ca <file>] [--organization <id>]...
 //	bw-takeout verify --identity <file> <generation-directory>
 //
 // backup runs in package run and reports through package report (design
@@ -12,16 +12,19 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 
 	"bw-takeout/internal/bwcli"
 	"bw-takeout/internal/offline"
 	"bw-takeout/internal/report"
 	"bw-takeout/internal/run"
+	"bw-takeout/internal/vaultid"
 )
 
 // Exit statuses (design D10 of archive-generation, D7 of
@@ -35,7 +38,7 @@ const (
 )
 
 const backupUsage = `usage: bw-takeout backup --server <https-url> --target <dir> --recipients-file <file>
-                         [--bw <path>] [--ca <file>]
+                         [--bw <path>] [--ca <file>] [--organization <id>]...
 
 Backs up one account interactively. The login and its two-step code are
 typed at the terminal.
@@ -46,6 +49,8 @@ Flags:
   --recipients-file <file>  age recipients, one per line (required)
   --bw <path>               bw executable (default: bw on the search path)
   --ca <file>               additional certificate authority file
+  --organization <id>       organization to back up as well, by its ID; the
+                            account must be its owner or admin; repeatable
 
 Exit status:
   0  generation published, capture verified, teardown complete
@@ -85,6 +90,7 @@ func backupFlags(args []string) *run.Config {
 	fl.StringVar(&cfg.RecipientsFile, "recipients-file", "", "")
 	fl.StringVar(&cfg.BW, "bw", "", "")
 	fl.StringVar(&cfg.CAFile, "ca", "", "")
+	fl.Var((*organizationFlag)(&cfg.Organizations), "organization", "")
 	if err := fl.Parse(args); err != nil || fl.NArg() != 0 {
 		return nil
 	}
@@ -92,6 +98,29 @@ func backupFlags(args []string) *run.Config {
 		return nil
 	}
 	return cfg
+}
+
+// organizationFlag collects the values of the repeatable flag
+// --organization (design D1 of organization-export). Each value must have
+// the UUID form and is lowercased, as bw prints IDs. A value given twice,
+// also in another case, is a usage error, because it is almost always a
+// typo for another organization. The order of the flags is kept.
+type organizationFlag []string
+
+func (f *organizationFlag) String() string { return strings.Join(*f, ",") }
+
+func (f *organizationFlag) Set(value string) error {
+	if !vaultid.ValidOrganizationID(value) {
+		return errors.New("organization ID is not a UUID")
+	}
+	id := strings.ToLower(value)
+	for _, seen := range *f {
+		if seen == id {
+			return errors.New("organization ID given twice")
+		}
+	}
+	*f = append(*f, id)
+	return nil
 }
 
 func runBackup(args []string, stdout, stderr io.Writer) int {

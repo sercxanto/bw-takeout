@@ -119,6 +119,11 @@ func verifyGeneration(identityPath, dir string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Account:     %s (%s)\n", printable.Clean(m.Source.AccountEmail), printable.Clean(m.Source.AccountID))
 	fmt.Fprintf(stdout, "Items:       %d\n", m.Counts.Items)
 	fmt.Fprintf(stdout, "Attachments: %d\n", m.Counts.Attachments)
+	// The ID and the count of each chosen organization, never its name,
+	// which is vault content (design D8 of organization-export).
+	for _, o := range m.Organizations {
+		fmt.Fprintf(stdout, "Organization: %s, %d items\n", printable.Clean(o.ID), o.Items)
+	}
 	fmt.Fprintf(stdout, "Archive:     intact, %d entries match the manifest\n", len(m.Entries))
 	fmt.Fprintf(stdout, "Verdict:     %s\n", printable.Clean(result.Verdict))
 	fmt.Fprintf(stdout, "Findings:    %d\n", len(result.Findings))

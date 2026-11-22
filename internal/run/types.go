@@ -34,6 +34,11 @@ type Config struct {
 	BW string
 	// CAFile is an optional certificate authority file.
 	CAFile string
+	// Organizations are the chosen organization IDs, lowercase and in the
+	// order of the flags. The command line checks them before the run
+	// (design D1 of organization-export). Without one, the run backs up
+	// the personal vault only.
+	Organizations []string
 }
 
 // Publisher publishes a generation. *publish.Publisher implements it.
@@ -143,6 +148,8 @@ type Setup struct {
 	Server              string
 	Target              string
 	Recipients          int
+	// Organizations are the chosen organization IDs, in order.
+	Organizations []string
 	// CrashDumps is the crash dump protection of the run.
 	CrashDumps crashdump.Protection
 }

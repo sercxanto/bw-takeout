@@ -36,12 +36,7 @@ func backup(t *testing.T, target string, f *capturetest.Fixture, recipients []st
 	// Publish takes the verdict from the bytes that Finish returns, which are
 	// the bytes the manifest embeds.
 	return (&publish.Publisher{}).Publish(target, func(dst io.Writer, created time.Time) ([]byte, error) {
-		w, err := archive.NewWriter(dst, recipients, created, archive.Documents{
-			PlaintextExport:  in.PlaintextExport,
-			EncryptedExport:  in.EncryptedExport,
-			ItemList:         in.ItemList,
-			ArchivedItemList: in.ArchivedItemList,
-		})
+		w, err := archive.NewWriter(dst, recipients, created, archivetest.Documents(t, f))
 		if err != nil {
 			return nil, err
 		}
@@ -51,9 +46,10 @@ func backup(t *testing.T, target string, f *capturetest.Fixture, recipients []st
 			}
 		}
 		return w.Finish(archive.Meta{
-			Source:       archivetest.Source,
-			Tool:         manifest.Tool{Name: "bw-takeout", Version: "test"},
-			Verification: verification,
+			Source:            archivetest.Source,
+			Tool:              manifest.Tool{Name: "bw-takeout", Version: "test"},
+			Verification:      verification,
+			OrganizationNames: archivetest.OrganizationNames(f),
 		})
 	})
 }
@@ -132,13 +128,15 @@ const (
 // TestLeaveGenerationForOfflineExercise writes one synthetic generation for
 // the manual offline exercise on a second system. It runs only when both
 // environment variables are set: the target directory and the age recipient
-// whose identity is kept on the second system.
+// whose identity is kept on the second system. The generation holds one
+// chosen organization, so the exercise covers the organization documents
+// as well (task 6.4 of the change organization-export).
 func TestLeaveGenerationForOfflineExercise(t *testing.T) {
 	target, recipient := os.Getenv(exerciseTargetEnv), os.Getenv(exerciseRecipientEnv)
 	if target == "" || recipient == "" {
 		t.Skipf("skipped: opt-in, set %s and %s to leave a synthetic generation", exerciseTargetEnv, exerciseRecipientEnv)
 	}
-	pub, err := backup(t, target, capturetest.Intact(t), []string{recipient})
+	pub, err := backup(t, target, capturetest.IntactOrganization(t), []string{recipient})
 	if err != nil {
 		t.Fatal(err)
 	}

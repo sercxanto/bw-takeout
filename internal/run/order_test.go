@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -84,7 +85,7 @@ func TestIntactRunPublishes(t *testing.T) {
 	if n := countOf(cmds, cmdLogout); n != 1 {
 		t.Errorf("%d logouts", n)
 	}
-	if setups := e.progress.all("setup"); len(setups) != 1 || setups[0].setup != o.Setup {
+	if setups := e.progress.all("setup"); len(setups) != 1 || !reflect.DeepEqual(setups[0].setup, o.Setup) {
 		t.Errorf("setup progress %+v", setups)
 	}
 	if snaps := e.progress.all("snapshot"); len(snaps) != 1 || snaps[0].planned != len(f.Attachments) {

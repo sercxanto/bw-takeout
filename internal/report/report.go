@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"bw-takeout/internal/bwcli"
+	"bw-takeout/internal/collect"
 	"bw-takeout/internal/profile"
 	"bw-takeout/internal/publish"
 	"bw-takeout/internal/run"
@@ -76,7 +78,9 @@ func (w *Writer) verdict(r *verify.Result) {
 
 // Finding renders one finding or warning: severity, reason and each field
 // that is set. These are IDs, positions, counts and codes only (design D10
-// of capture-verification).
+// of capture-verification). A finding that an organization changed during
+// the capture ends with a hint to run again (design D10 of
+// organization-export).
 func Finding(f verify.Finding) string {
 	parts := []string{clean(string(f.Severity)), clean(string(f.Reason))}
 	add := func(name, value string) {
@@ -90,6 +94,7 @@ func Finding(f verify.Finding) string {
 		}
 	}
 	add("document", f.Document)
+	add("organization", f.OrganizationID)
 	add("item", f.ItemID)
 	add("attachment", f.AttachmentID)
 	addInt("passkey", f.Passkey)
@@ -97,10 +102,11 @@ func Finding(f verify.Finding) string {
 	addInt("expected", f.Expected)
 	addInt("found", f.Found)
 	addInt("count", f.Count)
-	for _, oc := range f.Organizations {
-		parts = append(parts, "organization="+clean(oc.OrganizationID)+":"+strconv.Itoa(oc.Count))
+	line := strings.Join(parts, " ")
+	if f.Reason == verify.OrganizationChangedDuringCapture {
+		line += " (run the backup again)"
 	}
-	return strings.Join(parts, " ")
+	return line
 }
 
 // ending writes the generation line and the line of what ended the run.
@@ -122,7 +128,7 @@ func (w *Writer) ending(o *run.Outcome) {
 	// the run before the signal is still named (review of 18 November
 	// 2026, second round).
 	if f := o.Failure; f != nil && !(o.Interrupted && f.AfterInterrupt) {
-		w.line("Failed:      %s: %s", clean(string(f.Phase)), errText(f.Err))
+		w.line("Failed:      %s: %s", clean(string(f.Phase)), failureText(f.Err))
 	}
 	if o.Interrupted {
 		w.line("Interrupted during %s.", clean(string(o.InterruptedIn)))
@@ -130,6 +136,37 @@ func (w *Writer) ending(o *run.Outcome) {
 	if o.PartialLeft {
 		w.line("             The partial generation stays in the target. The next run lists it as a leftover.")
 	}
+}
+
+// failureText is the text of the failure that ended a run. A refused
+// organization is named by its ID and the reason in words, and a failed
+// organization command by its operation, class and organization ID
+// (design D10 of organization-export). Every other failure is errText.
+func failureText(err error) string {
+	var oe *collect.OrganizationError
+	if errors.As(err, &oe) {
+		return "organization " + clean(oe.ID) + ": " + organizationReason(oe.Reason)
+	}
+	var be *bwcli.Error
+	if errors.As(err, &be) && be.OrganizationID != "" {
+		plain := *be
+		plain.OrganizationID = ""
+		return errText(&plain) + ", organization=" + clean(be.OrganizationID)
+	}
+	return errText(err)
+}
+
+// organizationReason says in words why a chosen organization was refused.
+func organizationReason(r collect.OrganizationReason) string {
+	switch r {
+	case collect.OrganizationNotMember:
+		return "the account is not a member"
+	case collect.OrganizationNotConfirmed:
+		return "the membership of the account is not confirmed"
+	case collect.OrganizationRole:
+		return "the account is neither owner nor admin"
+	}
+	return clean(string(r))
 }
 
 // errText is the cleaned text of err on one line. errors.Join separates

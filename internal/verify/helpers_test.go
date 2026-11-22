@@ -26,9 +26,14 @@ func runInput(t *testing.T, f *ct.Fixture, in capture.Input, withReference bool)
 	return verify.Verify(capture.Parse(in), ref)
 }
 
+// variant builds the intact fixture of the first named variant, Intact or
+// IntactOrganization, and applies every named variant to it.
 func variant(t *testing.T, names ...string) *ct.Fixture {
 	t.Helper()
-	f := ct.Intact(t)
+	if len(names) == 0 {
+		return ct.Intact(t)
+	}
+	f := ct.VariantByName(t, names[0]).Base(t)
 	for _, name := range names {
 		ct.VariantByName(t, name).Apply(t, f)
 	}
@@ -141,8 +146,14 @@ func fixtureRuns() []fixtureRun {
 		}
 	}
 
-	runs := []fixtureRun{{name: "intact", build: fromFixture()}}
-	for _, v := range ct.Variants() {
+	runs := []fixtureRun{
+		{name: "intact", build: fromFixture()},
+		{name: "intact organization", build: func(t *testing.T) (*ct.Fixture, capture.Input) {
+			f := ct.IntactOrganization(t)
+			return f, f.Input(t)
+		}},
+	}
+	for _, v := range append(ct.Variants(), ct.OrganizationVariants()...) {
 		runs = append(runs, fixtureRun{name: v.Name, build: fromFixture(v.Name)})
 	}
 	return append(runs,

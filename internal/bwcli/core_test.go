@@ -254,7 +254,8 @@ func TestStartFailure(t *testing.T) {
 func TestNotLoggedIn(t *testing.T) {
 	f := newFixture(t, scenario("status", statusUnauthenticated))
 	for _, cmd := range []command{f.client.cmdSync(), f.client.cmdExportJSON(), f.client.cmdExportEncrypted(),
-		f.client.cmdListItems(), f.client.cmdListArchived(), f.client.cmdAttachment(testItem, testAttachment)} {
+		f.client.cmdListItems(), f.client.cmdListArchived(), f.client.cmdAttachment(testItem, testAttachment),
+		f.client.cmdListOrganizations(), f.client.cmdExportOrganizationJSON(testOrg), f.client.cmdExportOrganizationEncrypted(testOrg)} {
 		t.Run(string(cmd.op), func(t *testing.T) {
 			f := newFixture(t, scenario(strings.Join(cmd.args, " "), notLoggedIn, "status", statusUnauthenticated))
 			_, err := f.client.run(bg, cmd)

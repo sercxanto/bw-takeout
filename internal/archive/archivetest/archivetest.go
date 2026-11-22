@@ -38,16 +38,40 @@ func NewKey(t testing.TB) *age.X25519Identity {
 	return id
 }
 
-// Documents returns the rendered documents of the fixture.
+// Documents returns the rendered documents of the fixture, with those of
+// its organizations.
 func Documents(t testing.TB, f *capturetest.Fixture) archive.Documents {
 	t.Helper()
 	in := f.Input(t)
-	return archive.Documents{
+	d := archive.Documents{
 		PlaintextExport:  in.PlaintextExport,
 		EncryptedExport:  in.EncryptedExport,
 		ItemList:         in.ItemList,
 		ArchivedItemList: in.ArchivedItemList,
 	}
+	for _, o := range in.Organizations {
+		d.Organizations = append(d.Organizations, archive.OrganizationDocuments{
+			ID: o.ID, PlaintextExport: o.PlaintextExport, EncryptedExport: o.EncryptedExport,
+		})
+	}
+	return d
+}
+
+// OrganizationName is the synthetic name of an organization. It carries the
+// sentinel marker, because a name is vault content that no output may
+// print.
+func OrganizationName(id string) string {
+	return capturetest.Marker + "-organization-name-" + id[len(id)-4:]
+}
+
+// OrganizationNames returns the synthetic name of every organization of
+// the fixture.
+func OrganizationNames(f *capturetest.Fixture) map[string]string {
+	names := map[string]string{}
+	for _, o := range f.Organizations {
+		names[o.ID] = OrganizationName(o.ID)
+	}
+	return names
 }
 
 // Attachments returns the attachments of the fixture. All of them carry the
@@ -101,7 +125,9 @@ func WriteTo(t testing.TB, w io.Writer, f *capturetest.Fixture, verification []b
 			t.Fatal(err)
 		}
 	}
-	embedded, err := aw.Finish(Meta(verification))
+	meta := Meta(verification)
+	meta.OrganizationNames = OrganizationNames(f)
+	embedded, err := aw.Finish(meta)
 	if err != nil {
 		t.Fatal(err)
 	}

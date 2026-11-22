@@ -2,7 +2,7 @@
 
 For the first change, define a known synthetic reference inventory outside the CLI's view. Verify two passkeys with different keys and counters, then simulate a missing credential, a missing key, and an equal count with swapped content. Download two attachments with the same name but different IDs and bytes. Make one individual download fail and check that no silent success results.
 
-Further cases: stale local state, a restricted organization role, interrupted encryption, and two concurrent runs with the same target. Existing archives must stay byte-identical. For offline recovery, decrypt without network access and compare the contents with the reference inventory. Report mock, SDK test and authenticated end-to-end test separately. Concurrent runs, interrupted writing and offline decryption are tested with synthetic data, see [archive and publishing tests](#archive-and-publishing-tests). The tests against stale local state, organization roles and a live vault are planned.
+Further cases: stale local state, a restricted organization role, interrupted encryption, and two concurrent runs with the same target. Existing archives must stay byte-identical. For offline recovery, decrypt without network access and compare the contents with the reference inventory. Report mock, SDK test and authenticated end-to-end test separately. Concurrent runs, interrupted writing and offline decryption are tested with synthetic data, see [archive and publishing tests](#archive-and-publishing-tests). Stale local state is tested against the fake `bw`. Organization roles are tested against the fake `bw` for owner, admin, user and the other roles, and for admin and user against Vaultwarden 1.37.4 in the [organization scenario](#vaultwarden-tests), which is also the live vault test; an owner run against Vaultwarden is not part of it, and Bitwarden Cloud is not tested.
 
 ## Synthetic Capture Fixtures
 
@@ -28,19 +28,23 @@ Rules the fixtures follow:
 
 Twenty-three variants each break the intact fixture in one place: missing item, duplicate ID, one passkey missing, all passkeys dropped, blob login item, unrecognized item form, empty key, unparsable key, non-numeric counter, unknown key algorithm, swapped credential with equal count, organization items, listed item not exported, exported item not listed (removed from both lists), and the eight variants of the change archived-item-list: archive filter ignored with the archived item in neither list, archive filter ignored in a vault without archived items, an item in both lists with different attachment IDs, an item in both lists with a different organization, a duplicate ID within the archived list, an archived list that is not valid JSON, an absent archived list, and a missing download for the attachment of the archived item. The change capture-collection adds a twenty-third variant with three decryption error lines on the plaintext export and three on the download of the first attachment; it changes only the counts, not the documents. The variants of an invalid and an absent archived list replace the rendered archived list with a byte override. Every variant declares the places it changes, and a test compares that list with the actual difference to the intact fixture. The plaintext export and the item lists render the same decrypted view, so a variant that changes decrypted content changes both.
 
+The change organization-export adds the intact organization fixture: the intact fixture plus one chosen organization with a login (one passkey, one attachment) and a secure note. Both items are in the plaintext and the encrypted organization export, with collections in place of folders and the same revision date, and in the default item list. Their attachment and passkey are in the reference inventory, and every sensitive field of the organization exports carries a sentinel. Fourteen variants each break it in one place: an item missing from the plaintext organization export, an item of another organization in the export, an organization item listed as personal, a revision that differs between the two exports, a revision that differs between the list and the export, a listed organization item that is not exported, an exported organization item that is not listed, a blob login item in the encrypted organization export, an empty passkey key in the plaintext organization export, a password-protected organization export, an absent organization document, two decryption error lines on the plaintext organization export, a missing download of the organization attachment, and items of two organizations that are not chosen. The organization exports are server reads, not renderings of the snapshot, so a variant that changes an organization export leaves the item list as it is.
+
 ## Verification Tests
 
 `internal/capture` tests the parsers: format recognition, rejected document forms, duplicate detection, and the archived item list as a document of its own. `internal/verify` tests the verdict rules. Each test of a spec scenario carries the scenario's name, for example `TestOneDownloadFails`. The cross-cutting tests run every fixture variant and every additional failure case, with and without the reference inventory, and check that the serialized result contains no sensitive value, that every finding carries a severity, a known reason code and the IDs it refers to, and that two runs produce byte-identical output.
 
 ### Spec Scenario Coverage
 
-Every scenario of the capture-verification spec has one test of the same name in `internal/verify`. The mapping was checked on 14 November 2026, again after the review decisions of the same day, and is complete. The rows of the three requirements of the change archived-item-list were added and checked with `go test -list` on 16 November 2026. `TestArchiveFilterWarningLeavesTheVerdict` checks in addition that the filter warning leaves a failed, an unverified and a verified verdict unchanged. Parser cases are tested in addition in `internal/capture/parse_test.go`.
+Every scenario of the capture-verification spec has one test of the same name in `internal/verify`. The mapping was checked on 14 November 2026, again after the review decisions of the same day, and is complete. The rows of the three requirements of the change archived-item-list were added and checked with `go test -list` on 16 November 2026. The change organization-export removed the rows of "Organization items stay visible", added those of "Organization items outside the scope", "Item lists are checked as documents in every scope" and the five organization requirements, and the organization scenarios of the modified requirements (21 November 2026). Beyond the scenarios, `TestOrganizationVariants` runs every organization variant with its verdict and reasons, and the tests in `internal/verify/organization_test.go` cover a duplicate ID in an organization export, an export item without an organization, revision dates at millisecond precision, a missing revision date on an organization item and on a listed one, a personal item without one, the reference comparison of organization items, a rejected organization document next to a personal deviation, and the order of findings by organization. `TestArchiveFilterWarningLeavesTheVerdict` checks in addition that the filter warning leaves a failed, an unverified and a verified verdict unchanged. Parser cases are tested in addition in `internal/capture/parse_test.go`.
 
 | Requirement | Scenario | Test |
 |---|---|---|
 | Three-state verdict | Intact capture | `TestIntactCapture` |
 | | Failure outranks unverifiable items | `TestFailureOutranksUnverifiableItems` |
 | Scope statement and standing limits | Verified result without reference inventory | `TestVerifiedResultWithoutReferenceInventory` |
+| | Scope with a chosen organization | `TestScopeWithAChosenOrganization` |
+| | No organization chosen | `TestNoOrganizationChosen` |
 | Document form validation | Password-protected export supplied as inventory | `TestPasswordProtectedExportSuppliedAsInventory` |
 | | Unparsable document | `TestUnparsableDocument` |
 | Item identity comparison | Item missing from plaintext export | `TestItemMissingFromPlaintextExport` |
@@ -60,16 +64,34 @@ Every scenario of the capture-verification spec has one test of the same name in
 | | Attachment content differs from reference | `TestAttachmentContentDiffersFromReference` |
 | | Counter grew since the reference | `TestCounterGrewSinceTheReference` |
 | | Counter lower than the reference | `TestCounterLowerThanTheReference` |
+| | Organization item missing from the capture | `TestOrganizationItemMissingFromTheCapture` |
 | Attachment accounting by ID | Two attachments with the same name | `TestTwoAttachmentsWithTheSameName` |
 | | One download fails | `TestOneDownloadFails` |
 | | Result missing | `TestResultMissing` |
 | | Empty attachment | `TestEmptyAttachment` |
+| | Result missing for a chosen organization | `TestResultMissingForAChosenOrganization` |
 | Attachment inventory coverage | Listed item not exported | `TestListedItemNotExported` |
 | | Exported item not listed | `TestExportedItemNotListed` |
-| Organization items stay visible | Organization items present | `TestOrganizationItemsPresent` |
+| Organization items outside the scope | Items of organizations that are not chosen | `TestItemsOfOrganizationsThatAreNotChosen`, with a chosen organization in `TestOrganizationNotChosenWithAChosenOne` |
 | | Exported item listed as organization item | `TestExportedItemListedAsOrganizationItem` |
-| | Download result for an organization attachment | `TestDownloadResultForAnOrganizationAttachment` |
+| | Download result for an attachment outside the scope | `TestDownloadResultForAnAttachmentOutsideTheScope`, without a chosen organization in `TestDownloadResultForAnOrganizationAttachment` |
+| Item lists are checked as documents in every scope | Unchosen organization item in both lists | `TestUnchosenOrganizationItemInBothLists` |
+| | Unchosen organization item that differs between the lists | `TestUnchosenOrganizationItemThatDiffersBetweenTheLists`, a duplicate ID in `TestUnchosenOrganizationItemTwiceInOneList` |
+| Organization exports are validated as documents | Password-protected organization export | `TestPasswordProtectedOrganizationExport` |
+| | Organization export absent | `TestOrganizationExportAbsent` |
+| Organization exports are compared like the personal exports | Item missing from the plaintext organization export | `TestItemMissingFromThePlaintextOrganizationExport` |
+| | Blob-format item in an organization export | `TestBlobFormatItemInAnOrganizationExport` |
+| | Passkey with an empty key in an organization export | `TestPasskeyWithAnEmptyKeyInAnOrganizationExport` |
+| | Intact organization | `TestIntactOrganization` |
+| Organization items belong to their organization | Item of another organization in the export | `TestItemOfAnotherOrganizationInTheExport` |
+| | Exported item listed as personal item | `TestExportedItemListedAsPersonalItem` |
+| Organization exports agree on revisions | Item changed between the two exports | `TestItemChangedBetweenTheTwoExports` |
+| | Same revisions | `TestSameRevisions` |
+| Items of chosen organizations are matched with the item lists | Listed organization item not exported | `TestListedOrganizationItemNotExported` |
+| | Exported organization item not listed | `TestExportedOrganizationItemNotListed` |
+| | Item changed after the snapshot | `TestItemChangedAfterTheSnapshot` |
 | Attributable findings | Finding for a missing passkey | `TestFindingForAMissingPasskey` |
+| | Finding about an organization export | `TestFindingAboutAnOrganizationExport` |
 | No secrets in results | Failing capture with sensitive content | `TestFailingCaptureWithSensitiveContent` |
 | Default and archived item lists form one listing | Archived item with an attachment | `TestArchivedItemWithAnAttachment` |
 | | Archived item in neither list | `TestArchivedItemInNeitherList` |
@@ -84,6 +106,7 @@ Every scenario of the capture-verification spec has one test of the same name in
 | | Disjoint lists | `TestDisjointLists` |
 | | Both lists empty | `TestBothListsEmpty` |
 | Decryption error lines are reported | Decryption errors on the plaintext export | `TestDecryptionErrorsOnThePlaintextExport`, each document in `TestDecryptionErrorsOnEachDocument` |
+| | Decryption errors on an organization export | `TestDecryptionErrorsOnAnOrganizationExport` |
 | | Decryption errors together with a proven deviation | `TestDecryptionErrorsTogetherWithAProvenDeviation` |
 | | Decryption errors on an attachment download | `TestDecryptionErrorsOnAnAttachmentDownload` |
 | | No decryption errors | `TestNoDecryptionErrors`, counts of zero or less in `TestDecryptionErrorsNegativeOrOnAFailedDownload` |
@@ -129,11 +152,16 @@ Every scenario of the three specs of the change archive-generation has at least 
 | | Both item lists round trip | `archive.TestBothItemListsRoundTrip` |
 | | Empty archived item list | `archive.TestEmptyArchivedItemList` |
 | | Archived item list absent | `archive.TestArchivedItemListAbsent` (also each of the other three documents) |
+| | Organization documents round trip | `archive.TestOrganizationDocumentsRoundTrip`, order in `archive.TestOrganizationDocumentOrder`, with `age` and `tar` in `archive.TestRecoveryWithStandardTools` |
+| | Organization document absent | `archive.TestOrganizationDocumentAbsent` (both documents) |
 | | Two attachments with the same file name | `archive.TestTwoAttachmentsWithTheSameFileName` |
 | | ID with a path separator | `archive.TestIDValidation`, `main.TestEndToEnd/attachment_ID_with_a_path_separator` |
 | | Attachment ID that is not a UUID | `archive.TestRoundTripIntactFixture`, `archive.TestIDValidation` |
+| | Organization ID that is not a UUID | `archive.TestOrganizationIDThatIsNotAUUID`, a duplicate in `archive.TestDuplicateOrganizationID` |
 | | Manifest covers every entry | `archive.TestRoundTripIntactFixture`, `archive.TestReaderScenarios` |
 | | Verification result embedded unchanged | `manifest.TestRoundTripKeepsVerificationBytes`, `archive.TestRoundTripIntactFixture` |
+| | Chosen organization in the manifest | `archive.TestChosenOrganizationInTheManifest`, without a name in `archive.TestOrganizationWithoutAName`, serialization in `manifest.TestRoundTripWithAndWithoutOrganizations` |
+| | No organization chosen | `archive.TestNoOrganizationChosen`, `manifest.TestRoundTripWithAndWithoutOrganizations` |
 | | Instructions present and free of vault data | `archive.TestRecoveryInstructions` |
 | | Temporary location stays empty | `archive.TestTemporaryLocationStaysEmpty`, `publish.TestNoNamesFromTheVault` |
 | generation-publishing | Two generations in the same second | `publish.TestTwoGenerationsInTheSameSecond` |
@@ -165,10 +193,19 @@ Every scenario of the three specs of the change archive-generation has at least 
 | | Recovery instructions not first | `archive.TestReaderScenarios/recovery_instructions_not_first` |
 | | Newer format version | `archive.TestReaderScenarios/newer_format_version`, `main.TestFailedVerification/newer_format_version` |
 | | Archive without the archived item list | `archive.TestArchiveWithoutTheArchivedItemList` |
+| | Intact generation with an organization | `main.TestIntactGenerationWithAnOrganization`, `archive.TestReaderScenariosForOrganizations/intact_generation_with_an_organization` |
+| | Organization document missing | `main.TestOrganizationDocumentMissing`, `archive.TestReaderScenariosForOrganizations/organization_document_missing` |
+| | Document of an organization that is not listed | `main.TestDocumentOfAnOrganizationThatIsNotListed`, `archive.TestReaderScenariosForOrganizations/document_of_an_organization_that_is_not_listed` |
+| | Organization item count differs | `main.TestOrganizationItemCountDiffers`, `archive.TestReaderScenariosForOrganizations/organization_item_count_differs` |
+| | Generation without an organization | `main.TestGenerationWithoutAnOrganization` |
+| | Manifest without an organization list | `main.TestManifestWithoutAnOrganizationList`, `manifest.TestManifestWithoutOrganizationsIsRefused`, the earlier layout in `archive.TestArchiveOfTheEarlierLayout` |
 | | Verified capture | `main.TestVerifiedCapture` |
 | | Unverified capture | `main.TestUnverifiedCapture` |
 | | Failed verification | `main.TestFailedVerification` |
+| | Generation with an organization | `main.TestGenerationWithAnOrganization` |
 | | Generation with sentinel values | `main.TestGenerationWithSentinelValues` |
+
+The change organization-export added the rows of the organization documents, the organization IDs, the manifest section and the offline checks (21 November 2026). The tests in `cmd/bw-takeout/organization_test.go` run the built command against generations of the intact organization fixture, with a synthetic organization name that carries the sentinel and appears in no output. `TestLeaveGenerationForOfflineExercise` now leaves a generation with one chosen organization; the steps of [recovery](../user/recovery.md) were run as written against such a generation on 21 November 2026 in the dev container.
 
 The change interactive-backup-run replaced the check of the whole binary for "System without bw" with `offline.TestNoNetworkOrProcessPackage`, which checks the dependencies of the package that holds the `verify` command, because the binary now also holds the backup command (design D9 of that change).
 
@@ -367,6 +404,12 @@ Every scenario of the two specs of the change bw-process-adapter has one test of
 |  |  | ID that starts with a dash | `bwcli.TestIDThatStartsWithADash` |
 |  | Server address is checked before use | Address without HTTPS | `bwcli.TestAddressWithoutHTTPS` |
 |  |  | HTTPS address | `bwcli.TestHTTPSAddress` |
+|  | Organization exports are requested by ID | Export by organization ID | `bwcli.TestExportByOrganizationID` |
+|  |  | Organization ID that starts with a dash | `bwcli.TestOrganizationIDThatStartsWithADash` |
+|  |  | Failed organization export with a name in the error text | `bwcli.TestFailedOrganizationExportWithANameInTheErrorText` |
+|  | Organization list is read from its output | Two memberships | `bwcli.TestTwoMemberships` |
+|  |  | Entry without a role | `bwcli.TestEntryWithoutARole` |
+|  |  | No membership | `bwcli.TestNoMembership` |
 | bw-profile | Fresh profile for every run | Two runs in the same second | `profile.TestTwoRunsInTheSameSecond` |
 |  |  | Chosen name already exists | `profile.TestChosenNameAlreadyExists` |
 |  |  | Profile location is missing | `profile.TestProfileLocationIsMissing` |
@@ -379,6 +422,8 @@ Every scenario of the two specs of the change bw-process-adapter has one test of
 |  | Leftover profiles are reported and never removed | Leftover from a killed run | `profile.TestLeftoverFromAKilledRun` |
 |  |  | Own profile | `profile.TestOwnProfile` |
 |  |  | Unrelated entries in the profile location | `profile.TestUnrelatedEntriesInTheProfileLocation` |
+
+The change organization-export added the six rows of the two organization requirements. Beside them, `bwcli.TestOrganizationListEntryWithAnIDThatIsNotAUUID` and `bwcli.TestOrganizationListForms` check that any other list form is the class `output`, `bwcli.TestOrganizationListOutputIsWiped` that the raw list is wiped after decoding, `bwcli.TestEmptyOrganizationExportNamesTheOrganization` and `bwcli.TestOrganizationFailureText` that a failure names the organization ID, and `bwcli.TestNotLoggedIn` covers the three new commands. `bwcli.TestOrganizationExportThatLogsOut` uses the logout hook of the fake (`Behavior.LogOut`, checked by `bwclitest.TestFakeLogsOutAfterAnAnswer`): after an organization export that fails through the hook, the client reports `not_logged_in` with the organization ID, and a following vault command fails as not logged in. This models the 401 logout of the [organization spike](../research/organization-export-spike-2026-11-21.md).
 
 ### Test Run of 15 November 2026, bw-process-adapter
 
@@ -405,7 +450,7 @@ Evidence level: mock. That `list`, `export` and `get` start no sync of their own
 
 ### Spec Scenario Coverage of capture-collection
 
-Every scenario of the capture-collection spec has at least one test in `internal/collect`. The mapping was checked with `go test -list` on 18 November 2026.
+Every scenario of the capture-collection spec has at least one test in `internal/collect`. The mapping was checked with `go test -list` on 18 November 2026. The change organization-export replaced the rows of "Attachments of personal items are downloaded once" with those of "Attachments in scope are downloaded once" and added the three organization requirements (21 November 2026). Their tests in `internal/collect/organization_test.go` run against the fake `bw`, with the intact organization fixture as answers and its list of organizations, except the plan of an item in both lists and the wipe after a failed organization export, which use the in-memory vault. `TestSessionLostOnAnOrganizationExport` uses the logout hook of the fake. `TestWipeClearsTheOrganizationDocuments` checks that `Snapshot.Wipe` clears the organization documents, also through the slices of `Documents` and `Input`.
 
 | Requirement | Scenario | Test |
 |---|---|---|
@@ -417,8 +462,20 @@ Every scenario of the capture-collection spec has at least one test in `internal
 | Source comes from the status | Source of a capture | `TestSourceOfACapture`, `TestIntegrationIntactRun` |
 | Four documents are collected | All documents collected | `TestAllDocumentsCollected`, `TestIntegrationIntactRun` |
 | | Export fails | `TestExportFails`, each command in `TestEachDocumentCommandFails` |
-| Attachments of personal items are downloaded once | Attachment shown by both lists | `TestAttachmentShownByBothLists` |
-| | Organization attachment | `TestOrganizationAttachment` |
+| Chosen organizations are checked before the documents | Admin of the chosen organization | `TestAdminOfTheChosenOrganization`, owner in `TestOwnerOfTheChosenOrganization`, order in `TestOrganizationListAfterTheFreshnessCheck` |
+| | Member without the role | `TestMemberWithoutTheRole` |
+| | Chosen organization not in the list | `TestChosenOrganizationNotInTheList` |
+| | Membership not confirmed | `TestMembershipNotConfirmed` |
+| | Custom role | `TestCustomRole` |
+| | No organization chosen | `TestNoOrganizationChosen` |
+| | Organization list fails | `TestOrganizationListFails` |
+| Organization source comes from the organization list | Source with two organizations | `TestSourceWithTwoOrganizations`, without a name in `TestOrganizationWithoutAName` |
+| Two documents per chosen organization are collected | Two organizations | `TestTwoOrganizations` |
+| | Organization export fails | `TestOrganizationExportFails`, wipe in `TestOrganizationExportFailureWipesEarlierDocuments` |
+| | Session lost on an organization export | `TestSessionLostOnAnOrganizationExport` |
+| Attachments in scope are downloaded once | Attachment shown by both lists | `TestAttachmentShownByBothLists`, for an organization item in `TestOrganizationAttachmentShownByBothLists` |
+| | Attachment of a chosen organization | `TestAttachmentOfAChosenOrganization` |
+| | Attachment of an organization that is not chosen | `TestAttachmentOfAnOrganizationThatIsNotChosen`, without a chosen organization in `TestOrganizationAttachment` |
 | | Unparsable item list | `TestUnparsableItemList` |
 | Attachments are handed on one at a time | Two attachments | `TestTwoAttachments` |
 | | Receiver fails | `TestReceiverFails`, fixed text in `TestReceiverFailureTextIsNotRepeated` |
@@ -431,6 +488,7 @@ Every scenario of the capture-collection spec has at least one test in `internal
 | Run-level failures end the collection | Session lost during the downloads | `TestSessionLostDuringTheDownloads` |
 | | Cancelled run | `TestCancelledRun`, during a wait in `TestCancellationDuringAWait` |
 | Decryption error counts are passed on | Plaintext export with decryption errors | `TestPlaintextExportWithDecryptionErrors`, `TestIntegrationDecryptionErrorsOnThePlaintextExport` |
+| | Organization export with decryption errors | `TestOrganizationExportWithDecryptionErrors` |
 | | Download with decryption errors | `TestDownloadWithDecryptionErrors`, `TestIntegrationDecryptionErrorsOnADownload` |
 
 ### Test Run of 18 November 2026, capture-collection
@@ -470,11 +528,17 @@ Every scenario of the backup-run delta has at least one test. Names without a pa
 |---|---|---|
 | Backup inputs are flags | Server flag missing | `main.TestServerFlagMissing` |
 | | Server address not HTTPS | `main.TestServerAddressNotHTTPS`, `bwcli.TestValidServerAddressExported` |
+| Organizations are chosen by flag | Two organizations | `main.TestTwoOrganizations`, `TestChosenOrganizations` |
+| | Organization ID not a UUID | `main.TestOrganizationIDNotAUUID` |
+| | Same organization twice | `main.TestSameOrganizationTwice` |
+| | No organization flag | `main.TestNoOrganizationFlag`, `TestNoOrganizationFlag` |
 | Recipients come from a file | Two recipients with a comment | `archive.TestTwoRecipientsWithAComment` |
 | | Invalid line | `archive.TestInvalidLine` |
 | Inputs are checked before the first bw process | Target missing | `TestTargetMissing`, `main.TestBackupTargetMissingWithoutBW` |
 | | bw not found | `TestBWNotFound`, `main.TestBackupBWNotFound` |
 | The target is untouched until the snapshot is complete | Stale snapshot | `TestStaleSnapshot` |
+| | Chosen organization without the role | `TestChosenOrganizationWithoutTheRole` |
+| | Organization export fails | `TestOrganizationExportFails` |
 | Logout after every login attempt | Login refused | `TestLoginRefused` |
 | | Failure before the login | `TestFailureBeforeTheLogin` |
 | Logout is bounded | Logout hangs | `TestLogoutHangs`, `TestDefaultLogoutLimit` |
@@ -484,12 +548,17 @@ Every scenario of the backup-run delta has at least one test. Names without a pa
 | The run decides on interrupts itself | bw ends on its own after the interrupt | `TestBWEndsOnItsOwnAfterTheInterrupt`, `report.TestEndingLines` |
 | | Terminate signal | `TestTerminateSignal`, `main.TestInterruptSignalsOnUnix` |
 | Plaintext stays in memory | No temporary files | `TestNoTemporaryFiles`, `TestDocumentsWipedAfterPublishedRun`, `TestDocumentsWipedAfterWriterFailure` |
+| | No temporary files with an organization | `TestNoTemporaryFilesWithAnOrganization` |
 | Report shows the setup and the leftovers | Leftovers present | `TestLeftoversPresent` |
+| | Chosen organizations | `TestChosenOrganizations`, `report.TestReportWithOneOrganization` |
 | Report shows progress per attachment | One download fails | `TestOneDownloadFails` |
 | Report shows the verdict in full | Failed verdict | `TestFailedVerdict`, `report.TestEndingLines` |
 | Report shows how the run ended | Profile not removed | `TestProfileNotRemoved` |
 | | Status without server address | `TestStatusWithoutServerAddress`, `report.TestStatusWithoutServerAddressUsesTheFlag` |
+| | Organization check failed | `TestOrganizationCheckFailed`, each reason in `report.TestOrganizationFailureLines` |
+| | Organization export failed | `TestOrganizationExportFailed`, after the logout of bw in `TestOrganizationExportLogsOut` |
 | Report holds no vault content and no bw text | Sentinels in the vault and in bw output | `TestSentinelsInTheVaultAndInBWOutput` |
+| | Sentinel in an organization name | `TestSentinelInAnOrganizationName` |
 | | Control characters in the account address | `TestControlCharactersInTheAccountAddress`, `report.TestValuesAreCleaned` |
 | Exit status of a backup | Verified backup | `TestVerifiedBackup`, `report.TestExitStatusTable` |
 | | Unverified backup | `TestUnverifiedBackup` |
@@ -498,6 +567,8 @@ Every scenario of the backup-run delta has at least one test. Names without a pa
 | | No generation and profile not removed | `TestNoGenerationAndProfileNotRemoved` |
 
 Further tests cover the cases of the tasks beyond the scenarios: a target that is a file, an empty or missing recipients file, a CA path that is a directory, a relative `--bw` path, the full intact run with the archive opened again, the first interrupt during the logout, an interrupt during the commit and one just before it, a failed logout, the removal error in the outcome, and the golden report. The review fixes of 18 November 2026 added `TestPublishedGenerationWithFlushError`, `TestFailedVerdictWithFailedAbort`, `TestWriteFailureWithFailedAbort`, `TestPanicKeepsTeardown`, `TestLogoutResultByCause` and `main.TestBrokenPipeOnStandardOutput`, the second round `TestFailureBeforeAnInterruptDuringTheLogout` and `TestSignalAfterTheLogoutReturned` and further cases of `report.TestEndingLines`. Each failed with its fix reverted.
+
+The change organization-export added the rows of "Organizations are chosen by flag" and the organization scenarios of the modified requirements (21 November 2026). The usage errors of the flag run the built command with the fake `bw` given as `--bw` and check that no profile was created, so no `bw` process can have started. `report.TestReportWithOneOrganization` is the golden report of a run with one organization; the golden report of a run without one, `report.TestReportOfTheDesignExample`, is unchanged. The finding line with the organization is in `report.TestFindingLineNamesEverySetField` and `report.TestFindingLineOfAChangedOrganization`.
 
 ### Test Run of 18 November 2026, interactive-backup-run
 
@@ -601,7 +672,7 @@ Results:
 - `bw` showed the address and the two-step code as typed on the terminal after each prompt. That is output of `bw`, not of the report. The codes are not recorded here.
 - No result contradicts a code note, so no research note was added.
 
-Not run: Windows, Linux amd64, Bitwarden Cloud, a second interrupt during the logout, an interrupt at a prompt of `bw` during the backup, an account with organization items, an account with lapsed premium, attachments larger than 20 MB, and run 2 on macOS. Evidence level: manual end-to-end run with a synthetic account, Vaultwarden only.
+Not run: Windows, Linux amd64, Bitwarden Cloud, a second interrupt during the logout, an interrupt at a prompt of `bw` during the backup, an account with organization items (since covered by the [organization scenario](#vaultwarden-tests) of the Vaultwarden suite), an account with lapsed premium, attachments larger than 20 MB, and run 2 on macOS. Evidence level: manual end-to-end run with a synthetic account, Vaultwarden only.
 
 ## Crash Dump Tests
 
@@ -680,6 +751,11 @@ The suite needs the dev container (Go, the npm `bw` and network access) and noth
 | `TestLogCheckFindsRecordedValues` | The log check finds a recorded value and text of the session key form and names only their kind |
 | `TestIntactVaultIsVerified` | Two-step login is enabled through the API after seeding, `bw` showed exactly the prompts `Email address`, `Master password` and `Two-step login code`, in this order. Exit status 0, the verdict `verified`, exactly one generation in the target and no partial one, `bw-takeout verify` exits with 0, the generation holds both seeded attachments with their SHA-256, the archived item's attachment among them, and one passkey with the seeded credential ID, and the profile location is empty |
 | `TestTamperedPasskeyFails` | The account has no two-step login, and `bw` showed only `Email address` and `Master password`. After the encrypted `keyValue` of the passkey is replaced through the API with a well-formed ciphertext under a foreign key: exit status 1, `Generation:  none published, the verdict is failed`, the finding `failed passkey_count_mismatch` for the passkey item with `expected=1 found=0` as the only failed finding, an empty target and an empty profile location |
+| `TestOrganizationSetup` | The organization setup below: as the admin, assigned to C1 only, `bw list items` shows the items of C1 and C2 and not the item in the trash, and `bw list organizations` shows the organization with type 1 (admin) and status 2 (confirmed) |
+| `TestOrganizationBackupIsVerified` | The admin backs up with `--organization`: exit status 0, the verdict `verified`, the setup line `Organizations:` with the ID, `verify` exits with 0 and prints the organization with 2 items, both organization documents in the generation, each holding exactly the two seeded items and not the item in the trash, an empty personal export, both attachments with their SHA-256, and an empty profile location |
+| `TestOrganizationRoleIsRefused` | The user backs up with `--organization`: exit status 1, the line `Failed:      snapshot: organization <id>: the account is neither owner nor admin`, an empty target and an empty profile location. A shim around `bw` records every argument list: `list organizations --raw` was started and no `export --organizationid` |
+
+**Organization scenario.** Three tests rebuild the setup of the [organization spike](../research/organization-export-spike-2026-11-21.md) (design D12 of the change organization-export). Each registers an owner, an admin and a user. As the owner, the test creates an organization over the API with a new 64-byte organization key, wrapped for the owner's public key as an EncString of type 4 (RSA-OAEP with SHA-1), a new RSA key pair of the organization and the default collection C1, then creates C2, invites the admin (type 1) and the user (type 2) with `accessAll: false` and C1 as their only collection, and confirms both with the organization key wrapped for each. Without SMTP the invited accounts are accepted at once. Through the owner's `bw` it then creates one login in C1 and one in C2, each with an attachment of 64 KiB of random bytes, and a third login in C1 that it deletes to the trash. The organization key and the organization's private key are recorded for the log check, like every password and session key. All calls worked as recorded in the design; no field name had to change.
 
 **Failure scenarios.** The two login failure scenarios register an account, enable two-step login and run the backup without seeding, because the run ends before the first document. They assert what the `backup-run` spec promises after a refused login. The class after `login:` and the result of the logout are logged, not asserted, because the logout after a refused login is `bw` behavior, which the spec does not fix. A limit of 90 seconds (`loginFailureLimit`) ends a run in which `bw` would ask again after a wrong answer. If that happens, the test is not changed to answer twice, because a product that waits for a person who is not there is a question for the product.
 
@@ -687,7 +763,7 @@ The suite needs the dev container (Go, the npm `bw` and network access) and noth
 
 **Evidence level:** automated end-to-end, Vaultwarden only. It is the first test of the verdict rules against a live capture whose inventory is known from outside the CLI.
 
-**Not covered:** macOS and Windows (Vaultwarden publishes Linux images only), Bitwarden Cloud, a second two-step login inside one run, the remember token, recovery codes, blob-format items (`bw` 2026.10.1 wrote legacy items against Vaultwarden), a lapsed premium and the archive filter (Vaultwarden 1.37.4 reports premium for every user), a deleted or corrupted attachment file on the server, an interrupt during a live backup, and organizations. The [manual login exercise](#manual-login-exercise) and the [manual backup exercise](#manual-backup-exercise) stay for macOS and the interrupt cases.
+**Not covered:** macOS and Windows (Vaultwarden publishes Linux images only), Bitwarden Cloud, a second two-step login inside one run, the remember token, recovery codes, blob-format items (`bw` 2026.10.1 wrote legacy items against Vaultwarden), a lapsed premium and the archive filter (Vaultwarden 1.37.4 reports premium for every user), a deleted or corrupted attachment file on the server, an interrupt during a live backup, and of organizations: custom roles, organization items in blob format or with passkeys, decryption error lines on an organization export, an organization that changes during a run, and the managed-collections export. The [manual login exercise](#manual-login-exercise) and the [manual backup exercise](#manual-backup-exercise) stay for macOS and the interrupt cases.
 
 ### Vaultwarden Test Run of 21 November 2026
 
@@ -724,6 +800,18 @@ In the dev container on Debian 12.15, Linux 6.8 aarch64, with Go 1.27.3, `bw` 20
 - **User documentation.** [Limitations](../user/limitations.md) and [usage](../user/usage.md) were compared with these runs, and no statement was contradicted, so no change was needed. The statements on the device entry after a failed login and on Ctrl-C at a prompt are not touched by this change.
 
 Not run in the dev container: Linux amd64 and the workflow `vaultwarden.yml` on the runner, macOS, Windows and Bitwarden Cloud.
+
+### Test Run of 21 November 2026, organization-export
+
+In the dev container on Debian 12.15, Linux 6.8 aarch64, with Go 1.27.3, OpenSpec 2.0.0, `bw` 2026.10.1 (npm layout, SHA-256 of `bw.js` `8a443d1190643330826e8cc0b27381fba5af5a06c6c3d7c7254033913a51ee9b`) and Vaultwarden 1.37.4 for linux/arm64 (binary SHA-256 `ae658947f85964e934d7673d9cab4c0edbce8e6167422d6ff3b10008e125421d`): `gofmt -l .` printed nothing, `go mod tidy -diff` showed no change, `go vet ./...`, `go vet -tags vaultwarden ./...`, `GOOS=darwin go vet ./...` and `GOOS=windows go vet ./...` passed, `go test -race ./...` passed, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed in all packages with only expected skips, `go test -count=1 -tags vaultwarden -v ./internal/e2e/` passed all 38 tests in 429 seconds, the key-material search of `checks.yml` found nothing on the working tree, and `openspec validate organization-export --strict` passed. The change added no skip, and `.github/expected-skips.txt` was not changed. Evidence level: mock for the regular suite, automated end-to-end against Vaultwarden for `internal/e2e`.
+
+- **Organization scenario.** The setup of design D12 worked as recorded, with no field name changed. `TestOrganizationSetup` passed in 55 seconds: the admin, assigned to C1 only, saw the items of C1 and C2, as in the spike. `TestOrganizationBackupIsVerified` passed in 87 seconds, of which the backup took 49 seconds: verified, both organization documents with exactly the two seeded items and without the item in the trash, both attachments with their SHA-256. `TestOrganizationRoleIsRefused` passed in 59 seconds, the backup ending after 23 seconds in the snapshot phase with the reason `role`. With the role check disabled on purpose, it failed: the run then reported `snapshot: bw export_organization_json failed: not_logged_in, exit code 1, organization=<id>`, the 401 logout of the spike, now through the product. The change was reverted.
+- **Log check.** The log check of `TestMain` found none of the 60 recorded values, among them the organization key, the organization's private key, the passwords of owner, admin and user and the session keys, and no text of the session key form.
+- **Rules disabled on purpose.** Each new rule of `verify`, `collect`, `archive` and `report` was disabled one at a time, and at least one test failed for each. Two rules had no failing test at first: a rejected organization document must not end the personal checks, and findings sort by organization ID first. `verify.TestRejectedOrganizationDocumentKeepsThePersonalChecks` and `verify.TestFindingsSortByOrganizationBeforeDocument` were added for them.
+- **Recovery.** The steps of [recovery](../user/recovery.md) ran as written against a generation with one organization left by `TestLeaveGenerationForOfflineExercise`: `verify` exited with 0 and printed the organization with 2 items, `tar -tvf` listed both organization documents, and the SHA-256 of `documents/export.json` and of the plaintext organization export matched the manifest.
+- **ADR 0006.** The three new commands were checked against [ADR 0006](../decisions/0006-secret-boundary.md). They run with the session key in the environment only, an empty standard input, the long time limit and the empty working directory. The organization ID is validated before it becomes an argument, the raw organization list is wiped after decoding, and no text of `bw` reaches a failure. One clause no longer matched: the ADR listed what a failure carries, and a failed organization export now also carries the organization ID. That clause was updated; nothing else in the ADR changed.
+
+Not run in the dev container: Linux amd64 and the workflow `vaultwarden.yml` on the runner, which the [CI run of the same day](#ci-run-of-21-november-2026-organization-export) covered, macOS, Windows, and Bitwarden Cloud. Evidence level: automated end-to-end against Vaultwarden 1.37.4 only.
 
 ## Skip Report
 
@@ -803,6 +891,14 @@ The whole run took 4 minutes 24 seconds, well below the limit of 30 minutes: abo
 The maintainer started `vaultwarden.yml` by hand on the branch `vaultwarden-totp-login` at commit `5ee06141303f5a39029acdf016126e6fcddbc005`, the commit of the change ([run](https://github.com/sercxanto/bw-takeout/actions/runs/44907229965)). The run used the trigger `workflow_dispatch` and passed on `ubuntu-24.04` (Linux amd64). The job started at 13:07:01 UTC and ended at 13:11:42 UTC, so it took 4 minutes 41 seconds, well below the limit of 30 minutes. All steps succeeded: the checkout, the build of the dev container image and `go test -count=1 -tags vaultwarden -v ./internal/e2e/`, which includes the log check of `TestMain`.
 
 This is the first run of the two-step login scenario and of both login failure scenarios on Linux amd64. The maintainer reported that the tests passed. The per-test output, the class and the `Logout:` line of the failure scenarios on amd64, and the results of `CI` and `Checks` were not recorded here. Evidence level: automated end-to-end, Vaultwarden only, on Linux amd64.
+
+## CI Run of 21 November 2026, organization-export
+
+The workflows ran on [pull request 7](https://github.com/sercxanto/bw-takeout/pull/7) of the branch `organization-export` at commit `e9e6510`, the commit of the change. [Checks](https://github.com/sercxanto/bw-takeout/actions/runs/44953133623) passed in 35 seconds: format, vet with the tag `vaultwarden`, module tidiness and the key-material search. In [CI](https://github.com/sercxanto/bw-takeout/actions/runs/44953133628) the test matrix passed on `ubuntu-24.04`, `macos-26` and `windows-2025`, each with vet and the tests with the skip report, and on `ubuntu-24.04` also with the race detector.
+
+The maintainer started `vaultwarden.yml` by hand on the branch at the same commit ([run](https://github.com/sercxanto/bw-takeout/actions/runs/44953246870)). It passed on `ubuntu-24.04` (Linux amd64). The job started at 21:46:15 UTC and ended at 21:54:23 UTC, so it took 8 minutes 8 seconds, below the limit of 30 minutes: 5 seconds for the checkout, 30 seconds for the build of the dev container image and 7 minutes 27 seconds for `go test -count=1 -tags vaultwarden -v ./internal/e2e/`, which includes the log check of `TestMain`. This is the first run of the organization scenario on Linux amd64: an admin backup that is verified and a user backup that is refused before any export.
+
+The per-test output was not recorded here. Evidence level: mock on three platforms for the regular suite, automated end-to-end against Vaultwarden 1.37.4 on Linux amd64 for `internal/e2e`.
 
 ## CI Run of 19 November 2026, memory-hardening
 

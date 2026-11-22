@@ -613,14 +613,22 @@ func TestRecoveryInstructions(t *testing.T) {
 	if strings.Contains(text, capturetest.Marker) {
 		t.Error("recovery text contains the sentinel marker")
 	}
-	for _, s := range f.Sensitive() {
+	org := capturetest.IntactOrganization(t)
+	for _, s := range append(f.Sensitive(), org.Sensitive()...) {
 		if strings.Contains(text, s) {
 			t.Errorf("recovery text contains sentinel value %q", s)
+		}
+	}
+	for _, v := range []string{archivetest.OrganizationName(capturetest.ChosenOrganization), capturetest.ChosenOrganization} {
+		if strings.Contains(text, v) {
+			t.Errorf("recovery text contains %q", v)
 		}
 	}
 	for _, name := range []string{
 		archive.RecoveryPath, archive.PlaintextExportPath, archive.EncryptedExportPath,
 		archive.ItemListPath, archive.ArchivedItemListPath, "attachments/", archive.ManifestPath,
+		"documents/organizations/<organization-id>/export.json",
+		"documents/organizations/<organization-id>/export.encrypted.json",
 	} {
 		if !strings.Contains(text, name) {
 			t.Errorf("recovery text does not name %s", name)

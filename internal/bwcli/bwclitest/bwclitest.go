@@ -24,7 +24,31 @@ const (
 	RecordFile   = "fakebw-records.jsonl"
 	// DataFile is the file real bw creates in a fresh data directory.
 	DataFile = "data.json"
+	// LoggedOutFile marks a fake that Behavior.LogOut has logged out.
+	LoggedOutFile = "fakebw-logged-out"
 )
+
+// ListOrganizations is the argument list of the organization list, as a
+// key of Scenario.Commands.
+const ListOrganizations = "list organizations --raw"
+
+// OrganizationExport and OrganizationEncryptedExport return the argument
+// lists of the two organization exports, as keys of Scenario.Commands.
+func OrganizationExport(id string) string {
+	return "export --organizationid " + id + " --format json --raw"
+}
+
+func OrganizationEncryptedExport(id string) string {
+	return "export --organizationid " + id + " --format encrypted_json --raw"
+}
+
+// StatusUnauthenticated is the status document the fake prints once it is
+// logged out.
+const StatusUnauthenticated = `{"serverUrl":null,"lastSync":null,"status":"unauthenticated"}`
+
+// NotLoggedInLine is what bw writes to standard error for a vault command
+// after it logged out.
+const NotLoggedInLine = "You are not logged in.\n"
 
 // SleepArg is the argument with which the fake starts its own child for
 // Behavior.SpawnChild. Such a child only sleeps and writes no record.
@@ -71,6 +95,14 @@ type Behavior struct {
 	// the line was read. On Windows it exits with the code of a console
 	// interrupt instead.
 	Interrupt bool `json:"interrupt,omitempty"`
+	// LogOut logs the fake out after this answer: every later start other
+	// than the version query and the login then answers as bw 2026.10.1
+	// does without a session, status with StatusUnauthenticated and any
+	// other command with NotLoggedInLine and exit code 1. It models the
+	// 401 of Vaultwarden on an organization export without the role,
+	// after which bw logged itself out (design D9 of the change
+	// organization-export).
+	LogOut bool `json:"logOut,omitempty"`
 }
 
 // Record is what the fake writes for each start.

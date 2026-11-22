@@ -24,7 +24,12 @@ import (
 // changed reference inventory are reported as "~ attachments" and
 // "~ reference", a changed byte override of the archived item list as
 // "~ archived-bytes", and changed decryption error counts of the documents
-// as "~ decryption-errors".
+// as "~ decryption-errors". The exports of an organization start with
+// "organization[<id>]/plaintext" and "organization[<id>]/encrypted", their
+// byte overrides and decryption error counts are reported as
+// "~ organization[<id>]/plaintext-bytes", ".../encrypted-bytes" and
+// ".../decryption-errors", and an organization on one side only as
+// "- organization[<id>]" or "+ organization[<id>]".
 func Diff(t testing.TB, a, b *Fixture) []string {
 	t.Helper()
 	var out []string
@@ -45,8 +50,50 @@ func Diff(t testing.TB, a, b *Fixture) []string {
 	if a.DecryptionErrors != b.DecryptionErrors {
 		out = append(out, "~ decryption-errors")
 	}
+	diffOrganizations(t, a.Organizations, b.Organizations, &out)
 	sort.Strings(out)
 	return out
+}
+
+func diffOrganizations(t testing.TB, a, b []OrganizationFixture, out *[]string) {
+	t.Helper()
+	index := func(orgs []OrganizationFixture) map[string]*OrganizationFixture {
+		m := make(map[string]*OrganizationFixture, len(orgs))
+		for i := range orgs {
+			m[orgs[i].ID] = &orgs[i]
+		}
+		return m
+	}
+	am, bm := index(a), index(b)
+	for id, ao := range am {
+		path := "organization[" + id + "]"
+		bo, ok := bm[id]
+		if !ok {
+			*out = append(*out, "- "+path)
+			continue
+		}
+		diffTree(path+"/plaintext", normalize(t, ao.PlaintextExport), normalize(t, bo.PlaintextExport), out)
+		diffTree(path+"/encrypted", normalize(t, ao.EncryptedExport), normalize(t, bo.EncryptedExport), out)
+		for _, bytesOf := range []struct {
+			name string
+			a, b []byte
+		}{
+			{"plaintext-bytes", ao.PlaintextExportBytes, bo.PlaintextExportBytes},
+			{"encrypted-bytes", ao.EncryptedExportBytes, bo.EncryptedExportBytes},
+		} {
+			if (bytesOf.a == nil) != (bytesOf.b == nil) || !bytes.Equal(bytesOf.a, bytesOf.b) {
+				*out = append(*out, "~ "+path+"/"+bytesOf.name)
+			}
+		}
+		if ao.DecryptionErrors != bo.DecryptionErrors {
+			*out = append(*out, "~ "+path+"/decryption-errors")
+		}
+	}
+	for id := range bm {
+		if _, ok := am[id]; !ok {
+			*out = append(*out, "+ organization["+id+"]")
+		}
+	}
 }
 
 // normalize passes a document through JSON so that both sides of a

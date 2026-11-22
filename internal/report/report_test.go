@@ -11,6 +11,7 @@ import (
 
 	"bw-takeout/internal/bwcli"
 	"bw-takeout/internal/capture"
+	"bw-takeout/internal/collect"
 	"bw-takeout/internal/crashdump"
 	"bw-takeout/internal/manifest"
 	"bw-takeout/internal/profile"
@@ -21,9 +22,10 @@ import (
 )
 
 const (
-	exampleItem       = "8c1e0000-0000-4000-8000-0000000000aa"
-	exampleAttachment = "att00000000000000000000000000002"
-	exampleHash       = "3f9a000000000000000000000000000000000000000000000000000000e1c0"
+	exampleItem         = "8c1e0000-0000-4000-8000-0000000000aa"
+	exampleOrganization = "0c000000-0000-4000-8000-0000000000bb"
+	exampleAttachment   = "att00000000000000000000000000002"
+	exampleHash         = "3f9a000000000000000000000000000000000000000000000000000000e1c0"
 )
 
 // exampleOutcome is the example of design D8 as an outcome.
@@ -116,22 +118,112 @@ Profile:     removed
 	}
 }
 
+// A run with one chosen organization: the setup line follows the
+// recipients, the scope and the limit name the organization, and a finding
+// names it (design D10 of organization-export).
+func TestReportWithOneOrganization(t *testing.T) {
+	o := exampleOutcome()
+	o.Setup.Organizations = []string{exampleOrganization}
+	o.Verification = &verify.Result{
+		Verdict: verify.Failed,
+		Scope: verify.Scope{Code: verify.ScopeCodeWithOrganizations, Statement: verify.ScopeStatementWithOrganizations,
+			Organizations: []string{exampleOrganization}},
+		StandingLimits: []verify.Limit{verify.LimitOrganizationExportsSeparateReads, verify.LimitServerCompleteness},
+		Findings: []verify.Finding{{
+			Severity: verify.SeverityFailed, Reason: verify.OrganizationChangedDuringCapture,
+			OrganizationID: exampleOrganization, ItemID: exampleItem,
+		}},
+	}
+	o.Published = nil
+	o.Downloads = o.Downloads[:1]
+	o.Planned = 1
+	stdout, _ := render(o)
+	want := `bw:          /usr/local/bin/bw
+bw version:  2026.10.1, sha256 ` + exampleHash + `
+Server:      https://vault.example.org
+Target:      /mnt/backup
+Recipients:  2
+Organizations: ` + exampleOrganization + `
+Crash dumps: core limit 0, process not dumpable
+Leftover profile:  /home/u/.cache/bw-takeout/profiles/profile-x (age 3d4h)
+Leftover partial:  ` + filepath.Join("/mnt/backup", "bw-takeout-20261118T090300Z-00000001.partial") + ` (age 1h12m)
+Sync:        fresh
+Synced from: https://vault.example.org
+Account:     user@example.org (8c1e0000-0000-4000-8000-000000000001)
+Attachments: 1 planned
+  1/1 ok
+Verdict:     failed
+Scope:       ` + verify.ScopeStatementWithOrganizations + `
+Limits:      organization_exports_separate_server_reads, server_completeness_not_checked
+Findings:    1
+  failed organization_changed_during_capture organization=` + exampleOrganization + ` item=` + exampleItem + ` (run the backup again)
+Warnings:    0
+Generation:  none published, the verdict is failed
+Logout:      ok (1.4 s)
+Profile:     removed
+`
+	if stdout != want {
+		t.Errorf("report differs\n--- got\n%s\n--- want\n%s", stdout, want)
+	}
+}
+
+// The failure lines of an organization: a refused organization with each
+// reason, and a failed organization command with its operation, class and
+// organization ID.
+func TestOrganizationFailureLines(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want string
+	}{
+		{&collect.OrganizationError{ID: exampleOrganization, Reason: collect.OrganizationNotMember},
+			"Failed:      snapshot: organization " + exampleOrganization + ": the account is not a member"},
+		{&collect.OrganizationError{ID: exampleOrganization, Reason: collect.OrganizationNotConfirmed},
+			"Failed:      snapshot: organization " + exampleOrganization + ": the membership of the account is not confirmed"},
+		{&collect.OrganizationError{ID: exampleOrganization, Reason: collect.OrganizationRole},
+			"Failed:      snapshot: organization " + exampleOrganization + ": the account is neither owner nor admin"},
+		{&bwcli.Error{Op: bwcli.OpExportOrganizationEncrypted, Class: bwcli.ClassNotLoggedIn, ExitCode: 1, OrganizationID: exampleOrganization},
+			"Failed:      snapshot: bw export_organization_encrypted_json failed: not_logged_in, exit code 1, organization=" + exampleOrganization},
+		{&bwcli.Error{Op: bwcli.OpListOrganizations, Class: bwcli.ClassOutput, ExitCode: 0},
+			"Failed:      snapshot: bw list_organizations failed: output, exit code 0"},
+	} {
+		o := exampleOutcome()
+		o.Published, o.Verification, o.Source, o.Downloads = nil, nil, nil, nil
+		o.Failure = &run.Failure{Phase: run.PhaseSnapshot, Err: tc.err}
+		stdout, _ := render(o)
+		if !strings.Contains(stdout, "\n"+tc.want+"\n") {
+			t.Errorf("report lacks %q\n%s", tc.want, stdout)
+		}
+	}
+}
+
 func intp(n int) *int { return &n }
 
 func TestFindingLineNamesEverySetField(t *testing.T) {
 	f := verify.Finding{
-		Severity: verify.SeverityWarning, Reason: verify.OrganizationItemsExcluded,
-		Document: "plaintext_export", ItemID: exampleItem, AttachmentID: exampleAttachment,
+		Severity: verify.SeverityFailed, Reason: verify.PasskeyCountMismatch,
+		Document: "organization_plaintext_export", OrganizationID: exampleOrganization,
+		ItemID: exampleItem, AttachmentID: exampleAttachment,
 		Passkey: intp(1), Field: "keyValue", Expected: intp(2), Found: intp(1), Count: intp(3),
-		Organizations: []verify.OrganizationCount{{OrganizationID: "org-a", Count: 2}, {OrganizationID: "org-b", Count: 1}},
 	}
-	want := "warning organization_items_excluded document=plaintext_export item=" + exampleItem +
-		" attachment=" + exampleAttachment + " passkey=1 field=keyValue expected=2 found=1 count=3 organization=org-a:2 organization=org-b:1"
+	want := "failed passkey_count_mismatch document=organization_plaintext_export organization=" + exampleOrganization +
+		" item=" + exampleItem + " attachment=" + exampleAttachment + " passkey=1 field=keyValue expected=2 found=1 count=3"
 	if got := report.Finding(f); got != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
 	if got := report.Finding(verify.Finding{Severity: verify.SeverityFailed, Reason: verify.DuplicateItemID, Passkey: intp(0)}); got != "failed duplicate_item_id passkey=0" {
 		t.Errorf("got %s", got)
+	}
+}
+
+// The finding that an organization changed names the organization and the
+// item and tells the user to run again.
+func TestFindingLineOfAChangedOrganization(t *testing.T) {
+	f := verify.Finding{Severity: verify.SeverityFailed, Reason: verify.OrganizationChangedDuringCapture,
+		OrganizationID: exampleOrganization, ItemID: exampleItem}
+	want := "failed organization_changed_during_capture organization=" + exampleOrganization + " item=" + exampleItem +
+		" (run the backup again)"
+	if got := report.Finding(f); got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
 	}
 }
 

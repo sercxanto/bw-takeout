@@ -32,12 +32,17 @@ type DocumentError struct {
 	Document Document
 	Problem  Problem
 	ItemID   string
+	// OrganizationID names the organization of an organization document.
+	OrganizationID string
 }
 
 func (e *DocumentError) Error() string {
 	msg := string(e.Document) + ": " + string(e.Problem)
 	if e.ItemID != "" {
 		msg += " in item " + e.ItemID
+	}
+	if e.OrganizationID != "" {
+		msg += " of organization " + e.OrganizationID
 	}
 	return msg
 }
@@ -81,6 +86,14 @@ func Parse(in Input) *Capture {
 	record(err)
 	c.ArchivedList, err = ParseArchivedItemList(in.ArchivedItemList)
 	record(err)
+	for _, o := range in.Organizations {
+		oc := OrganizationCapture{ID: o.ID, DecryptionErrors: o.DecryptionErrors}
+		oc.Plaintext, err = ParseOrganizationPlaintextExport(o.ID, o.PlaintextExport)
+		record(err)
+		oc.Encrypted, err = ParseOrganizationEncryptedExport(o.ID, o.EncryptedExport)
+		record(err)
+		c.Organizations = append(c.Organizations, oc)
+	}
 
 	refs := make([]AttachmentRef, 0, len(in.Downloads))
 	for _, d := range in.Downloads {
@@ -93,7 +106,29 @@ func Parse(in Input) *Capture {
 // ParsePlaintextExport parses the document of "bw export --format json".
 // The error is always a *DocumentError.
 func ParsePlaintextExport(raw []byte) (*PlaintextExport, error) {
-	const doc = PlaintextExportDocument
+	out, err := parsePlaintextExport(PlaintextExportDocument, raw)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ParseOrganizationPlaintextExport parses the document of
+// "bw export --organizationid <id> --format json" with the rules of
+// ParsePlaintextExport. Its top-level form is the same, with collections in
+// place of folders, which neither parser reads. A rejection names the
+// organization document and the organization ID. The error is always a
+// *DocumentError.
+func ParseOrganizationPlaintextExport(organizationID string, raw []byte) (*PlaintextExport, error) {
+	out, err := parsePlaintextExport(OrganizationPlaintextExportDocument, raw)
+	if err != nil {
+		err.OrganizationID = organizationID
+		return nil, err
+	}
+	return out, nil
+}
+
+func parsePlaintextExport(doc Document, raw []byte) (*PlaintextExport, *DocumentError) {
 	root, err := decodeObject(doc, raw)
 	if err != nil {
 		return nil, err
@@ -120,7 +155,7 @@ func ParsePlaintextExport(raw []byte) (*PlaintextExport, error) {
 		if err != nil {
 			return nil, err
 		}
-		item := PlaintextItem{ID: id}
+		item := PlaintextItem{ID: id, RevisionDate: rawString(obj, "revisionDate")}
 		if item.OrganizationID, ok = optionalString(obj, "organizationId"); !ok {
 			return nil, malformed(doc, id)
 		}
@@ -138,7 +173,29 @@ func ParsePlaintextExport(raw []byte) (*PlaintextExport, error) {
 // "bw export --format encrypted_json" without a password and recognizes the
 // format of every item. The error is always a *DocumentError.
 func ParseEncryptedExport(raw []byte) (*EncryptedExport, error) {
-	const doc = EncryptedExportDocument
+	out, err := parseEncryptedExport(EncryptedExportDocument, raw)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ParseOrganizationEncryptedExport parses the document of
+// "bw export --organizationid <id> --format encrypted_json" with the rules
+// of ParseEncryptedExport. Its values are sealed with the organization key
+// instead of the account key, which the parser does not see. A rejection
+// names the organization document and the organization ID. The error is
+// always a *DocumentError.
+func ParseOrganizationEncryptedExport(organizationID string, raw []byte) (*EncryptedExport, error) {
+	out, err := parseEncryptedExport(OrganizationEncryptedExportDocument, raw)
+	if err != nil {
+		err.OrganizationID = organizationID
+		return nil, err
+	}
+	return out, nil
+}
+
+func parseEncryptedExport(doc Document, raw []byte) (*EncryptedExport, *DocumentError) {
 	root, err := decodeObject(doc, raw)
 	if err != nil {
 		return nil, err
@@ -162,7 +219,7 @@ func ParseEncryptedExport(raw []byte) (*EncryptedExport, error) {
 		if err != nil {
 			return nil, err
 		}
-		item := EncryptedItem{ID: id}
+		item := EncryptedItem{ID: id, RevisionDate: rawString(obj, "revisionDate")}
 		var ok bool
 		if item.OrganizationID, ok = optionalString(obj, "organizationId"); !ok {
 			return nil, malformed(doc, id)
@@ -212,7 +269,7 @@ func parseItemList(doc Document, raw []byte) (*ItemList, error) {
 		if err != nil {
 			return nil, err
 		}
-		item := ListedItem{ID: id}
+		item := ListedItem{ID: id, RevisionDate: rawString(obj, "revisionDate")}
 		if item.OrganizationID, ok = optionalString(obj, "organizationId"); !ok {
 			return nil, malformed(doc, id)
 		}
@@ -380,7 +437,7 @@ func decode(raw []byte) (any, bool) {
 	return v, true
 }
 
-func decodeObject(doc Document, raw []byte) (map[string]any, error) {
+func decodeObject(doc Document, raw []byte) (map[string]any, *DocumentError) {
 	v, ok := decode(raw)
 	if !ok {
 		return nil, &DocumentError{Document: doc, Problem: ProblemInvalidJSON}
@@ -394,7 +451,7 @@ func decodeObject(doc Document, raw []byte) (map[string]any, error) {
 
 // itemObject checks that an array element is an object with a non-empty
 // string ID.
-func itemObject(doc Document, raw any) (map[string]any, string, error) {
+func itemObject(doc Document, raw any) (map[string]any, string, *DocumentError) {
 	obj, ok := raw.(map[string]any)
 	if !ok {
 		return nil, "", malformed(doc, "")
@@ -425,6 +482,14 @@ func optionalString(obj map[string]any, key string) (string, bool) {
 	}
 	s, ok := obj[key].(string)
 	return s, ok
+}
+
+// rawString returns the string under key, or "" for any other value. It
+// never rejects, so that a field the checks read only for some documents
+// does not judge the others more strictly.
+func rawString(obj map[string]any, key string) string {
+	s, _ := obj[key].(string)
+	return s
 }
 
 // optionalArray returns the array under key, or nil when the key is absent
@@ -493,18 +558,24 @@ func dedupePerItem(items []ListedItem) []AttachmentRef {
 	return out
 }
 
-// PersonalAttachments returns the ID pairs of the attachments on personal
-// items, in the order the lists are given, items in document order and
-// attachments in item order. Each pair is kept once, also when both lists
-// or one list repeat it. Every entry of an item counts on its own, so an
-// item listed once as personal and once as an organization item contributes
-// the attachments of its personal entry. Such a capture fails verification
-// anyway, because the entries differ. A nil list contributes nothing.
+// ScopedAttachments returns the ID pairs of the attachments on personal
+// items and on items of the chosen organizations, in the order the lists
+// are given, items in document order and attachments in item order. Each
+// pair is kept once, also when both lists or one list repeat it. Every
+// entry of an item counts on its own, so an item listed once in scope and
+// once outside contributes the attachments of the entry in scope. Such a
+// capture fails verification anyway, because the entries differ. A nil
+// list contributes nothing. Organization IDs are compared exactly; the
+// chosen IDs are lowercase, as bw prints them.
 //
 // The collection plans its downloads with this function and the
 // verification builds its expected set with it, so the two always agree
-// (design D6 of capture-collection).
-func PersonalAttachments(lists ...*ItemList) []AttachmentRef {
+// (design D6 of capture-collection and of organization-export).
+func ScopedAttachments(chosen []string, lists ...*ItemList) []AttachmentRef {
+	inScope := map[string]bool{"": true}
+	for _, id := range chosen {
+		inScope[id] = true
+	}
 	seen := map[AttachmentRef]bool{}
 	var out []AttachmentRef
 	for _, list := range lists {
@@ -512,7 +583,7 @@ func PersonalAttachments(lists ...*ItemList) []AttachmentRef {
 			continue
 		}
 		for _, item := range list.Items {
-			if item.OrganizationID != "" {
+			if !inScope[item.OrganizationID] {
 				continue
 			}
 			for _, attachmentID := range item.AttachmentIDs {

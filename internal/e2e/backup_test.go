@@ -42,6 +42,13 @@ func runBackup(t *testing.T, s *vaultServer, a *account, answers map[string]answ
 // runBackupLimit is runBackup with its own time limit.
 func runBackupLimit(t *testing.T, s *vaultServer, a *account, answers map[string]answerFunc, limit time.Duration) *backupRun {
 	t.Helper()
+	return runBackupWith(t, s, a, answers, limit, bwPath(t))
+}
+
+// runBackupWith is runBackupLimit with a bw executable of its own and
+// extra flags, such as --organization.
+func runBackupWith(t *testing.T, s *vaultServer, a *account, answers map[string]answerFunc, limit time.Duration, bw string, extra ...string) *backupRun {
+	t.Helper()
 	root := t.TempDir()
 	r := &backupRun{
 		Target:   filepath.Join(root, "target"),
@@ -66,13 +73,13 @@ func runBackupLimit(t *testing.T, s *vaultServer, a *account, answers map[string
 		t.Fatal(err)
 	}
 
-	cmd := exec.Command(takeout, "backup",
+	cmd := exec.Command(takeout, append([]string{"backup",
 		"--server", s.URL,
 		"--ca", s.CAFile,
-		"--bw", bwPath(t),
+		"--bw", bw,
 		"--target", r.Target,
 		"--recipients-file", recipients,
-	)
+	}, extra...)...)
 	cmd.Dir = root
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"),

@@ -26,7 +26,7 @@ Check it with this project. The check needs no network and no `bw`, and it write
 bw-takeout verify --identity identity.txt "$G"
 ```
 
-It reads the whole archive, compares every entry with the manifest and prints the creation time, the server and account, the number of items and attachments, and the stored verdict. Exit status 0 means intact and verified, 3 intact and unverified, 1 failed. See [usage](usage.md).
+It reads the whole archive, compares every entry with the manifest and prints the creation time, the server and account, the number of items and attachments, the ID and the number of items of each chosen organization, and the stored verdict. It never prints the name of an organization. Exit status 0 means intact and verified, 3 intact and unverified, 1 failed. See [usage](usage.md).
 
 Without this project, the age and tar commands list the archive without writing plaintext:
 
@@ -50,14 +50,24 @@ The directory `recovered` then holds:
 - `documents/export.encrypted.json`: the account-bound encrypted export. Only the account that made it can read it.
 - `documents/items.json`: the default item list from `bw list items`. It leaves archived items out.
 - `documents/items.archived.json`: the list of archived items from `bw list items --archived`. Together with `documents/items.json` it is the only source that names the attachments. It is `[]` when the vault holds no archived item.
-- `attachments/<item-id>/<attachment-id>`: the attachments. Their original file names are in `manifest.json`.
-- `manifest.json`: source, versions, the verification result and the size and SHA-256 of every other file.
+- `documents/organizations/<organization-id>/export.json`: only when the backup was made with `--organization`. The plaintext JSON export of that whole organization, as `bw export --organizationid` wrote it, with every password, note, field and passkey of its items in clear text and its collections. It can be read directly and imported into an organization of Bitwarden or Vaultwarden.
+- `documents/organizations/<organization-id>/export.encrypted.json`: the encrypted export of the same organization. It is sealed with the organization key, so it can only be opened by importing it into that organization with the account of a member.
+- `attachments/<item-id>/<attachment-id>`: the attachments of personal items and of items of the chosen organizations. Their original file names are in `manifest.json`.
+- `manifest.json`: source, versions, the chosen organizations with ID, name and item count, the verification result and the size and SHA-256 of every other file.
 
 To check one file by hand, compare its SHA-256 with the manifest:
 
 ```sh
 sha256sum recovered/documents/export.json
 grep -A 3 '"path": "documents/export.json"' recovered/manifest.json
+```
+
+An organization document is checked the same way. The organization IDs of the generation are the directory names below `documents/organizations`:
+
+```sh
+ls recovered/documents/organizations
+sha256sum recovered/documents/organizations/*/export.json
+grep -A 3 '"path": "documents/organizations/' recovered/manifest.json
 ```
 
 When you are done, delete the plaintext:

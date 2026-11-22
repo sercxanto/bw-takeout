@@ -57,6 +57,11 @@
 //   - An end by an interrupt signal (Interrupt): what the terminal does to
 //     bw when the user presses the interrupt key at the password prompt. Not
 //     observed from a Go parent.
+//   - A logout after one answer (LogOut): an organization export without
+//     the owner or admin role got 401 from Vaultwarden, bw logged out, and
+//     every later command printed "You are not logged in." while bw status
+//     reported unauthenticated. Spike of 21 November 2026
+//     (docs/research/organization-export-spike-2026-11-21.md).
 package main
 
 import (
@@ -146,6 +151,14 @@ func run() int {
 		fmt.Fprint(os.Stderr, "? Master password: [input is hidden] ")
 		return exitCode(1)
 	}
+	if !login && len(args) > 0 && args[0] != "--version" && loggedOut(dataDir) {
+		if args[0] == "status" {
+			fmt.Fprint(os.Stdout, bwclitest.StatusUnauthenticated)
+			return 0
+		}
+		fmt.Fprint(os.Stderr, bwclitest.NotLoggedInLine)
+		return exitCode(1)
+	}
 	if b.DelayMillis > 0 {
 		time.Sleep(time.Duration(b.DelayMillis) * time.Millisecond)
 	}
@@ -164,6 +177,12 @@ func run() int {
 	if err := repeat(os.Stderr, b.Stderr, b.StderrRepeat); err != nil {
 		return 89
 	}
+	if b.LogOut {
+		if err := os.WriteFile(filepath.Join(dataDir, bwclitest.LoggedOutFile), nil, 0o600); err != nil {
+			fmt.Fprintln(os.Stderr, "fakebw: logout not recorded:", err)
+			return 88
+		}
+	}
 	return exitCode(b.Exit)
 }
 
@@ -173,6 +192,12 @@ func exitCode(code int) int {
 		return 0
 	}
 	return code
+}
+
+// loggedOut reports whether Behavior.LogOut has logged the fake out.
+func loggedOut(dataDir string) bool {
+	_, err := os.Lstat(filepath.Join(dataDir, bwclitest.LoggedOutFile))
+	return err == nil
 }
 
 func createData(dataDir string) error {

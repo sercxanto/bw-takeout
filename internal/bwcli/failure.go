@@ -21,6 +21,11 @@ const (
 	OpListArchived    Op = "list_archived_items"
 	OpAttachment      Op = "attachment"
 	OpLogout          Op = "logout"
+	// The organization commands of design D9 of the change
+	// organization-export.
+	OpListOrganizations           Op = "list_organizations"
+	OpExportOrganizationJSON      Op = "export_organization_json"
+	OpExportOrganizationEncrypted Op = "export_organization_encrypted_json"
 )
 
 // Class is the kind of a failure (design D7).
@@ -73,6 +78,9 @@ type Error struct {
 	// ItemID and AttachmentID name the attachment of a failed download.
 	// They are set only when both have the valid form.
 	ItemID, AttachmentID string
+	// OrganizationID names the organization of a failed organization
+	// export. It is set only when it has the valid form.
+	OrganizationID string
 }
 
 func (e *Error) Error() string {
@@ -82,6 +90,9 @@ func (e *Error) Error() string {
 	}
 	if e.ItemID != "" {
 		s += ", item " + e.ItemID + ", attachment " + e.AttachmentID
+	}
+	if e.OrganizationID != "" {
+		s += ", organization " + e.OrganizationID
 	}
 	return s
 }

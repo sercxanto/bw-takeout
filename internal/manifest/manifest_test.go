@@ -79,7 +79,7 @@ func TestRoundTripKeepsVerificationBytes(t *testing.T) {
 	if err := json.Unmarshal(data, &keys); err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{"format", "format_version", "created", "source", "tool", "bw", "counts", "verification", "entries"} {
+	for _, k := range []string{"format", "format_version", "created", "source", "tool", "bw", "counts", "organizations", "verification", "entries"} {
 		if _, ok := keys[k]; !ok {
 			t.Errorf("key %s missing", k)
 		}
@@ -157,22 +157,37 @@ func TestParseRejectsInvalidManifests(t *testing.T) {
 		"duplicate path": func(d map[string]any) {
 			entry(1)(d)["path"] = "RECOVERY.txt"
 		},
-		"negative size":     func(d map[string]any) { entry(0)(d)["size"] = -1 },
-		"uppercase hash":    func(d map[string]any) { entry(0)(d)["sha256"] = strings.ToUpper(hashA) },
-		"short hash":        func(d map[string]any) { entry(0)(d)["sha256"] = hashA[:63] },
-		"long hash":         func(d map[string]any) { entry(0)(d)["sha256"] = hashA + "a" },
-		"non-hex hash":      func(d map[string]any) { entry(0)(d)["sha256"] = "g" + hashA[1:] },
-		"empty hash":        func(d map[string]any) { entry(0)(d)["sha256"] = "" },
-		"unknown kind":      func(d map[string]any) { entry(0)(d)["kind"] = "symlink" },
-		"missing kind":      func(d map[string]any) { delete(entry(0)(d), "kind") },
-		"empty path":        func(d map[string]any) { entry(0)(d)["path"] = "" },
-		"wrong format":      func(d map[string]any) { d["format"] = "other" },
-		"missing format":    func(d map[string]any) { delete(d, "format") },
-		"missing version":   func(d map[string]any) { delete(d, "format_version") },
-		"bad created":       func(d map[string]any) { d["created"] = "yesterday" },
-		"no verification":   func(d map[string]any) { delete(d, "verification") },
-		"verification list": func(d map[string]any) { d["verification"] = []any{} },
-		"size as text":      func(d map[string]any) { entry(0)(d)["size"] = "10" },
+		"negative size":      func(d map[string]any) { entry(0)(d)["size"] = -1 },
+		"uppercase hash":     func(d map[string]any) { entry(0)(d)["sha256"] = strings.ToUpper(hashA) },
+		"short hash":         func(d map[string]any) { entry(0)(d)["sha256"] = hashA[:63] },
+		"long hash":          func(d map[string]any) { entry(0)(d)["sha256"] = hashA + "a" },
+		"non-hex hash":       func(d map[string]any) { entry(0)(d)["sha256"] = "g" + hashA[1:] },
+		"empty hash":         func(d map[string]any) { entry(0)(d)["sha256"] = "" },
+		"unknown kind":       func(d map[string]any) { entry(0)(d)["kind"] = "symlink" },
+		"missing kind":       func(d map[string]any) { delete(entry(0)(d), "kind") },
+		"empty path":         func(d map[string]any) { entry(0)(d)["path"] = "" },
+		"wrong format":       func(d map[string]any) { d["format"] = "other" },
+		"missing format":     func(d map[string]any) { delete(d, "format") },
+		"missing version":    func(d map[string]any) { delete(d, "format_version") },
+		"bad created":        func(d map[string]any) { d["created"] = "yesterday" },
+		"no verification":    func(d map[string]any) { delete(d, "verification") },
+		"verification list":  func(d map[string]any) { d["verification"] = []any{} },
+		"size as text":       func(d map[string]any) { entry(0)(d)["size"] = "10" },
+		"no organizations":   func(d map[string]any) { delete(d, "organizations") },
+		"organizations null": func(d map[string]any) { d["organizations"] = nil },
+		"organization ID not a UUID": func(d map[string]any) {
+			d["organizations"] = []any{map[string]any{"id": "../x", "name": "a", "items": 0}}
+		},
+		"organization twice": func(d map[string]any) {
+			o := map[string]any{"id": capturetest.ChosenOrganization, "name": "a", "items": 0}
+			d["organizations"] = []any{o, o}
+		},
+		"negative organization count": func(d map[string]any) {
+			d["organizations"] = []any{map[string]any{"id": capturetest.ChosenOrganization, "name": "a", "items": -1}}
+		},
+		"organization count as text": func(d map[string]any) {
+			d["organizations"] = []any{map[string]any{"id": capturetest.ChosenOrganization, "name": "a", "items": "1"}}
+		},
 	}
 	for name, change := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -194,5 +209,85 @@ func TestParseErrorsCarryNoFileName(t *testing.T) {
 	_, err := Parse(data)
 	if err == nil || strings.Contains(err.Error(), capturetest.Marker) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+// A manifest with and without organizations round-trips byte for byte, and
+// the organizations follow the counts.
+func TestRoundTripWithAndWithoutOrganizations(t *testing.T) {
+	for name, orgs := range map[string][]Organization{
+		"none": nil,
+		"two": {
+			{ID: capturetest.ChosenOrganization, Name: capturetest.Marker + " org é", Items: 3},
+			{ID: capturetest.OrganizationSecond, Name: "", Items: 0},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := sample(t)
+			m.Organizations = orgs
+			data, err := Marshal(m)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := Parse(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Organizations) != len(orgs) || got.Organizations == nil {
+				t.Fatalf("organizations %+v, want %+v", got.Organizations, orgs)
+			}
+			for i := range orgs {
+				if got.Organizations[i] != orgs[i] {
+					t.Errorf("organization %d: %+v, want %+v", i, got.Organizations[i], orgs[i])
+				}
+			}
+			again, err := Marshal(got)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(again, data) {
+				t.Errorf("second serialization differs:\n%s\n%s", again, data)
+			}
+			counts := bytes.Index(data, []byte(`"counts":`))
+			organizations := bytes.Index(data, []byte(`"organizations":`))
+			verification := bytes.Index(data, []byte(`"verification":`))
+			if !(counts < organizations && organizations < verification) {
+				t.Errorf("organizations not between counts and verification")
+			}
+			if orgs == nil && !bytes.Contains(data, []byte(`"organizations": []`)) {
+				t.Errorf("no empty organization list in %s", data)
+			}
+		})
+	}
+}
+
+// A manifest of the layout before organizations is refused as invalid, and
+// version 2 as unsupported.
+func TestManifestWithoutOrganizationsIsRefused(t *testing.T) {
+	_, err := Parse(replace(t, func(d map[string]any) { delete(d, "organizations") }))
+	if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "organizations") {
+		t.Errorf("got %v", err)
+	}
+	_, err = Parse(replace(t, func(d map[string]any) { delete(d, "organizations"); d["format_version"] = 2 }))
+	var uv *UnsupportedVersionError
+	if !errors.As(err, &uv) {
+		t.Errorf("version 2: got %v", err)
+	}
+}
+
+// Marshal refuses what Parse would refuse, and no message names an
+// organization name.
+func TestMarshalRefusesInvalidOrganizations(t *testing.T) {
+	for _, orgs := range [][]Organization{
+		{{ID: "not-a-uuid", Name: capturetest.Marker}},
+		{{ID: capturetest.ChosenOrganization, Name: capturetest.Marker}, {ID: capturetest.ChosenOrganization, Name: capturetest.Marker}},
+		{{ID: capturetest.ChosenOrganization, Name: capturetest.Marker, Items: -1}},
+	} {
+		m := sample(t)
+		m.Organizations = orgs
+		_, err := Marshal(m)
+		if !errors.Is(err, ErrInvalid) || strings.Contains(err.Error(), capturetest.Marker) {
+			t.Errorf("%+v: got %v", orgs, err)
+		}
 	}
 }
