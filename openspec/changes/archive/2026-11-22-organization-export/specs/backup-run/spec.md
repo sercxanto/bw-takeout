@@ -67,7 +67,7 @@ Before the login, the report SHALL name the `bw` executable with its version and
 - **THEN** the setup lines name both organization IDs in the order given
 
 ### Requirement: Report shows how the run ended
-The report SHALL name the published generation by its path, or state that none was published. It SHALL name a failure that ended the run by its phase, its `bw` operation, its class, for a download its IDs, and for an organization export or a failed organization check the organization ID and, for the check, the reason. It SHALL state the result of the logout and of the profile removal, and SHALL name the profile path when the removal failed. When the status names no server address, the report SHALL name the server address the run was given.
+The report SHALL name the published generation by its path, or state that none was published. It SHALL name a failure that ended the run by phase, `bw` operation, class, the IDs of a failed download, and the organization ID of a failed organization export or check, with the reason of the check. It SHALL state the result of the logout and of the profile removal, and the profile path when the removal failed. When the status names no server address, it SHALL name the address the run was given.
 
 #### Scenario: Profile not removed
 - **WHEN** the profile directory cannot be removed
