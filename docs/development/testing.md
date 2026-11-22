@@ -811,7 +811,7 @@ In the dev container on Debian 12.15, Linux 6.8 aarch64, with Go 1.27.3, OpenSpe
 - **Recovery.** The steps of [recovery](../user/recovery.md) ran as written against a generation with one organization left by `TestLeaveGenerationForOfflineExercise`: `verify` exited with 0 and printed the organization with 2 items, `tar -tvf` listed both organization documents, and the SHA-256 of `documents/export.json` and of the plaintext organization export matched the manifest.
 - **ADR 0006.** The three new commands were checked against [ADR 0006](../decisions/0006-secret-boundary.md). They run with the session key in the environment only, an empty standard input, the long time limit and the empty working directory. The organization ID is validated before it becomes an argument, the raw organization list is wiped after decoding, and no text of `bw` reaches a failure. One clause no longer matched: the ADR listed what a failure carries, and a failed organization export now also carries the organization ID. That clause was updated; nothing else in the ADR changed.
 
-Not run in the dev container: Linux amd64 and the workflow `vaultwarden.yml` on the runner, macOS, Windows, and Bitwarden Cloud. Evidence level: automated end-to-end against Vaultwarden 1.37.4 only.
+Not run in the dev container: Linux amd64 and the workflow `vaultwarden.yml` on the runner, which the [CI run of the same day](#ci-run-of-21-november-2026-organization-export) covered, macOS, Windows, and Bitwarden Cloud. Evidence level: automated end-to-end against Vaultwarden 1.37.4 only.
 
 ## Skip Report
 
@@ -891,6 +891,14 @@ The whole run took 4 minutes 24 seconds, well below the limit of 30 minutes: abo
 The maintainer started `vaultwarden.yml` by hand on the branch `vaultwarden-totp-login` at commit `5ee06141303f5a39029acdf016126e6fcddbc005`, the commit of the change ([run](https://github.com/sercxanto/bw-takeout/actions/runs/44907229965)). The run used the trigger `workflow_dispatch` and passed on `ubuntu-24.04` (Linux amd64). The job started at 13:07:01 UTC and ended at 13:11:42 UTC, so it took 4 minutes 41 seconds, well below the limit of 30 minutes. All steps succeeded: the checkout, the build of the dev container image and `go test -count=1 -tags vaultwarden -v ./internal/e2e/`, which includes the log check of `TestMain`.
 
 This is the first run of the two-step login scenario and of both login failure scenarios on Linux amd64. The maintainer reported that the tests passed. The per-test output, the class and the `Logout:` line of the failure scenarios on amd64, and the results of `CI` and `Checks` were not recorded here. Evidence level: automated end-to-end, Vaultwarden only, on Linux amd64.
+
+## CI Run of 21 November 2026, organization-export
+
+The workflows ran on [pull request 7](https://github.com/sercxanto/bw-takeout/pull/7) of the branch `organization-export` at commit `e9e6510`, the commit of the change. [Checks](https://github.com/sercxanto/bw-takeout/actions/runs/44953133623) passed in 35 seconds: format, vet with the tag `vaultwarden`, module tidiness and the key-material search. In [CI](https://github.com/sercxanto/bw-takeout/actions/runs/44953133628) the test matrix passed on `ubuntu-24.04`, `macos-26` and `windows-2025`, each with vet and the tests with the skip report, and on `ubuntu-24.04` also with the race detector.
+
+The maintainer started `vaultwarden.yml` by hand on the branch at the same commit ([run](https://github.com/sercxanto/bw-takeout/actions/runs/44953246870)). It passed on `ubuntu-24.04` (Linux amd64). The job started at 21:46:15 UTC and ended at 21:54:23 UTC, so it took 8 minutes 8 seconds, below the limit of 30 minutes: 5 seconds for the checkout, 30 seconds for the build of the dev container image and 7 minutes 27 seconds for `go test -count=1 -tags vaultwarden -v ./internal/e2e/`, which includes the log check of `TestMain`. This is the first run of the organization scenario on Linux amd64: an admin backup that is verified and a user backup that is refused before any export.
+
+The per-test output was not recorded here. Evidence level: mock on three platforms for the regular suite, automated end-to-end against Vaultwarden 1.37.4 on Linux amd64 for `internal/e2e`.
 
 ## CI Run of 19 November 2026, memory-hardening
 
