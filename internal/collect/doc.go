@@ -86,7 +86,9 @@
 //
 // That list, export and get start no sync of their own, so that one forced
 // sync fixes the snapshot for every later command, comes from reading the
-// code of bw 2026.10.1 (docs/research/bw-cli-code-notes-2026-11-17.md). The
+// code of bw 2026.10.1 (docs/research/bw-cli-code-notes-2026-11-17.md) and
+// was checked unchanged in 2026.11.1
+// (docs/research/bw-cli-code-notes-2026-11-24.md). The
 // tests of this package use an in-memory vault and the fake bw of package
 // bwclitest. Their evidence level is mock.
 package collect

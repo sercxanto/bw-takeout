@@ -3,6 +3,7 @@ package verify_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"bw-takeout/internal/capture"
@@ -192,7 +193,33 @@ func fixtureRuns() []fixtureRun {
 		fixtureRun{name: "item list not valid JSON", build: withInput(func(t *testing.T, in *capture.Input) {
 			in.ItemList = in.ItemList[:len(in.ItemList)/2]
 		})},
+		fixtureRun{name: "unknown export keys and item types", build: func(t *testing.T) (*ct.Fixture, capture.Input) {
+			f := unknownExportKeys(t)
+			return f, f.Input(t)
+		}},
 	)
+}
+
+// unknownExportKeys returns the intact organization fixture with every
+// warning of the change bw-version-2026-11: identifier keys with sentinel
+// values, a key that is not an identifier and holds the sentinel marker
+// itself, an unknown item type, and more distinct paths than are reported.
+// The identifier keys hold no marker, because they are reported by name.
+func unknownExportKeys(t *testing.T) *ct.Fixture {
+	t.Helper()
+	f := ct.IntactOrganization(t)
+	note := itemOf(t, f.PlaintextItems(), ct.ItemNote)
+	note["newItemKey"] = ct.Marker + "-value-of-a-new-item-key"
+	note[ct.Marker+" key @ example.invalid"] = ct.Marker + "-value-of-a-key-that-is-no-identifier"
+	note["type"] = 9
+	for i := 0; i < verify.MaxUnknownKeyPaths+2; i++ {
+		f.EncryptedExport[fmt.Sprintf("newDocumentKey%02d", i)] = ct.Marker + "-document-level-value"
+	}
+	f.EncryptedExport[ct.Marker+"-document-key-that-is-no-identifier"] = ct.Marker + "-document-level-value"
+	o := f.Organization(t, ct.ChosenOrganization)
+	login := itemOf(t, o.PlaintextItems(), ct.ItemOrgLogin)["login"].(map[string]any)
+	login["fido2Credentials"].([]any)[0].(map[string]any)["newPasskeyKey"] = ct.Marker + "-new-passkey-value"
+	return f
 }
 
 var passwordProtectedExport = []byte(`{"encrypted":true,"passwordProtected":true,"salt":"c2FsdA==",` +

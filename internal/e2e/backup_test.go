@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -131,6 +133,37 @@ func (r *backupRun) reportLine(label string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// decryptionErrorCount returns the count of the finding
+// "unverified document_decryption_errors" for the personal document, and
+// whether the report holds it (design D3 of the change bw-version-2026-11).
+func (r *backupRun) decryptionErrorCount(document string) (int, bool) {
+	prefix := "  unverified document_decryption_errors document=" + document + " count="
+	for _, l := range strings.Split(r.Report, "\n") {
+		if v, ok := strings.CutPrefix(l, prefix); ok {
+			n, err := strconv.Atoi(v)
+			return n, err == nil
+		}
+	}
+	return 0, false
+}
+
+// exportKeyReasons are the warnings of the change bw-version-2026-11 about
+// export keys and item types this project does not know.
+var exportKeyReasons = []string{"export_key_unknown", "export_key_unknown_omitted", "export_item_type_unknown"}
+
+// wantNoUnknownExportKeys fails for every report line with one of the
+// exportKeyReasons. Such a line names a key path and holds no vault
+// content, so it is logged.
+func (r *backupRun) wantNoUnknownExportKeys(t *testing.T) {
+	t.Helper()
+	for _, l := range strings.Split(r.Report, "\n") {
+		fields := strings.Fields(l)
+		if len(fields) >= 2 && fields[0] == "warning" && slices.Contains(exportKeyReasons, fields[1]) {
+			t.Errorf("the export holds a key or item type this project does not know: %s", l)
+		}
+	}
 }
 
 // wantEmptyProfileLocation checks that the profile location under the

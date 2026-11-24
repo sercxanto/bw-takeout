@@ -8,7 +8,7 @@ Further cases: stale local state, a restricted organization role, interrupted en
 
 The package `internal/capture/capturetest` builds one capture of a personal vault in memory: the plaintext export, the account-bound encrypted export, the default item list, the archived item list and the content of each attachment. The tests read no file and start no process.
 
-**Evidence level: mock.** The document shapes were derived from the source of `bitwarden/clients` at commit `91214c3b978edb5496a32a946451960fe7d44531` (CLI 2026.10.1) and compared with the installed 2026.10.1 bundle. The fixtures are not taken from a live capture, and no test runs against one. The package documentation of `internal/capture` lists every recognized field with a link to its source, and it names what the code does not settle, for example whether an empty key is left out or written as null. The legacy shapes of the account-bound encrypted export, the plaintext export and the item list match the [Vaultwarden live probe of 14 November 2026](../research/vaultwarden-live-probe-2026-11-14.md), by comparison of the report with the parser; blob items, Bitwarden Cloud and partial items remain unconfirmed.
+**Evidence level: mock.** The document shapes were derived from the source of `bitwarden/clients` at commit `91214c3b978edb5496a32a946451960fe7d44531` (CLI 2026.10.1) and compared with the installed 2026.10.1 bundle. The [code notes of 24 November 2026](../research/bw-cli-code-notes-2026-11-24.md) found the same shapes and keys in the source and the bundle of 2026.11.1. The fixtures are not taken from a live capture, and no test runs against one. The package documentation of `internal/capture` lists every recognized field with a link to its source, and it names what the code does not settle, for example whether an empty key is left out or written as null. The legacy shapes of the account-bound encrypted export, the plaintext export and the item list match the [Vaultwarden live probe of 14 November 2026](../research/vaultwarden-live-probe-2026-11-14.md), by comparison of the report with the parser; blob items, Bitwarden Cloud and partial items remain unconfirmed.
 
 The intact fixture holds four personal items:
 
@@ -36,7 +36,7 @@ The change organization-export adds the intact organization fixture: the intact 
 
 ### Spec Scenario Coverage
 
-Every scenario of the capture-verification spec has one test of the same name in `internal/verify`. The mapping was checked on 14 November 2026, again after the review decisions of the same day, and is complete. The rows of the three requirements of the change archived-item-list were added and checked with `go test -list` on 16 November 2026. The change organization-export removed the rows of "Organization items stay visible", added those of "Organization items outside the scope", "Item lists are checked as documents in every scope" and the five organization requirements, and the organization scenarios of the modified requirements (21 November 2026). Beyond the scenarios, `TestOrganizationVariants` runs every organization variant with its verdict and reasons, and the tests in `internal/verify/organization_test.go` cover a duplicate ID in an organization export, an export item without an organization, revision dates at millisecond precision, a missing revision date on an organization item and on a listed one, a personal item without one, the reference comparison of organization items, a rejected organization document next to a personal deviation, and the order of findings by organization. `TestArchiveFilterWarningLeavesTheVerdict` checks in addition that the filter warning leaves a failed, an unverified and a verified verdict unchanged. Parser cases are tested in addition in `internal/capture/parse_test.go`.
+Every scenario of the capture-verification spec has one test of the same name in `internal/verify`. The mapping was checked on 14 November 2026, again after the review decisions of the same day, and is complete. The rows of the three requirements of the change archived-item-list were added and checked with `go test -list` on 16 November 2026. The change organization-export removed the rows of "Organization items stay visible", added those of "Organization items outside the scope", "Item lists are checked as documents in every scope" and the five organization requirements, and the organization scenarios of the modified requirements (21 November 2026). Beyond the scenarios, `TestOrganizationVariants` runs every organization variant with its verdict and reasons, and the tests in `internal/verify/organization_test.go` cover a duplicate ID in an organization export, an export item without an organization, revision dates at millisecond precision, a missing revision date on an organization item and on a listed one, a personal item without one, the reference comparison of organization items, a rejected organization document next to a personal deviation, and the order of findings by organization. `TestArchiveFilterWarningLeavesTheVerdict` checks in addition that the filter warning leaves a failed, an unverified and a verified verdict unchanged. Parser cases are tested in addition in `internal/capture/parse_test.go`. The change bw-version-2026-11 added the rows of its three requirements (24 November 2026). Each of their tests also checks that the verdict and the findings equal those of the same capture without the unknown keys. The parser side, with every place of the known key sets, the identifier rule and the item type counts, is tested in `internal/capture/keys_test.go`, and the fixture run "unknown export keys and item types" brings the three warnings into the cross-cutting tests, with a key that is not an identifier and contains the sentinel marker.
 
 | Requirement | Scenario | Test |
 |---|---|---|
@@ -110,6 +110,18 @@ Every scenario of the capture-verification spec has one test of the same name in
 | | Decryption errors together with a proven deviation | `TestDecryptionErrorsTogetherWithAProvenDeviation` |
 | | Decryption errors on an attachment download | `TestDecryptionErrorsOnAnAttachmentDownload` |
 | | No decryption errors | `TestNoDecryptionErrors`, counts of zero or less in `TestDecryptionErrorsNegativeOrOnAFailedDownload` |
+| Export keys unknown to this project are reported | Unknown key on an item | `TestUnknownKeyOnAnItem` |
+| | Same unknown key on several items | `TestSameUnknownKeyOnSeveralItems` |
+| | Unknown key inside a passkey of an organization export | `TestUnknownKeyInsideAPasskeyOfAnOrganizationExport` |
+| | Unknown key at document level | `TestUnknownKeyAtDocumentLevel` |
+| | Keys within an unknown value | `TestKeysWithinAnUnknownValue` |
+| | Known keys only | `TestKnownKeysOnly` |
+| | Known key absent | `TestKnownKeyAbsent` |
+| Item types unknown to this project are reported | New item type | `TestNewItemType` |
+| | New item type in an organization export | `TestNewItemTypeInAnOrganizationExport` |
+| | Known item types | `TestKnownItemTypes` |
+| Reported key paths hold no content | Unknown key that is not an identifier | `TestUnknownKeyThatIsNotAnIdentifier` |
+| | Many distinct unknown keys | `TestManyDistinctUnknownKeys`, the cap per document in `TestUnknownKeyCapPerDocument` |
 
 ## Test Run of 14 November 2026
 
@@ -333,13 +345,13 @@ echoed() { stty -a | tr ' ;' '\n\n' | grep -x -- '-\{0,1\}echo'; }
 **8. Run the two terminal-dependent cases on macOS** with the official single-file `bw`, which is not the npm package under Node, and with the tool built for darwin/arm64. Saving and restoring the terminal state uses other system calls there. In a folder outside the project, in Terminal on the Mac:
 
 ```sh
-curl -fLO https://github.com/bitwarden/clients/releases/download/cli-v2026.10.1/bw-macos-arm64-2026.10.1.zip
-shasum -a 256 bw-macos-arm64-2026.10.1.zip
-unzip bw-macos-arm64-2026.10.1.zip
+curl -fLO https://github.com/bitwarden/clients/releases/download/cli-v2026.11.1/bw-bit-macos-arm64-2026.11.1.zip
+shasum -a 256 bw-bit-macos-arm64-2026.11.1.zip
+unzip bw-bit-macos-arm64-2026.11.1.zip
 ./bw --version
 ```
 
-The hash must be `4e595f9da80ef8b30abca808d0c78a1560d9589466d1bccd2b3e70f321fb12bf`, the digest that GitHub lists for this asset of the release `cli-v2026.10.1`. Copy `.local/bin/loginprobe-darwin-arm64` and `.local/vaultwarden/cert.pem` from the dev container into the same folder. Then check the forwarded port with `curl -fsS --cacert cert.pem https://localhost:8087/alive` and define the call:
+The hash must be `0447a5c94b5893deb3fbe4f4ac02e8d811e2f9815c27d567d08b4fc70486cff1`, the digest that GitHub lists for this asset of the release `cli-v2026.11.1`. Since 2026.11.0 the single-file zips carry `bw-bit-` (with the Bitwarden-licensed additions) or `bw-oss-` in their name; the exercise uses the `bw-bit-` build, which matches the earlier `bw-macos-arm64` zip. The run of 15 November 2026 used `bw-macos-arm64-2026.10.1.zip` with the digest `4e595f9da80ef8b30abca808d0c78a1560d9589466d1bccd2b3e70f321fb12bf`. Copy `.local/bin/loginprobe-darwin-arm64` and `.local/vaultwarden/cert.pem` from the dev container into the same folder. Then check the forwarded port with `curl -fsS --cacert cert.pem https://localhost:8087/alive` and define the call:
 
 ```sh
 probe() { ./loginprobe-darwin-arm64 -bw "$PWD/bw" -server https://localhost:8087 -ca "$PWD/cert.pem"; }
@@ -560,6 +572,7 @@ Every scenario of the backup-run delta has at least one test. Names without a pa
 | Report holds no vault content and no bw text | Sentinels in the vault and in bw output | `TestSentinelsInTheVaultAndInBWOutput` |
 | | Sentinel in an organization name | `TestSentinelInAnOrganizationName` |
 | | Control characters in the account address | `TestControlCharactersInTheAccountAddress`, `report.TestValuesAreCleaned` |
+| | Key path of an unknown export key | `TestKeyPathOfAnUnknownExportKey` (change bw-version-2026-11) |
 | Exit status of a backup | Verified backup | `TestVerifiedBackup`, `report.TestExitStatusTable` |
 | | Unverified backup | `TestUnverifiedBackup` |
 | | Published generation, logout failed | `TestPublishedGenerationLogoutFailed` |
@@ -643,7 +656,7 @@ ls -A ~/.cache/bw-takeout/profiles
 
 The `tar -t` line lists entry names only, which hold IDs, and writes nothing to disk. It shows whether the attachment of the archived item is in the generation. The profile location must be empty.
 
-**6. On macOS, if possible,** repeat runs 1 and 3 with the official single-file `bw` 2026.10.1 and `bw-takeout-darwin-arm64`, as in step 8 of the login exercise, with `--bw "$PWD/bw"`, and the generation of run 1 checked with `verify`.
+**6. On macOS, if possible,** repeat runs 1 and 3 with the official single-file `bw` of the pin, 2026.11.1, and `bw-takeout-darwin-arm64`, as in step 8 of the login exercise, with `--bw "$PWD/bw"`, and the generation of run 1 checked with `verify`.
 
 **What to record.** For each run: the system, the run, the full report (it holds no vault content), the exit status, the messages on standard error other than the prompts of `bw`, and anything unexpected on the terminal. Once per system: the `bw` line and the `bw version` line of the report, `go version` and the operating system version. From the report of each run: the logout line with its duration. From step 5: the output of `verify`, the attachment entries, and whether the attachment of the archived item is among them. From the web vault after all runs: the number of device entries of the account. Never record the password, the code, the TOTP seed, the identity, the session key, the archive or text that `bw` wrote beyond the prompt names.
 
@@ -749,10 +762,10 @@ The suite needs the dev container (Go, the npm `bw` and network access) and noth
 | `TestWrongPasswordFailsLogin` | An account with two-step login, no seeded vault, a wrong master password of the same form as the right one: `bw` showed exactly `Email address` and `Master password`, exit status 1, `Generation:  none published`, a `Failed:` line that starts with `login:`, a `Logout:` line other than `not needed, no login was started`, `Profile:     removed`, an empty target and an empty profile location, within `loginFailureLimit` of 90 seconds |
 | `TestWrongTwoStepCodeFailsLogin`, `TestWrongCodeIsWrongByConstruction` | The same assertions with the right password and a wrong code, with `bw` showing the three prompts in order. The wrong code is the code of a step 100 steps before the current one, moved back while it equals the code of one of the three steps the server accepts or of the last used step. The unit test checks this for 2000 clock positions |
 | `TestLogCheckFindsRecordedValues` | The log check finds a recorded value and text of the session key form and names only their kind |
-| `TestIntactVaultIsVerified` | Two-step login is enabled through the API after seeding, `bw` showed exactly the prompts `Email address`, `Master password` and `Two-step login code`, in this order. Exit status 0, the verdict `verified`, exactly one generation in the target and no partial one, `bw-takeout verify` exits with 0, the generation holds both seeded attachments with their SHA-256, the archived item's attachment among them, and one passkey with the seeded credential ID, and the profile location is empty |
-| `TestTamperedPasskeyFails` | The account has no two-step login, and `bw` showed only `Email address` and `Master password`. After the encrypted `keyValue` of the passkey is replaced through the API with a well-formed ciphertext under a foreign key: exit status 1, `Generation:  none published, the verdict is failed`, the finding `failed passkey_count_mismatch` for the passkey item with `expected=1 found=0` as the only failed finding, an empty target and an empty profile location |
+| `TestIntactVaultIsVerified` | Two-step login is enabled through the API after seeding, `bw` showed exactly the prompts `Email address`, `Master password` and `Two-step login code`, in this order. Exit status 0, the verdict `verified`, exactly one generation in the target and no partial one, `bw-takeout verify` exits with 0, the generation holds both seeded attachments with their SHA-256, the archived item's attachment among them, and one passkey with the seeded credential ID, no warning `export_key_unknown`, `export_key_unknown_omitted` or `export_item_type_unknown`, and the profile location is empty |
+| `TestTamperedPasskeyFails` | The account has no two-step login, and `bw` showed only `Email address` and `Master password`. After the encrypted `keyValue` of the passkey is replaced through the API with a well-formed ciphertext under a foreign key: exit status 1, `Generation:  none published, the verdict is failed`, the finding `failed passkey_count_mismatch` for the passkey item with `expected=1 found=0` as the only failed finding, the finding `unverified document_decryption_errors` for the plaintext export with a count of at least 1 (design D3 of the change bw-version-2026-11), an empty target and an empty profile location |
 | `TestOrganizationSetup` | The organization setup below: as the admin, assigned to C1 only, `bw list items` shows the items of C1 and C2 and not the item in the trash, and `bw list organizations` shows the organization with type 1 (admin) and status 2 (confirmed) |
-| `TestOrganizationBackupIsVerified` | The admin backs up with `--organization`: exit status 0, the verdict `verified`, the setup line `Organizations:` with the ID, `verify` exits with 0 and prints the organization with 2 items, both organization documents in the generation, each holding exactly the two seeded items and not the item in the trash, an empty personal export, both attachments with their SHA-256, and an empty profile location |
+| `TestOrganizationBackupIsVerified` | The admin backs up with `--organization`: exit status 0, the verdict `verified`, the setup line `Organizations:` with the ID, `verify` exits with 0 and prints the organization with 2 items, both organization documents in the generation, each holding exactly the two seeded items and not the item in the trash, an empty personal export, both attachments with their SHA-256, no warning about an unknown export key or item type, and an empty profile location |
 | `TestOrganizationRoleIsRefused` | The user backs up with `--organization`: exit status 1, the line `Failed:      snapshot: organization <id>: the account is neither owner nor admin`, an empty target and an empty profile location. A shim around `bw` records every argument list: `list organizations --raw` was started and no `export --organizationid` |
 
 **Organization scenario.** Three tests rebuild the setup of the [organization spike](../research/organization-export-spike-2026-11-21.md) (design D12 of the change organization-export). Each registers an owner, an admin and a user. As the owner, the test creates an organization over the API with a new 64-byte organization key, wrapped for the owner's public key as an EncString of type 4 (RSA-OAEP with SHA-1), a new RSA key pair of the organization and the default collection C1, then creates C2, invites the admin (type 1) and the user (type 2) with `accessAll: false` and C1 as their only collection, and confirms both with the organization key wrapped for each. Without SMTP the invited accounts are accepted at once. Through the owner's `bw` it then creates one login in C1 and one in C2, each with an attachment of 64 KiB of random bytes, and a third login in C1 that it deletes to the trash. The organization key and the organization's private key are recorded for the log check, like every password and session key. All calls worked as recorded in the design; no field name had to change.
@@ -812,6 +825,30 @@ In the dev container on Debian 12.15, Linux 6.8 aarch64, with Go 1.27.3, OpenSpe
 - **ADR 0006.** The three new commands were checked against [ADR 0006](../decisions/0006-secret-boundary.md). They run with the session key in the environment only, an empty standard input, the long time limit and the empty working directory. The organization ID is validated before it becomes an argument, the raw organization list is wiped after decoding, and no text of `bw` reaches a failure. One clause no longer matched: the ADR listed what a failure carries, and a failed organization export now also carries the organization ID. That clause was updated; nothing else in the ADR changed.
 
 Not run in the dev container: Linux amd64 and the workflow `vaultwarden.yml` on the runner, which the [CI run of the same day](#ci-run-of-21-november-2026-organization-export) covered, macOS, Windows, and Bitwarden Cloud. Evidence level: automated end-to-end against Vaultwarden 1.37.4 only.
+
+### Vaultwarden Test Run of 24 November 2026, bw-version-2026-11
+
+In the dev container on Debian 12.15, Linux 6.8 aarch64, with Go 1.27.3 and Vaultwarden 1.37.4 for linux/arm64 (binary SHA-256 `ae658947f85964e934d7673d9cab4c0edbce8e6167422d6ff3b10008e125421d`), `go test -count=1 -tags vaultwarden -v ./internal/e2e/` ran three times with the stricter assertions of design D3 and the new check for unknown export keys. All three runs used the Node 24.22.3 of the image (`PATH` starting with `/usr/local/bin`), not the Node 26 that the shell of the dev container finds first.
+
+1. **`bw` 2026.10.1**, the `bw` of the image (npm layout, SHA-256 of `bw.js` `8a443d1190643330826e8cc0b27381fba5af5a06c6c3d7c7254033913a51ee9b`): all 38 tests passed in 438 seconds.
+2. **`bw` 2026.11.1** from `.local/bw-2026.11.1/`, with `PATH` starting at its `node_modules/.bin` (npm layout, SHA-256 of `bw.js` `5fdd56c7497a68ef3ec782f709df6409eae9167e5babdd65747cf02e394068d3`): all 38 tests passed in 107 seconds.
+3. **`bw` 2026.11.1 of the rebuilt image**, after the maintainer had rebuilt the dev container from the new pin: `bw --version` printed `2026.11.1`, `/usr/local/bin/bw` resolved to `/opt/bootstrap/node_modules/@bitwarden/cli/build/bw.js` with the same SHA-256 as in run 2, and all 38 tests passed in 66 seconds.
+
+Findings of each scenario, the same in all three runs:
+
+- Intact vault, with two-step login: exit status 0, `verified`, 0 findings, 0 warnings, 2 of 2 attachments ok, and no warning about an unknown export key or item type. The seed through `bw` worked unchanged, also with 2026.11.1, whose `create item` and `create attachment` now always take the SDK path (see the [code notes of 24 November 2026](../research/bw-cli-code-notes-2026-11-24.md#attachment-download)).
+- Tampered passkey: exit status 1, `failed`, four findings: `failed passkey_count_mismatch` for the passkey item with `expected=1 found=0`, and `unverified document_decryption_errors` with `count=3` for the plaintext export, the item list and the archived item list. The decryption error counts of 2026.11.1 equal those of 2026.10.1 in this run and in the [run of 21 November 2026](#vaultwarden-test-run-of-21-november-2026), so the per-item decryption of 2026.11.1 writes the same lines with the marker. Run 3 showed the same counts. 0 warnings.
+- Organization backup as admin: exit status 0, `verified`, 0 findings, 0 warnings, both organization documents with the two seeded items, both attachments ok.
+- Organization backup as user: exit status 1, `Failed:      snapshot: organization <id>: the account is neither owner nor admin`, no organization export started.
+- Wrong master password and wrong two-step code: exit status 1, `Failed:      login: bw login failed: exit, exit code 1`, `Logout:      failed (exit)`, `Profile:     removed`.
+
+The log check found none of the 60 recorded values in any run.
+
+Durations with 2026.10.1 and 2026.11.1: seeding 45.8 and 9.4 seconds, the intact backup 37.7 and 9.4 seconds, the tampered backup 36.6 and 9.0 seconds, the organization backup 50.4 and 11.4 seconds, a logout 2.6 and 0.6 seconds. The difference matches the new exit after a command (PM-45308): 2026.10.1 waited for timers left behind, about two seconds per `bw` process, and 2026.11.1 exits as soon as its output is flushed.
+
+The regular checks of the same day, with Go 1.27.3 and OpenSpec 2.0.0: `gofmt -l .` printed nothing, `go mod tidy -diff` showed no change, `go vet ./...`, `GOOS=darwin go vet ./...`, `GOOS=windows go vet ./...` and `go vet -tags vaultwarden ./internal/e2e/` passed, `go test -race ./...` passed, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed with only expected skips, the key-material search of `checks.yml` found nothing, and `openspec validate bw-version-2026-11 --strict` passed. The change added no skip. With the identifier rule of design D5 disabled on purpose, `TestKeysThatAreNotIdentifiers`, `TestIdentifierRule`, `TestUnknownKeyThatIsNotAnIdentifier` and `TestFailingCaptureWithSensitiveContent` failed; the change was reverted.
+
+Not run here: Linux amd64, which the [CI run of the same day](#ci-run-of-24-november-2026-bw-version-2026-11) covered, macOS, Windows and Bitwarden Cloud. Evidence level: automated end-to-end against Vaultwarden 1.37.4 only.
 
 ## Skip Report
 
@@ -899,6 +936,14 @@ The workflows ran on [pull request 7](https://github.com/sercxanto/bw-takeout/pu
 The maintainer started `vaultwarden.yml` by hand on the branch at the same commit ([run](https://github.com/sercxanto/bw-takeout/actions/runs/44953246870)). It passed on `ubuntu-24.04` (Linux amd64). The job started at 21:46:15 UTC and ended at 21:54:23 UTC, so it took 8 minutes 8 seconds, below the limit of 30 minutes: 5 seconds for the checkout, 30 seconds for the build of the dev container image and 7 minutes 27 seconds for `go test -count=1 -tags vaultwarden -v ./internal/e2e/`, which includes the log check of `TestMain`. This is the first run of the organization scenario on Linux amd64: an admin backup that is verified and a user backup that is refused before any export.
 
 The per-test output was not recorded here. Evidence level: mock on three platforms for the regular suite, automated end-to-end against Vaultwarden 1.37.4 on Linux amd64 for `internal/e2e`.
+
+## CI Run of 24 November 2026, bw-version-2026-11
+
+The workflows ran on [pull request 8](https://github.com/sercxanto/bw-takeout/pull/8) of the branch `bw-version-2026-11` at commit `eedd8b6`, the commit of the change. [Checks](https://github.com/sercxanto/bw-takeout/actions/runs/45490804765) passed in 30 seconds: format, vet with the tag `vaultwarden`, module tidiness and the key-material search. In [CI](https://github.com/sercxanto/bw-takeout/actions/runs/45490804929) the test matrix passed on `ubuntu-24.04`, `macos-26` and `windows-2025`.
+
+`vaultwarden.yml` was started by hand on the branch at the same commit ([run](https://github.com/sercxanto/bw-takeout/actions/runs/45490800218)). It passed on `ubuntu-24.04` (Linux amd64) with the dev container image built from the new pin: `bw` 2026.11.1 with the SHA-256 of `bw.js` `5fdd56c7497a68ef3ec782f709df6409eae9167e5babdd65747cf02e394068d3`, the same as on Linux arm64, and the Vaultwarden 1.37.4 binary for linux/amd64 with SHA-256 `392bc9afa7de1821e372a6d93369c87c1070644c68e26057017a2bf1b9cac3be`. The job took 2 minutes 9 seconds: 4 seconds for the checkout, 27 seconds for the build of the image and 1 minute 33 seconds for `go test -count=1 -tags vaultwarden -v ./internal/e2e/`, of which the package took 80.8 seconds. All 38 tests passed. The findings equal those on Linux arm64: the intact and the organization backup verified, and the tampered passkey failed with `passkey_count_mismatch` and `document_decryption_errors` with `count=3` for the plaintext export, the item list and the archived item list. The log check found none of the 60 recorded values. The earlier run of the organization-export change took 7 minutes 27 seconds for the same step with `bw` 2026.10.1.
+
+Evidence level: mock on three platforms for the regular suite, automated end-to-end against Vaultwarden 1.37.4 on Linux amd64 for `internal/e2e`.
 
 ## CI Run of 19 November 2026, memory-hardening
 

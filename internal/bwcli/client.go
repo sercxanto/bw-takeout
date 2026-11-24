@@ -17,7 +17,9 @@
 // 2026.10.1 bundle, the live probe against Vaultwarden on Linux arm64, or an
 // unauthenticated run in the dev container. See
 // docs/research/bw-cli-code-notes-2026-11-15.md and
-// docs/research/vaultwarden-live-probe-2026-11-14.md.
+// docs/research/vaultwarden-live-probe-2026-11-14.md. The code of 2026.11.1
+// was checked against each of these assumptions, and the Vaultwarden suite
+// passed with it (docs/research/bw-cli-code-notes-2026-11-24.md).
 package bwcli
 
 import (

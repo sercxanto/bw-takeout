@@ -94,6 +94,7 @@ func TestIntactVaultIsVerified(t *testing.T) {
 	if len(got.passkeys) != 1 || got.passkeys[0] != inv.CredentialID {
 		t.Errorf("the plaintext export holds %d passkeys, want the seeded one", len(got.passkeys))
 	}
+	r.wantNoUnknownExportKeys(t)
 	r.wantEmptyProfileLocation(t)
 }
 
@@ -127,6 +128,14 @@ func TestTamperedPasskeyFails(t *testing.T) {
 	}
 	if n := strings.Count(r.Report, "\n  failed "); n != 1 {
 		t.Fatalf("%d failed findings, want only the passkey count", n)
+	}
+	// The replaced key makes bw write decryption error lines with the
+	// plaintext export. Their number depends on how bw batches the
+	// decryption, so only one is required (design D3 of the change
+	// bw-version-2026-11). A bw whose lines no longer carry the marker
+	// fails here instead of counting none.
+	if n, ok := r.decryptionErrorCount("plaintext_export"); !ok || n < 1 {
+		t.Fatalf("the report has no finding \"unverified document_decryption_errors document=plaintext_export\" with a count of at least 1")
 	}
 	entries, err := os.ReadDir(r.Target)
 	if err != nil {

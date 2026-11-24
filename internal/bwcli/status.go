@@ -13,7 +13,8 @@ import (
 type State string
 
 // The states of the 2026.10.1 bundle. bw status reports no other value
-// (bundle lines 39608 to 39614).
+// (bundle lines 39608 to 39614; unchanged in 2026.11.1, bundle lines 40312
+// to 40318).
 const (
 	StateUnauthenticated State = "unauthenticated"
 	StateLocked          State = "locked"

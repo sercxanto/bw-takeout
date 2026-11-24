@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"sort"
 	"strings"
 )
@@ -116,7 +117,8 @@ func ParsePlaintextExport(raw []byte) (*PlaintextExport, error) {
 // ParseOrganizationPlaintextExport parses the document of
 // "bw export --organizationid <id> --format json" with the rules of
 // ParsePlaintextExport. Its top-level form is the same, with collections in
-// place of folders, which neither parser reads. A rejection names the
+// place of folders, which the parsers read only to compare their keys with
+// the known sets (design D4 of bw-version-2026-11). A rejection names the
 // organization document and the organization ID. The error is always a
 // *DocumentError.
 func ParseOrganizationPlaintextExport(organizationID string, raw []byte) (*PlaintextExport, error) {
@@ -150,10 +152,20 @@ func parsePlaintextExport(doc Document, raw []byte) (*PlaintextExport, *Document
 
 	out := &PlaintextExport{Items: make([]PlaintextItem, 0, len(elements))}
 	ids := make([]string, 0, len(elements))
+	types := map[int]int{}
 	for _, raw := range elements {
 		obj, id, err := itemObject(doc, raw)
 		if err != nil {
 			return nil, err
+		}
+		// An item type this project does not know is counted (design D4
+		// of bw-version-2026-11). The plaintext export does not judge it.
+		// Every integer counts, also one outside the range of intValue
+		// (review of 24 November 2026, finding C3).
+		if typ, ok := anyInt(obj["type"]); ok {
+			if _, known := typeObjectKeys[typ]; !known {
+				types[typ]++
+			}
 		}
 		item := PlaintextItem{ID: id, RevisionDate: rawString(obj, "revisionDate")}
 		if item.OrganizationID, ok = optionalString(obj, "organizationId"); !ok {
@@ -166,6 +178,8 @@ func parsePlaintextExport(doc Document, raw []byte) (*PlaintextExport, *Document
 		ids = append(ids, id)
 	}
 	out.DuplicateIDs = duplicateStrings(ids)
+	out.UnknownKeys = unknownKeys(doc, root)
+	out.UnknownItemTypes = unknownItemTypes(types)
 	return out, nil
 }
 
@@ -232,6 +246,7 @@ func parseEncryptedExport(doc Document, raw []byte) (*EncryptedExport, *Document
 		ids = append(ids, id)
 	}
 	out.DuplicateIDs = duplicateStrings(ids)
+	out.UnknownKeys = unknownKeys(doc, root)
 	return out, nil
 }
 
@@ -509,6 +524,19 @@ func intValue(v any) (int, bool) {
 	}
 	i, err := n.Int64()
 	if err != nil || i < 0 || i > 1<<16 {
+		return 0, false
+	}
+	return int(i), true
+}
+
+// anyInt returns a JSON number that is an integer and fits into an int.
+func anyInt(v any) (int, bool) {
+	n, ok := v.(json.Number)
+	if !ok {
+		return 0, false
+	}
+	i, err := n.Int64()
+	if err != nil || i < math.MinInt || i > math.MaxInt {
 		return 0, false
 	}
 	return int(i), true

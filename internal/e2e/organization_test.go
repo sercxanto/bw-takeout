@@ -506,6 +506,7 @@ func TestOrganizationBackupIsVerified(t *testing.T) {
 	if len(g.attachments) != len(o.attachments) {
 		t.Errorf("%d attachment entries, want %d", len(g.attachments), len(o.attachments))
 	}
+	r.wantNoUnknownExportKeys(t)
 	r.wantEmptyProfileLocation(t)
 	t.Logf("backup of the organization in %v", r.Duration.Round(time.Millisecond))
 }

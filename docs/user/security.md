@@ -68,6 +68,12 @@ The backing-up account must be an owner or admin of each chosen organization. Th
 
 Each organization export is recorded by `bw` as an event `Organization_ClientExportedVault` in the organization's event log, visible to its owners and admins. Every run with `--organization` therefore leaves one or two such events per organization. This is the behavior of `bw` and cannot be avoided with its public commands. Tell the other admins of the organization that the backup does this, so that the events are not taken for an unexplained export.
 
+## Key Names in the Report
+
+When an export holds a key that this project does not know, the report and the verification result name its path, for example `field=items[].login.fido2Credentials[].newKey`, together with the document and a count ([limitations](limitations.md#what-a-verdict-can-and-cannot-detect), [ADR 0007](../decisions/0007-bw-versions.md)). The path holds key names only, never a value. A key enters it only when it has the form of an identifier, an ASCII letter followed by at most 63 ASCII letters or digits. Every other key is printed as `<other>`, so a key with spaces, punctuation or letters outside ASCII never appears. At most 32 paths are named per document. This is the one exception to the rule that no text of `bw` reaches an output ([ADR 0006](../decisions/0006-secret-boundary.md)).
+
+Residual risk: the keys of the export forms are names that `bw` defines, not vault content. If a future `bw` exported an object whose keys were chosen by the user at a place this project walks, an identifier-shaped key of that object could appear in the report, which is printed to the terminal in clear text. The parsers walk only places whose keys are fixed in the source of `bw`, and never the value of an unknown key, so this needs a change of a known place in `bw`. The code notes of each new `bw` version check those places.
+
 ## What Is Visible Without a Key
 
 Item names, attachment file names, organization names, IDs and all vault content are inside the encryption. The directory name of a generation shows its creation time and whether it is partial or unverified. The size of the archive file is visible.

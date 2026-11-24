@@ -70,6 +70,28 @@ const (
 	DocumentDecryptionErrors Reason = "document_decryption_errors"
 )
 
+// Reason codes for export keys and item types this project does not know
+// (design D6 of the change bw-version-2026-11). All three are warnings: the
+// documents are archived as bw wrote them, so nothing is lost, and the
+// verdict stays as the other checks set it.
+const (
+	// ExportKeyUnknown: a key path of an export is not in the known set of
+	// its place. Document, organization ID where it applies, the path in
+	// Field and the number of items, folders or collections in Count.
+	ExportKeyUnknown Reason = "export_key_unknown"
+	// ExportKeyUnknownOmitted: an export has more than MaxUnknownKeyPaths
+	// distinct unknown paths. Count is the number of paths left out.
+	ExportKeyUnknownOmitted Reason = "export_key_unknown_omitted"
+	// ExportItemTypeUnknown: items of a plaintext export have an integer
+	// type this project does not know. The type in ItemType and the number
+	// of items in Count.
+	ExportItemTypeUnknown Reason = "export_item_type_unknown"
+)
+
+// MaxUnknownKeyPaths is the number of unknown key paths reported per
+// document. The paths reported are the first in byte order.
+const MaxUnknownKeyPaths = 32
+
 // Reason codes for the chosen organizations (design D5 of the change
 // organization-export).
 const (
@@ -216,10 +238,13 @@ type Finding struct {
 	// Passkey is the zero-based position of the passkey within its item in
 	// the plaintext export.
 	Passkey *int `json:"passkey,omitempty"`
-	// Field names a passkey field by its JSON key.
-	Field    string `json:"field,omitempty"`
-	Expected *int   `json:"expected,omitempty"`
-	Found    *int   `json:"found,omitempty"`
+	// Field names a passkey field by its JSON key, or the key path of an
+	// unknown export key.
+	Field string `json:"field,omitempty"`
+	// ItemType is the item type number of export_item_type_unknown.
+	ItemType *int `json:"item_type,omitempty"`
+	Expected *int `json:"expected,omitempty"`
+	Found    *int `json:"found,omitempty"`
 	// Count is the number of items a warning summarizes, or the number of
 	// decryption error lines a finding reports.
 	Count *int `json:"count,omitempty"`
@@ -237,6 +262,7 @@ func Reasons() []Reason {
 		ItemOrganizationMismatch,
 		ListedItemDiffersBetweenLists, ArchiveFilterNotApplied,
 		DocumentDecryptionErrors,
+		ExportKeyUnknown, ExportKeyUnknownOmitted, ExportItemTypeUnknown,
 		OrganizationItemMismatch, OrganizationChangedDuringCapture,
 		PasskeyCountMismatch, PasskeyCountUnverifiable, PasskeyFieldMissing,
 		PasskeyFieldInvalid, PasskeyKeyInvalid, PasskeyKeyFormUnknown,
@@ -304,7 +330,10 @@ func lessFinding(a, b Finding) bool {
 	if pa, pb := position(a.Passkey), position(b.Passkey); pa != pb {
 		return pa < pb
 	}
-	return a.Field < b.Field
+	if a.Field != b.Field {
+		return a.Field < b.Field
+	}
+	return position(a.ItemType) < position(b.ItemType)
 }
 
 func position(p *int) int {
