@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Failures carry a class and no CLI text
-A failed command SHALL be reported with the operation, a class from a fixed list and the exit code. Text that `bw` wrote to standard output or standard error SHALL NOT be copied into a failure, a result or any output of this project. The one exception is the key path of a warning about an export key unknown to this project: it MAY contain key names of an export document that have the form of an identifier, an ASCII letter followed by at most 63 ASCII letters or digits, and no other text of the export (capture-verification "Reported key paths hold no content", backup-run "Report holds no vault content and no bw text"). The classes not logged in and locked SHALL be taken from the status document. Text of `bw` SHALL select a class only for premium required on an attachment download. No class SHALL make a result more favorable than a general failure.
+A failed command SHALL be reported with the operation, a class from a fixed list and the exit code. Text that `bw` wrote to standard output or standard error SHALL NOT be copied into a failure, a result or any output, except key paths that capture-verification allows. The classes not logged in and locked SHALL come from the status document. Text of `bw` SHALL select a class only for premium required on an attachment download. No class SHALL make a result more favorable than a general failure.
 
 #### Scenario: Failed download with a name in the error text
 - **WHEN** an attachment download fails and the error text of `bw` contains a sentinel value

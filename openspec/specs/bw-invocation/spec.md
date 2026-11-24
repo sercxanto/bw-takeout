@@ -157,7 +157,7 @@ A command SHALL count as successful only when the exit code is 0 and the output 
 - **THEN** the command is reported as failed
 
 ### Requirement: Failures carry a class and no CLI text
-A failed command SHALL be reported with the operation, a class from a fixed list and the exit code. Text that `bw` wrote to standard output or standard error SHALL NOT be copied into a failure, a result or any output of this project. The classes not logged in and locked SHALL be taken from the status document. Text of `bw` SHALL select a class only for premium required on an attachment download. No class SHALL make a result more favorable than a general failure.
+A failed command SHALL be reported with the operation, a class from a fixed list and the exit code. Text that `bw` wrote to standard output or standard error SHALL NOT be copied into a failure, a result or any output, except key paths that capture-verification allows. The classes not logged in and locked SHALL come from the status document. Text of `bw` SHALL select a class only for premium required on an attachment download. No class SHALL make a result more favorable than a general failure.
 
 #### Scenario: Failed download with a name in the error text
 - **WHEN** an attachment download fails and the error text of `bw` contains a sentinel value

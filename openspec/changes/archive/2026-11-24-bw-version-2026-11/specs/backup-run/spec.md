@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Report holds no vault content and no bw text
-The report SHALL NOT contain item names, user names, passwords, notes, field values, key material, attachment file names, organization names, the session key or text that `bw` wrote. The one exception is the key path of a warning about an export key unknown to this project: it MAY contain key names of the export that have the form of an identifier, an ASCII letter followed by at most 63 ASCII letters or digits, and no other text of the export. Characters that are not printable SHALL be replaced in every value it prints. The prompts of `bw` during the login reach the terminal directly and are not part of the report.
+The report SHALL NOT contain item names, user names, passwords, notes, field values, key material, attachment file names, organization names, the session key or text that `bw` wrote, except the identifier-shaped key names that capture-verification "Reported key paths hold no content" allows in a key path. Characters that are not printable SHALL be replaced in every value it prints. The prompts of `bw` during the login reach the terminal directly and are not part of the report.
 
 #### Scenario: Sentinels in the vault and in bw output
 - **WHEN** the vault holds sentinel values in names, notes, passwords and file names, and every `bw` command other than the login writes a sentinel to standard error

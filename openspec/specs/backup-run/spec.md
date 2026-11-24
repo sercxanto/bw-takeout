@@ -174,7 +174,7 @@ The report SHALL name the published generation by its path, or state that none w
 - **THEN** the report names the phase, the operation, its class and the organization ID
 
 ### Requirement: Report holds no vault content and no bw text
-The report SHALL NOT contain item names, user names, passwords, notes, field values, key material, attachment file names, organization names, the session key or text that `bw` wrote. Characters that are not printable SHALL be replaced in every value it prints. The prompts of `bw` during the login reach the terminal directly and are not part of the report.
+The report SHALL NOT contain item names, user names, passwords, notes, field values, key material, attachment file names, organization names, the session key or text that `bw` wrote, except the identifier-shaped key names that capture-verification "Reported key paths hold no content" allows in a key path. Characters that are not printable SHALL be replaced in every value it prints. The prompts of `bw` during the login reach the terminal directly and are not part of the report.
 
 #### Scenario: Sentinels in the vault and in bw output
 - **WHEN** the vault holds sentinel values in names, notes, passwords and file names, and every `bw` command other than the login writes a sentinel to standard error
@@ -187,6 +187,11 @@ The report SHALL NOT contain item names, user names, passwords, notes, field val
 #### Scenario: Control characters in the account address
 - **WHEN** the status reports an account address with a terminal escape sequence
 - **THEN** the report prints it with the control characters replaced
+
+#### Scenario: Key path of an unknown export key
+- **WHEN** an item of the plaintext export carries an unknown key of identifier form with a sentinel value, and an unknown key that contains a sentinel and is not an identifier
+- **THEN** the report names the path of the identifier key in a warning, and the other key only as the placeholder
+- **AND** no sentinel appears in the report on standard output or in the messages of the run on standard error
 
 ### Requirement: Exit status of a backup
 The exit status SHALL be 0 for a published generation with a verified capture and a complete teardown, 3 for a published generation with an unverified capture and a complete teardown, and 4 for a published generation whose logout was not successful or whose profile was not removed. It SHALL be 1 when no generation is published, and 2 for a usage error.
