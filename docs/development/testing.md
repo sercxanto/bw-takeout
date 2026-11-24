@@ -848,7 +848,7 @@ Durations with 2026.10.1 and 2026.11.1: seeding 45.8 and 9.4 seconds, the intact
 
 The regular checks of the same day, with Go 1.27.3 and OpenSpec 2.0.0: `gofmt -l .` printed nothing, `go mod tidy -diff` showed no change, `go vet ./...`, `GOOS=darwin go vet ./...`, `GOOS=windows go vet ./...` and `go vet -tags vaultwarden ./internal/e2e/` passed, `go test -race ./...` passed, `go test -count=1 -json ./... | go run ./internal/tools/skipreport` passed with only expected skips, the key-material search of `checks.yml` found nothing, and `openspec validate bw-version-2026-11 --strict` passed. The change added no skip. With the identifier rule of design D5 disabled on purpose, `TestKeysThatAreNotIdentifiers`, `TestIdentifierRule`, `TestUnknownKeyThatIsNotAnIdentifier` and `TestFailingCaptureWithSensitiveContent` failed; the change was reverted.
 
-Not run: Linux amd64 through `vaultwarden.yml` (workflow follow-up), macOS, Windows and Bitwarden Cloud. Evidence level: automated end-to-end against Vaultwarden 1.37.4 only.
+Not run here: Linux amd64, which the [CI run of the same day](#ci-run-of-24-november-2026-bw-version-2026-11) covered, macOS, Windows and Bitwarden Cloud. Evidence level: automated end-to-end against Vaultwarden 1.37.4 only.
 
 ## Skip Report
 
@@ -936,6 +936,14 @@ The workflows ran on [pull request 7](https://github.com/sercxanto/bw-takeout/pu
 The maintainer started `vaultwarden.yml` by hand on the branch at the same commit ([run](https://github.com/sercxanto/bw-takeout/actions/runs/44953246870)). It passed on `ubuntu-24.04` (Linux amd64). The job started at 21:46:15 UTC and ended at 21:54:23 UTC, so it took 8 minutes 8 seconds, below the limit of 30 minutes: 5 seconds for the checkout, 30 seconds for the build of the dev container image and 7 minutes 27 seconds for `go test -count=1 -tags vaultwarden -v ./internal/e2e/`, which includes the log check of `TestMain`. This is the first run of the organization scenario on Linux amd64: an admin backup that is verified and a user backup that is refused before any export.
 
 The per-test output was not recorded here. Evidence level: mock on three platforms for the regular suite, automated end-to-end against Vaultwarden 1.37.4 on Linux amd64 for `internal/e2e`.
+
+## CI Run of 24 November 2026, bw-version-2026-11
+
+The workflows ran on [pull request 8](https://github.com/sercxanto/bw-takeout/pull/8) of the branch `bw-version-2026-11` at commit `eedd8b6`, the commit of the change. [Checks](https://github.com/sercxanto/bw-takeout/actions/runs/45490804765) passed in 30 seconds: format, vet with the tag `vaultwarden`, module tidiness and the key-material search. In [CI](https://github.com/sercxanto/bw-takeout/actions/runs/45490804929) the test matrix passed on `ubuntu-24.04`, `macos-26` and `windows-2025`.
+
+`vaultwarden.yml` was started by hand on the branch at the same commit ([run](https://github.com/sercxanto/bw-takeout/actions/runs/45490800218)). It passed on `ubuntu-24.04` (Linux amd64) with the dev container image built from the new pin: `bw` 2026.11.1 with the SHA-256 of `bw.js` `5fdd56c7497a68ef3ec782f709df6409eae9167e5babdd65747cf02e394068d3`, the same as on Linux arm64, and the Vaultwarden 1.37.4 binary for linux/amd64 with SHA-256 `392bc9afa7de1821e372a6d93369c87c1070644c68e26057017a2bf1b9cac3be`. The job took 2 minutes 9 seconds: 4 seconds for the checkout, 27 seconds for the build of the image and 1 minute 33 seconds for `go test -count=1 -tags vaultwarden -v ./internal/e2e/`, of which the package took 80.8 seconds. All 38 tests passed. The findings equal those on Linux arm64: the intact and the organization backup verified, and the tampered passkey failed with `passkey_count_mismatch` and `document_decryption_errors` with `count=3` for the plaintext export, the item list and the archived item list. The log check found none of the 60 recorded values. The earlier run of the organization-export change took 7 minutes 27 seconds for the same step with `bw` 2026.10.1.
+
+Evidence level: mock on three platforms for the regular suite, automated end-to-end against Vaultwarden 1.37.4 on Linux amd64 for `internal/e2e`.
 
 ## CI Run of 19 November 2026, memory-hardening
 
