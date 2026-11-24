@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@bitwarden/cli": "2026.10.1",
+    "@bitwarden/cli": "2026.11.1",
     "@fission-ai/openspec": "2.0.0"
   }
 }

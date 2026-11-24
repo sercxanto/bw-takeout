@@ -99,6 +99,7 @@ func Finding(f verify.Finding) string {
 	add("attachment", f.AttachmentID)
 	addInt("passkey", f.Passkey)
 	add("field", f.Field)
+	addInt("item_type", f.ItemType)
 	addInt("expected", f.Expected)
 	addInt("found", f.Found)
 	addInt("count", f.Count)

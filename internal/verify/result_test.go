@@ -163,7 +163,12 @@ func TestRedactionCheckDetectsALeak(t *testing.T) {
 }
 
 // What each reason code must refer to.
-type needs struct{ document, item, attachment, passkey, counts, organization bool }
+type needs struct {
+	document, item, attachment, passkey, counts, organization bool
+	// field and itemType are needed by the warnings of the change
+	// bw-version-2026-11.
+	field, itemType bool
+}
 
 var reasonNeeds = map[verify.Reason]needs{
 	verify.DocumentInvalidJSON:              {document: true},
@@ -186,6 +191,9 @@ var reasonNeeds = map[verify.Reason]needs{
 	verify.ListedItemDiffersBetweenLists:    {item: true},
 	verify.ArchiveFilterNotApplied:          {counts: true},
 	verify.DocumentDecryptionErrors:         {document: true, counts: true},
+	verify.ExportKeyUnknown:                 {document: true, counts: true, field: true},
+	verify.ExportKeyUnknownOmitted:          {document: true, counts: true},
+	verify.ExportItemTypeUnknown:            {document: true, counts: true, itemType: true},
 	verify.AttachmentDecryptionErrors:       {item: true, attachment: true, counts: true},
 	verify.AttachmentDownloadOutOfScope:     {document: true, item: true, attachment: true},
 	verify.PasskeyCountMismatch:             {item: true, counts: true},
@@ -266,7 +274,8 @@ func TestFindingForAMissingPasskey(t *testing.T) {
 					if n.document && f.Document == "" || n.item && f.ItemID == "" ||
 						n.attachment && f.AttachmentID == "" || n.passkey && f.Passkey == nil ||
 						n.counts && f.Count == nil && (f.Expected == nil || f.Found == nil) ||
-						n.organization && f.OrganizationID == "" {
+						n.organization && f.OrganizationID == "" ||
+						n.field && f.Field == "" || n.itemType && f.ItemType == nil {
 						t.Errorf("%s: finding lacks a reference it needs: %+v", f.Reason, f)
 					}
 					if f.AttachmentID != "" && f.ItemID == "" {

@@ -7,7 +7,7 @@
 //
 // # Evidence level
 //
-// Every shape below is derived from source code. Two sources were read:
+// Every shape below is derived from source code. Three sources were read:
 //
 //   - "source": bitwarden/clients at commit
 //     91214c3b978edb5496a32a946451960fe7d44531, the release commit of CLI
@@ -17,6 +17,17 @@
 //     8a443d1190643330826e8cc0b27381fba5af5a06c6c3d7c7254033913a51ee9b. The
 //     blob marker, both encrypted document literals, the partial-item filter
 //     and the attachment response class were found there unchanged.
+//   - "source 2026.11.1": bitwarden/clients at commit
+//     44e7e9727ca78de9ca3e9a7ecea1f187165c8ce1, the release commit of CLI
+//     2026.11.1, compared with the commit above on 24 November 2026, and
+//     build/bw.js of npm @bitwarden/cli 2026.11.1 with SHA-256
+//     5fdd56c7497a68ef3ec782f709df6409eae9167e5babdd65747cf02e394068d3.
+//     The export model classes, the document types, the personal export
+//     service, the full organization export and the item list response
+//     write the same keys and apply the same filters as in 2026.10.1, and
+//     the blob marker is unchanged
+//     (docs/research/bw-cli-code-notes-2026-11-24.md). The links below
+//     point to the 2026.10.1 commit.
 //
 // One live run has since observed part of these shapes: bw 2026.10.1
 // against Vaultwarden 1.37.4 on 13 and 14 November 2026, reported in
@@ -255,14 +266,41 @@
 //     and no attachments. Deleted items are left out.
 //
 // [ParseOrganizationPlaintextExport] and [ParseOrganizationEncryptedExport]
-// apply the rules of the personal parsers, which read neither folders nor
-// collections. A rejection is a [DocumentError] with the document
+// apply the rules of the personal parsers, which read folders and
+// collections only to compare their keys with the known sets. A rejection is a [DocumentError] with the document
 // organization_plaintext_export or organization_encrypted_export and the
 // organization ID. An absent export is a zero-length input and is rejected
 // as invalid JSON.
 //
 // Not observed: blob items and passkeys in an organization export, and
 // decryption error lines on one.
+//
+// # Unknown keys and item types
+//
+// The parsers of the four exports compare every key they meet with the keys
+// this project knows at that place (design D4 of the change
+// bw-version-2026-11). The known sets are the union of the keys the export
+// models write in 2026.10.1 and 2026.11.1: one set per document form, one
+// for an element of folders and of collections, one for an item in both
+// forms (with key and data), one per type-specific object, and one for an
+// element of login.uris, login.fido2Credentials, fields and
+// passwordHistory. [PlaintextExport.UnknownKeys] and
+// [EncryptedExport.UnknownKeys] list each unknown path once, sorted, with
+// the number of items, folders or collections that carry it. A path at
+// document level has the count 1. The value of an unknown key is never
+// walked, and neither is a known key whose value has an unexpected type,
+// because the other rules judge that value already.
+//
+// A key enters a path only when it is an identifier: an ASCII letter
+// followed by at most 63 ASCII letters or digits. Any other unknown key is
+// written as [OtherKey] at its place (design D5). Every key of the export
+// models has the identifier form, so an identifier-shaped path names a key
+// of the schema of bw, not vault content.
+//
+// [PlaintextExport.UnknownItemTypes] counts the items whose integer type is
+// not one of the eight known types. The encrypted export keeps its rule: an
+// item of an unknown type has [FormatUnknown]. The item lists are not
+// compared with any key set (design D7).
 //
 // # Revision dates
 //

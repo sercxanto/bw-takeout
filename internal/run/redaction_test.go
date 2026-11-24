@@ -65,6 +65,32 @@ func TestSentinelsInTheVaultAndInBWOutput(t *testing.T) {
 	}
 }
 
+// Scenario "Key path of an unknown export key" of the change
+// bw-version-2026-11: the report names an identifier-shaped key path of the
+// export, and no other text of the export (review of 24 November 2026,
+// findings S1 and C1, maintainer decision).
+func TestKeyPathOfAnUnknownExportKey(t *testing.T) {
+	f := ct.Intact(t)
+	for _, raw := range f.PlaintextItems() {
+		item := raw.(map[string]any)
+		if item["id"] != ct.ItemNote {
+			continue
+		}
+		item["newItemKey"] = ct.Marker + "-value-of-a-new-key"
+		item[ct.Marker+" key of a user @ example.invalid"] = ct.Marker + "-value-of-a-key-that-is-no-identifier"
+	}
+	e := newEnv(t, scenarioOf(t, f))
+	r := e.runReported()
+	r.want(t, "  warning export_key_unknown document=plaintext_export field=items[].newItemKey count=1\n",
+		"  warning export_key_unknown document=plaintext_export field=items[].<other> count=1\n")
+	if found := r.leaks(f); len(found) != 0 {
+		t.Errorf("output contains %q\nstdout:\n%s\nstderr:\n%s", found, r.stdout, r.stderr)
+	}
+	if strings.Contains(r.stdout+r.stderr, "key of a user") {
+		t.Errorf("output holds text of the key that is no identifier:\n%s", r.stdout)
+	}
+}
+
 func TestControlCharactersInTheAccountAddress(t *testing.T) {
 	s := scenarioOf(t, ct.Intact(t))
 	s.Commands[cmdStatus] = statusBehavior(fakeLastSync, fakeServer+"/\x1b[2J", "user\x1b]0;title\x07@example.test")

@@ -203,15 +203,52 @@ func TestFindingLineNamesEverySetField(t *testing.T) {
 		Severity: verify.SeverityFailed, Reason: verify.PasskeyCountMismatch,
 		Document: "organization_plaintext_export", OrganizationID: exampleOrganization,
 		ItemID: exampleItem, AttachmentID: exampleAttachment,
-		Passkey: intp(1), Field: "keyValue", Expected: intp(2), Found: intp(1), Count: intp(3),
+		Passkey: intp(1), Field: "keyValue", ItemType: intp(9), Expected: intp(2), Found: intp(1), Count: intp(3),
 	}
 	want := "failed passkey_count_mismatch document=organization_plaintext_export organization=" + exampleOrganization +
-		" item=" + exampleItem + " attachment=" + exampleAttachment + " passkey=1 field=keyValue expected=2 found=1 count=3"
+		" item=" + exampleItem + " attachment=" + exampleAttachment + " passkey=1 field=keyValue item_type=9 expected=2 found=1 count=3"
 	if got := report.Finding(f); got != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
 	if got := report.Finding(verify.Finding{Severity: verify.SeverityFailed, Reason: verify.DuplicateItemID, Passkey: intp(0)}); got != "failed duplicate_item_id passkey=0" {
 		t.Errorf("got %s", got)
+	}
+}
+
+// The warnings of the change bw-version-2026-11 name the document, the
+// organization where it applies, the key path or the item type, and the
+// count (design D6).
+func TestFindingLinesOfUnknownExportKeys(t *testing.T) {
+	for _, tc := range []struct {
+		f    verify.Finding
+		want string
+	}{
+		{
+			verify.Finding{Severity: verify.SeverityWarning, Reason: verify.ExportKeyUnknown,
+				Document: "organization_plaintext_export", OrganizationID: exampleOrganization,
+				Field: "items[].login.fido2Credentials[].newKey", Count: intp(1)},
+			"warning export_key_unknown document=organization_plaintext_export organization=" + exampleOrganization +
+				" field=items[].login.fido2Credentials[].newKey count=1",
+		},
+		{
+			verify.Finding{Severity: verify.SeverityWarning, Reason: verify.ExportKeyUnknown,
+				Document: "plaintext_export", Field: "items[].<other>", Count: intp(3)},
+			"warning export_key_unknown document=plaintext_export field=items[].<other> count=3",
+		},
+		{
+			verify.Finding{Severity: verify.SeverityWarning, Reason: verify.ExportKeyUnknownOmitted,
+				Document: "encrypted_export", Count: intp(8)},
+			"warning export_key_unknown_omitted document=encrypted_export count=8",
+		},
+		{
+			verify.Finding{Severity: verify.SeverityWarning, Reason: verify.ExportItemTypeUnknown,
+				Document: "plaintext_export", ItemType: intp(9), Count: intp(2)},
+			"warning export_item_type_unknown document=plaintext_export item_type=9 count=2",
+		},
+	} {
+		if got := report.Finding(tc.f); got != tc.want {
+			t.Errorf("got  %s\nwant %s", got, tc.want)
+		}
 	}
 }
 

@@ -8,8 +8,9 @@ import (
 // premiumSentence is the only text of bw that selects a failure class, and
 // only for the attachment download (design D7). bw has no error codes, and
 // no structured signal exists for this case. The sentence is that of the
-// 2026.10.1 bundle; a sentence that changes in a later version falls back
-// to ClassExit.
+// 2026.10.1 bundle and unchanged in 2026.11.1
+// (docs/research/bw-cli-code-notes-2026-11-24.md); a sentence that changes
+// in a later version falls back to ClassExit.
 const premiumSentence = "Premium status is required to use this feature."
 
 // decryptionMarker starts each decryption error line of the bundled SDK.

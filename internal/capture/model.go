@@ -124,6 +124,30 @@ type EncryptedExport struct {
 	Items []EncryptedItem
 	// DuplicateIDs lists every item ID that occurs more than once, sorted.
 	DuplicateIDs []string
+	// UnknownKeys lists the key paths this project does not know, sorted
+	// by path (design D4 of the change bw-version-2026-11).
+	UnknownKeys []UnknownKey
+}
+
+// UnknownKey is one key path of an export that this project does not know
+// (design D4 of the change bw-version-2026-11). The path is written from
+// the document root, with "." between keys and "[]" for an array element,
+// for example "items[].login.fido2Credentials[].newKey". A key that is not
+// an identifier is written as [OtherKey], so the path holds no text of the
+// document beyond identifier-shaped keys (design D5).
+type UnknownKey struct {
+	Path string
+	// Count is the number of top-level elements (items, folders or
+	// collections) that carry the path, or 1 for a path at document level.
+	Count int
+}
+
+// UnknownItemType counts the items of a plaintext export whose integer
+// type this project does not know (design D4 of the change
+// bw-version-2026-11).
+type UnknownItemType struct {
+	Type  int
+	Count int
 }
 
 // EncryptedItem is one item of the encrypted export.
@@ -146,6 +170,12 @@ type EncryptedItem struct {
 type PlaintextExport struct {
 	Items        []PlaintextItem
 	DuplicateIDs []string
+	// UnknownKeys lists the key paths this project does not know, sorted
+	// by path.
+	UnknownKeys []UnknownKey
+	// UnknownItemTypes lists the integer item types this project does not
+	// know, sorted by type.
+	UnknownItemTypes []UnknownItemType
 }
 
 // PlaintextItem is one item of the plaintext export.

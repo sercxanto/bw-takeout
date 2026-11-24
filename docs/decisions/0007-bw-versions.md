@@ -13,7 +13,7 @@ The architecture page expected the adapter to "check version and hash". On 15 No
 - Any `bw` version runs. The client reports the version that `bw --version` prints and the SHA-256 of the executable file after following symbolic links. It does not refuse, warn or change any result because of either value.
 - The version goes into the manifest of a generation. Whether the hash goes there too is decided with the backup run.
 - The versions this project was tested with are listed for developers in the [integration notes](../development/integrations.md#tested-bw-versions), each with its evidence level per platform. The list is not shown to users.
-- Differences in the export fields are reported at run time by a later change. That is the signal a user sees when `bw` changes what it exports.
+- Differences in the export fields are reported at run time. Since the change bw-version-2026-11, the verification compares the keys of the plaintext and the encrypted export, personal and of each chosen organization, with the keys of the export models of the versions this project has read, and reports each unknown key path and each unknown item type as a warning with the document and a count ([limitations](../user/limitations.md#what-a-verdict-can-and-cannot-detect), [key names in the report](../user/security.md#key-names-in-the-report)). The warnings do not change the verdict. That is the signal a user sees when `bw` changes what it exports, and it disappears once a release of this project adds the key to the known set.
 - What the client relies on is checked on every run from the output itself: the status document is parsed strictly, the session key must have its form, documents must not be empty, and a failure is never taken for a success.
 
 ## Alternatives

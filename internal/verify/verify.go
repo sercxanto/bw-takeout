@@ -40,8 +40,10 @@ func Verify(c *capture.Capture, ref *capture.Reference) *Result {
 		v.inScope[o.ID] = true
 	}
 	// The lines are reported whatever else the capture shows, also when a
-	// document was rejected.
+	// document was rejected. So are the unknown keys and item types of every
+	// accepted export.
 	v.decryptionErrors()
+	v.exportKeys()
 	personalRejected := false
 	for _, e := range c.Errors {
 		reason, ok := documentReasons[e.Problem]
@@ -539,6 +541,59 @@ func (v *verifier) decryptionErrors() {
 			f := attachmentFinding(SeverityWarning, AttachmentDecryptionErrors, d.Ref())
 			f.Count = intp(d.DecryptionErrors)
 			v.add(f)
+		}
+	}
+}
+
+// exportKeys turns the unknown key paths and item types that the parsers
+// recorded into warnings (design D6 of the change bw-version-2026-11):
+// per accepted export, the first MaxUnknownKeyPaths paths in byte order,
+// one more warning with the number of paths left out, and one warning per
+// unknown item type. The result sorts them like every other finding, by
+// organization ID, reason code, document, then path and item type (review
+// of 24 November 2026, finding C2). The paths passed the identifier rule in
+// package capture (design D5). None of the warnings changes the verdict.
+func (v *verifier) exportKeys() {
+	type export struct {
+		document capture.Document
+		org      string
+		keys     []capture.UnknownKey
+		types    []capture.UnknownItemType
+	}
+	var exports []export
+	plain := func(doc capture.Document, org string, p *capture.PlaintextExport) {
+		if p != nil {
+			exports = append(exports, export{doc, org, p.UnknownKeys, p.UnknownItemTypes})
+		}
+	}
+	sealed := func(doc capture.Document, org string, e *capture.EncryptedExport) {
+		if e != nil {
+			exports = append(exports, export{document: doc, org: org, keys: e.UnknownKeys})
+		}
+	}
+	plain(capture.PlaintextExportDocument, "", v.c.Plaintext)
+	sealed(capture.EncryptedExportDocument, "", v.c.Encrypted)
+	for _, o := range v.c.Organizations {
+		plain(capture.OrganizationPlaintextExportDocument, o.ID, o.Plaintext)
+		sealed(capture.OrganizationEncryptedExportDocument, o.ID, o.Encrypted)
+	}
+	for _, e := range exports {
+		keys := append([]capture.UnknownKey(nil), e.keys...)
+		sort.Slice(keys, func(i, j int) bool { return keys[i].Path < keys[j].Path })
+		for i, k := range keys {
+			if i == MaxUnknownKeyPaths {
+				v.add(Finding{Severity: SeverityWarning, Reason: ExportKeyUnknownOmitted, Document: string(e.document),
+					OrganizationID: e.org, Count: intp(len(keys) - MaxUnknownKeyPaths)})
+				break
+			}
+			v.add(Finding{Severity: SeverityWarning, Reason: ExportKeyUnknown, Document: string(e.document),
+				OrganizationID: e.org, Field: k.Path, Count: intp(k.Count)})
+		}
+		types := append([]capture.UnknownItemType(nil), e.types...)
+		sort.Slice(types, func(i, j int) bool { return types[i].Type < types[j].Type })
+		for _, typ := range types {
+			v.add(Finding{Severity: SeverityWarning, Reason: ExportItemTypeUnknown, Document: string(e.document),
+				OrganizationID: e.org, ItemType: intp(typ.Type), Count: intp(typ.Count)})
 		}
 	}
 }
